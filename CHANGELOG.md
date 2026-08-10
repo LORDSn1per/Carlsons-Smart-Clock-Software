@@ -10,6 +10,12 @@ recorded — only version numbers and short notes.
 > some numbers below are just iteration builds with no shipped change of their
 > own. Entries are written against the version that first carried the change.
 
+## 3.02 - 2026-08-11
+- Reverted the visual redesign below — kept the original page look/CSS, per
+  feedback that the redesign "looked crap"
+- Kept the two functional additions from that redesign: the selectable live
+  refresh dropdown (1/2/3/4s) and the working browser OTA upload button
+
 ## 3.00 - 2026-08-11
 - Settings page completely redesigned: new light/dark design system (follows the
   system theme, with a manual toggle in the header), responsive grid layout

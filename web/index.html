@@ -4,333 +4,140 @@
     <title>Carlson's Smart Clock - v2</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-/* ===== design tokens ================================================== */
-:root{
-  color-scheme:light dark;
-  --bg:#eef1f6; --surface:#fff; --surface-2:#f5f7fa; --surface-3:#eceff4;
-  --border:#e2e7ee; --border-strong:#ccd4df;
-  --text:#101828; --text-dim:#5a6675; --text-faint:#8a94a2;
-  --accent:#2f7ef7; --accent-ink:#fff; --accent-soft:rgba(47,126,247,.12);
-  --danger:#e5484d; --danger-soft:rgba(229,72,77,.12); --ok:#2ea043; --warn:#d98a00;
-  --r:14px; --r-sm:9px; --r-pill:999px;
-  --sh:0 1px 2px rgba(16,24,40,.05),0 4px 14px rgba(16,24,40,.06);
-  --sh-lg:0 10px 30px rgba(16,24,40,.13);
-  --maxw:1200px;
-  --fs:15px;
-}
-@media (prefers-color-scheme:dark){
-  :root:not([data-theme="light"]){
-    --bg:#0c1016; --surface:#151b24; --surface-2:#1b222c; --surface-3:#222a35;
-    --border:#252e3a; --border-strong:#36414f;
-    --text:#e6edf3; --text-dim:#9aa7b6; --text-faint:#6c7a8a;
-    --accent:#4c9aff; --accent-soft:rgba(76,154,255,.16);
-    --danger:#ff6369; --danger-soft:rgba(255,99,105,.14); --ok:#3fb950; --warn:#e3a008;
-    --sh:0 1px 2px rgba(0,0,0,.45),0 4px 14px rgba(0,0,0,.35);
-    --sh-lg:0 12px 34px rgba(0,0,0,.5);
-  }
-}
-:root[data-theme="dark"]{
-  --bg:#0c1016; --surface:#151b24; --surface-2:#1b222c; --surface-3:#222a35;
-  --border:#252e3a; --border-strong:#36414f;
-  --text:#e6edf3; --text-dim:#9aa7b6; --text-faint:#6c7a8a;
-  --accent:#4c9aff; --accent-soft:rgba(76,154,255,.16);
-  --danger:#ff6369; --danger-soft:rgba(255,99,105,.14); --ok:#3fb950; --warn:#e3a008;
-  --sh:0 1px 2px rgba(0,0,0,.45),0 4px 14px rgba(0,0,0,.35);
-  --sh-lg:0 12px 34px rgba(0,0,0,.5);
-}
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f0f0f0; font-size: 18px; }
+        .header-bar { display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid #ccc; margin-bottom: 20px; }
+        .header-bar h2 { color: #333; text-align: left; margin: 0; flex-grow: 1; }
+        .language-selector { display: flex; align-items: center; }
+        .language-selector label { font-size: 16px; margin-right: 8px; color: #555; }
+        .language-selector select { font-size: 16px; padding: 5px; border-radius: 4px; }
+        .control-group { background: #fff; padding: 20px; margin: 15px 0; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,.1); }
+        .control-row { display: flex; align-items: center; margin-bottom: 15px; }
+        .control-row label { width: 180px; margin-bottom: 0; text-align: left; color: #555; font-weight: 700; font-size: 18px; }
+        .card-label { display: block; margin-bottom: 15px; color: #222; font-weight: 700; font-size: 24px; text-align: center; text-shadow: 2px 2px 4px rgba(0,0,0,.2); }
+        .switch { position: relative; display: inline-block; width: 60px !important; height: 34px !important; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: #ccc; transition: .4s; border-radius: 34px !important; }
+        .slider:before { position: absolute; content: ""; height: 26px !important; width: 26px !important; left: 4px !important; bottom: 4px !important; background: #fff; transition: .4s; border-radius: 50%; }
+        input:checked+.slider { background: #2196f3 !important; }
+        input:checked+.slider:before { transform: translateX(26px) !important; }
+        input[type=color] { width: 60px; height: 30px; border: 1px solid #ccc; border-radius: 4px; padding: 0; cursor: pointer; margin-right: 20px; }
+        input[type=range] { width: 170px; }
+        input[type=range]:disabled, input[type=checkbox]:disabled+.slider { opacity: 0.5; cursor: not-allowed; }
+        input[type=text] { width: 250px; height: 30px; border: 1px solid #ccc; border-radius: 4px; padding: 5px; cursor: pointer; }
+        button { font-size: 18px; padding: 5px 10px; border-radius: 4px; cursor: pointer; background: #4caf50; color: #fff; border: none; }
+        button:hover { background: #45a049; }
+        .color-picker { width: 80px; text-align: center; }
+        .switch-col { width: 80px; text-align: right; }
+        .control-row.system-buttons { justify-content: center; }
+        button.system-button { width: 120px; margin: 0 5px; }
+        button.red-button { background: #f44336; }
+        button.red-button:hover { background: #d32f2f; }
+        select { font-size: 18px; padding: 5px; border-radius: 4px; cursor: pointer; width: 250px; }
+        span.brightness-value { margin-right: 5px; }
+        span.lux-value { font-size: 12px; color: #777; }
+        .value-container { display: flex; align-items: center; margin-top: 5px; }
+        .current-brightness-container { text-align: center; margin-bottom: 10px; }
+        .current-brightness-label { font-size: 16px; font-weight: 700; margin-right: 10px; }
+        .current-brightness-value { font-size: 16px; }
+        .hidden { display: none !important; }
+        .expandable-container.expanded { border: 2px solid rgba(0,0,0,.1); padding: 10px; border-radius: 8px; }
+        .expandable-container .control-row { display: flex; align-items: center; }
+        .expandable { display: none; margin-left: 0; text-align: center; }
+        .expandable.active { display: block; }
+        .expandable .control-row { display: flex; justify-content: center; }
+        .expandable label { width: 120px; }
+        a.provider-link { font-size: 14px; margin-left: 10px; }
+        
+        /* Schedule Card Styles */
+        .schedule-row { 
+            display: flex; 
+            flex-direction: column; 
+            margin-bottom: 12px; 
+            background: #f8f9fa; 
+            padding: 12px; 
+            border-radius: 6px; 
+            border: 1px solid #e0e0e0; 
+        }
+        .schedule-screen-select {
+            width: 100%;
+            margin-bottom: 10px; 
+            padding: 6px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+        }
+        .schedule-time-group {
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 10px;
+            width: 100%;
+        }
+        .sched-label { 
+            font-size: 14px; 
+            font-weight: bold; 
+            color: #555; 
+        }
+        .schedule-item input[type=time] { 
+            width: 100px; 
+            padding: 5px; 
+            font-size: 16px; 
+            border: 1px solid #ccc; 
+            border-radius: 4px; 
+        }
+        .remove-btn { 
+            background: #f44336; 
+            color: white; 
+            border: none; 
+            border-radius: 50%; 
+            width: 30px; 
+            height: 30px; 
+            cursor: pointer; 
+            font-weight: bold; 
+            margin-left: auto;
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            padding: 0; 
+        }
+        .remove-btn:hover { background: #d32f2f; }
+        
+        #activeScreenLabel {
+            font-size: 16px;
+            font-weight: bold;
+            color: #2196f3;
+            margin-top: 5px;
+            margin-bottom: 10px;
+        }
 
-/* ===== base =========================================================== */
-*{box-sizing:border-box}
-body{
-  margin:0; padding:0 16px 56px;
-  background:var(--bg); color:var(--text);
-  font:var(--fs)/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
-  -webkit-font-smoothing:antialiased;
-  max-width:none;
-}
-h2,h3{margin:0}
-hr{border:0;border-top:1px solid var(--border);margin:18px 0}
-
-/* ===== header ========================================================= */
-.header-bar{
-  position:sticky; top:0; z-index:50;
-  margin:0 -16px 18px; padding:11px 18px;
-  display:flex; align-items:center; gap:14px; flex-wrap:wrap;
-  background:color-mix(in srgb,var(--surface) 82%,transparent);
-  -webkit-backdrop-filter:saturate(180%) blur(12px);
-  backdrop-filter:saturate(180%) blur(12px);
-  border-bottom:1px solid var(--border);
-}
-.header-inner{width:100%;max-width:var(--maxw);margin:0 auto;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-.header-bar h2{
-  font-size:17px; font-weight:650; letter-spacing:-.01em;
-  display:flex; align-items:center; gap:9px; margin-right:auto;
-}
-.brand-dot{
-  width:9px;height:9px;border-radius:50%;background:var(--accent);
-  box-shadow:0 0 0 4px var(--accent-soft); flex:none;
-}
-.header-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.chip{
-  font-size:11.5px;font-weight:600;letter-spacing:.02em;
-  padding:3px 9px;border-radius:var(--r-pill);
-  background:var(--surface-2);border:1px solid var(--border);color:var(--text-dim);
-  white-space:nowrap;
-}
-.chip.warn{background:var(--danger-soft);border-color:transparent;color:var(--danger)}
-.language-selector{display:flex;align-items:center;gap:7px}
-.language-selector label{font-size:12.5px;color:var(--text-dim);font-weight:500}
-.language-selector select{min-width:112px}
-.icon-btn{
-  width:36px;height:36px;flex:none;padding:0;
-  display:inline-flex;align-items:center;justify-content:center;
-  font-size:16px;line-height:1;
-  background:var(--surface-2);color:var(--text);
-  border:1px solid var(--border);border-radius:var(--r-sm);cursor:pointer;
-  transition:background .15s,border-color .15s,transform .08s;
-}
-.icon-btn:hover{background:var(--surface-3);border-color:var(--border-strong)}
-.icon-btn:active{transform:scale(.94)}
-
-/* ===== layout ========================================================= */
-.layout{
-  max-width:var(--maxw); margin:0 auto;
-  display:grid; gap:16px; grid-template-columns:minmax(0,1fr);
-  align-items:start;
-}
-@media (min-width:1000px){
-  .layout{grid-template-columns:minmax(320px,368px) minmax(0,1fr)}
-  #clockCard{grid-column:2;grid-row:1/span 5}
-  #previewCard,#brightnessCard,#weatherCard,#systemCard{grid-column:1}
-  #previewCard{position:sticky;top:70px}
-}
-
-/* ===== card =========================================================== */
-.control-group{
-  background:var(--surface); border:1px solid var(--border);
-  border-radius:var(--r); box-shadow:var(--sh);
-  padding:18px; margin:0;
-}
-.card-label{
-  display:block; font-size:11.5px; font-weight:700;
-  letter-spacing:.09em; text-transform:uppercase; color:var(--text-faint);
-  margin:0 0 14px; padding-bottom:11px; border-bottom:1px solid var(--border);
-}
-h3[data-translate-key]{font-size:13px;font-weight:650;color:var(--text-dim);text-align:left!important;margin:0 0 12px!important}
-
-/* ===== rows =========================================================== */
-.control-row{
-  display:flex; align-items:center; gap:12px;
-  min-height:40px; padding:5px 0; flex-wrap:wrap;
-}
-.control-row+.control-row{border-top:1px solid var(--border)}
-.control-row label{
-  flex:1 1 auto; min-width:0; margin:0;
-  font-size:14px; font-weight:500; color:var(--text); text-align:left;
-}
-.control-row.system-buttons{gap:9px;border-top:1px solid var(--border);padding-top:13px;margin-top:4px}
-.control-row.system-buttons:first-child{border-top:0}
-
-/* ===== toggle switch ================================================== */
-.switch{position:relative;display:inline-block;width:46px;height:27px;flex:none}
-.switch input{opacity:0;width:0;height:0;position:absolute}
-.slider{
-  position:absolute;inset:0;cursor:pointer;
-  background:var(--border-strong);border-radius:var(--r-pill);
-  transition:background .2s ease;
-}
-.slider:before{
-  content:"";position:absolute;height:21px;width:21px;left:3px;bottom:3px;
-  background:#fff;border-radius:50%;
-  box-shadow:0 1px 3px rgba(0,0,0,.3);
-  transition:transform .2s cubic-bezier(.4,.1,.3,1.3);
-}
-input:checked+.slider{background:var(--accent)}
-input:checked+.slider:before{transform:translateX(19px)}
-.switch input:focus-visible+.slider{outline:2px solid var(--accent);outline-offset:2px}
-.switch-col{display:flex;align-items:center;gap:10px;flex:none}
-
-/* ===== inputs ========================================================= */
-select,input[type=text],input[type=time],input[type=number]{
-  font:inherit;font-size:14px;color:var(--text);
-  background:var(--surface-2);
-  border:1px solid var(--border-strong);border-radius:var(--r-sm);
-  padding:8px 11px;min-height:38px;cursor:pointer;
-  transition:border-color .15s,box-shadow .15s;
-  max-width:100%;
-}
-input[type=text],input[type=number]{cursor:text}
-select{
-  appearance:none;-webkit-appearance:none;padding-right:32px;
-  background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath fill='%238a94a2' d='M2.6 4.4h6.8L6 8.6z'/%3E%3C/svg%3E");
-  background-repeat:no-repeat;background-position:right 10px center;background-size:12px;
-}
-select:focus,input:focus{outline:0;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
-input[type=color]{
-  -webkit-appearance:none;appearance:none;
-  width:44px;height:32px;flex:none;padding:0;cursor:pointer;
-  background:none;border:1px solid var(--border-strong);border-radius:var(--r-sm);
-}
-input[type=color]::-webkit-color-swatch-wrapper{padding:3px}
-input[type=color]::-webkit-color-swatch{border:0;border-radius:5px}
-input[type=color]::-moz-color-swatch{border:0;border-radius:5px}
-input[type=range]{
-  -webkit-appearance:none;appearance:none;
-  flex:1 1 130px;min-width:110px;height:5px;padding:0;
-  background:var(--border-strong);border-radius:var(--r-pill);
-  border:0;cursor:pointer;
-}
-input[type=range]::-webkit-slider-thumb{
-  -webkit-appearance:none;appearance:none;width:19px;height:19px;border-radius:50%;
-  background:var(--accent);border:2px solid var(--surface);
-  box-shadow:0 1px 4px rgba(0,0,0,.3);cursor:grab;
-}
-input[type=range]::-moz-range-thumb{
-  width:17px;height:17px;border-radius:50%;background:var(--accent);
-  border:2px solid var(--surface);box-shadow:0 1px 4px rgba(0,0,0,.3);cursor:grab;
-}
-input[type=range]:disabled,input[type=checkbox]:disabled+.slider{opacity:.42;cursor:not-allowed}
-
-/* ===== buttons ======================================================== */
-button{
-  font:inherit;font-size:14px;font-weight:550;
-  padding:9px 15px;min-height:38px;
-  color:var(--accent-ink);background:var(--accent);
-  border:1px solid transparent;border-radius:var(--r-sm);
-  cursor:pointer;transition:filter .15s,transform .08s;
-}
-button:hover{filter:brightness(1.08)}
-button:active{transform:translateY(1px)}
-button:disabled{opacity:.5;cursor:not-allowed;filter:none}
-button.system-button{flex:1 1 auto;background:var(--surface-2);color:var(--text);border-color:var(--border-strong)}
-button.system-button:hover{background:var(--surface-3);filter:none}
-button.red-button{background:var(--danger);color:#fff;border-color:transparent}
-button.red-button:hover{filter:brightness(1.08)}
-
-/* ===== value readouts ================================================= */
-.value-container{display:flex;align-items:center;gap:7px;flex:none}
-span.brightness-value,span.lux-value{
-  font-variant-numeric:tabular-nums;font-size:13px;font-weight:600;
-  color:var(--text-dim);min-width:44px;text-align:right;
-}
-.current-brightness-container{
-  display:flex;align-items:center;justify-content:space-between;gap:10px;
-  background:var(--surface-2);border:1px solid var(--border);
-  border-radius:var(--r-sm);padding:9px 12px;margin-top:8px;
-}
-.current-brightness-label{font-size:12.5px;color:var(--text-dim);font-weight:500}
-.current-brightness-value{font-variant-numeric:tabular-nums;font-weight:650;font-size:14px;color:var(--accent)}
-
-/* ===== expandables ==================================================== */
-.hidden{display:none!important}
-.expandable,.expandable-container{
-  display:none;
-  margin:2px 0 8px;padding:12px;
-  background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-sm);
-}
-.expandable.active,.expandable-container.expanded{display:block}
-.expandable .control-row,.expandable-container .control-row{min-height:34px;padding:4px 0}
-.expandable .control-row:first-child,.expandable-container .control-row:first-child{border-top:0}
-.expandable label{font-size:13px;color:var(--text-dim)}
-.color-picker{display:flex;align-items:center;gap:9px;flex:none}
-a.provider-link{color:var(--accent);text-decoration:none;font-size:12.5px;font-weight:550}
-a.provider-link:hover{text-decoration:underline}
-
-/* ===== live preview =================================================== */
-.preview-frame{
-  display:flex;justify-content:center;
-  padding:14px;margin:2px 0 12px;
-  background:#000;border:1px solid var(--border-strong);border-radius:var(--r-sm);
-}
-#screenshotCanvas{
-  width:100%!important;height:auto!important;max-width:320px;
-  border:0!important;border-radius:4px;
-  image-rendering:pixelated;background:#000;display:block;
-}
-#activeScreenLabel{font-weight:650;color:var(--accent)}
-
-/* ===== schedules ====================================================== */
-.schedule-row,.schedule-item{
-  display:flex;align-items:center;gap:9px;flex-wrap:wrap;
-  background:var(--surface-2);border:1px solid var(--border);
-  border-radius:var(--r-sm);padding:9px 11px;margin-bottom:8px;
-}
-.schedule-screen-select{flex:1 1 150px;min-width:0}
-.schedule-time-group{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-.sched-label{font-size:12px;color:var(--text-dim);font-weight:550}
-.schedule-item input[type=time]{padding:6px 8px;min-height:34px}
-.remove-btn{
-  flex:none;width:32px;height:32px;min-height:0;padding:0;
-  display:inline-flex;align-items:center;justify-content:center;
-  font-size:17px;line-height:1;
-  background:var(--danger-soft);color:var(--danger);border:0;border-radius:var(--r-sm);
-}
-.remove-btn:hover{background:var(--danger);color:#fff;filter:none}
-
-/* ===== OTA ============================================================ */
-.ota-drop{
-  border:1.5px dashed var(--border-strong);border-radius:var(--r-sm);
-  padding:14px;text-align:center;background:var(--surface-2);
-}
-.ota-hint{font-size:12px;color:var(--text-faint);margin-top:7px;line-height:1.45}
-.ota-bar{height:7px;border-radius:var(--r-pill);background:var(--surface-3);overflow:hidden;margin-top:11px;display:none}
-.ota-bar.on{display:block}
-.ota-bar>i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
-.ota-status{font-size:12.5px;margin-top:8px;color:var(--text-dim);min-height:17px}
-.ota-status.err{color:var(--danger)} .ota-status.ok{color:var(--ok)}
-input[type=file]{
-  font:inherit;font-size:13px;color:var(--text-dim);max-width:100%;
-}
-input[type=file]::file-selector-button{
-  font:inherit;font-size:13px;font-weight:550;margin-right:9px;
-  padding:7px 12px;border-radius:var(--r-sm);cursor:pointer;
-  background:var(--surface-3);color:var(--text);border:1px solid var(--border-strong);
-}
-
-/* ===== small screens ================================================== */
-@media (max-width:520px){
-  body{padding:0 11px 44px;--fs:15px}
-  .header-bar{margin:0 -11px 14px;padding:10px 12px}
-  .header-bar h2{font-size:15.5px}
-  .control-group{padding:14px;border-radius:12px}
-  .control-row{gap:9px}
-  .control-row label{flex-basis:100%}
-  .schedule-time-group{flex:1 1 100%}
-  .remove-btn{margin-left:auto}
-}
-</style>
-<script>(function(){try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+        @media (max-width: 480px) {
+            .schedule-time-group {
+                flex-wrap: wrap;
+                justify-content: space-between;
+            }
+            .remove-btn { margin-left: 0; }
+        }
+    </style>
 </head>
 <body>
     <div class="header-bar">
-  <div class="header-inner">
-    <h2><span class="brand-dot"></span><span data-translate-key="mainTitle">Carlson's Smart Clock</span></h2>
-    <div class="header-meta">
-      <span class="chip" id="clockVersion"></span>
-      <span class="chip warn hidden" id="safeModeChip" data-translate-key="safeMode">Safe Mode</span>
-      <div class="language-selector">
-        <label for="languageSelect" data-translate-key="language">Language</label>
-        <select id="languageSelect" onchange="setLanguage(this.value)">
-          <option value="en">English</option>
-          <option value="de">German</option>
-          <option value="sv">Swedish</option>
-        </select>
-      </div>
-      <button type="button" class="icon-btn" id="themeToggle" onclick="cycleTheme()" title="Theme">&#9681;</button>
-    </div>
-  </div>
-</div>
-
-<main class="layout">
-
-<div class="control-group" id="previewCard">
-    <label class="card-label" data-translate-key="livePreview">Live Preview</label>
-
-    <div class="preview-frame">
-        <canvas id="screenshotCanvas" width="320" height="160"></canvas>
+        <h2 data-translate-key="mainTitle">Carlson's Smart Clock</h2>
+        <div class="language-selector">
+            <label for="languageSelect" data-translate-key="language">Language</label>
+            <select id="languageSelect" onchange="setLanguage(this.value)">
+                <option value="en">English</option>
+                <option value="de">German</option>
+                <option value="sv">Swedish</option>
+            </select>
+        </div>
     </div>
 
-<div class="control-row">
+<div class="control-group">
+    <label class="card-label" data-translate-key="clockSettings">Clock Settings</label>
+    <div style="text-align: center; margin-bottom: 10px;">
+        <span id="clockVersion" style="font-size: 12px; color: #777;"></span>
+    </div>
+    
+    <div class="control-row">
         <label data-translate-key="screenSelection">Screen Selection</label>
         <select id="screenSelect" onchange="updateScreen(this.value)">
             <option value="1" data-translate-key="screen1">Screen 1 - Classic Digital</option>
@@ -346,6 +153,14 @@ input[type=file]::file-selector-button{
         </select>
     </div>
 
+    <div class="control-row system-buttons">
+        <button class="system-button" onclick="startFullYearAnimation()" data-translate-key="fullYearAnimation">Full Year Animation</button>
+    </div>
+    
+    <div style="text-align: center; margin-top: 15px; margin-bottom: 5px;">
+        <canvas id="screenshotCanvas" width="320" height="160" style="border: 1px solid #ccc; width: 332px; height: 166px; image-rendering: pixelated; background-color: #000;"></canvas>
+    </div>
+
     <div class="control-row">
         <label data-translate-key="liveRefresh">Live Refresh</label>
         <select id="refreshSelect" onchange="setRefreshInterval(this.value)">
@@ -355,14 +170,7 @@ input[type=file]::file-selector-button{
             <option value="4000">4 s</option>
         </select>
     </div>
-
-    <div class="control-row system-buttons">
-        <button class="system-button" onclick="startFullYearAnimation()" data-translate-key="fullYearAnimation">Full Year Animation</button>
-    </div>
-</div>
-
-<div class="control-group" id="clockCard">
-    <label class="card-label" data-translate-key="screenOptions">Screen Options</label>
+    <div id="safeModeNotice" class="hidden" style="text-align:center;font-size:12px;color:#e5484d;margin:-5px 0 10px;" data-translate-key="safeModeNotice">Safe Mode active — refresh locked to 4s</div>
 
     <!-- Schedules Control Area (Hidden unless Schedules selected) -->
     <div id="schedulesContainer" class="hidden">
@@ -495,13 +303,13 @@ input[type=file]::file-selector-button{
 </div>
 </div>
 
-<div class="control-group" id="brightnessCard">
+<div class="control-group">
     <label class="card-label" data-translate-key="brightnessSettings">Brightness Settings</label>
     <div class="control-row"><label data-translate-key="brightness">Brightness</label><div class="color-picker"><input type="range" id="brightnessSlider" min="0" max="255" oninput="updateBrightness(this.value)"><span class="brightness-value" id="brightnessValue"></span></div><div class="switch-col"></div></div>
     <div class="expandable-container" id="autoBrightnessContainer"><div class="control-row"><label data-translate-key="autoBrightness">Auto Brightness</label><div class="color-picker"></div><label class="switch switch-col"><input type="checkbox" id="autoBrightnessSwitch" onchange="toggleAutoBrightness(this.checked);toggleAutoBrightnessExpandable(this.checked)"><span class="slider"></span></label></div><div id="autoBrightnessExpandable" class="expandable"><div class="control-row"><label data-translate-key="darkRoomBrightness">Dark Room Brightness</label><div class="color-picker"><input type="range" id="darkRoomBrightnessSlider" min="0" max="255" oninput="updateDarkRoomBrightness(this.value)"><div class="value-container"><span class="brightness-value" id="darkRoomBrightnessValue"></span><span class="lux-value" id="darkRoomLux"></span></div></div><div class="switch-col"></div></div><div class="control-row"><label data-translate-key="brightRoomBrightness">Bright Room Brightness</label><div class="color-picker"><input type="range" id="brightRoomBrightnessSlider" min="0" max="255" oninput="updateBrightRoomBrightness(this.value)"><div class="value-container"><span class="brightness-value" id="brightRoomBrightnessValue"></span><span class="lux-value" id="brightRoomLux"></span></div></div><div class="switch-col"></div></div><div class="current-brightness-container"><span class="current-brightness-label" data-translate-key="currentBrightness">Current Brightness:</span><span class="current-brightness-value" id="currentBrightness">0%</span></div><div class="control-row system-buttons"><button class="system-button" onclick="setDarkRoomLDR()" data-translate-key="setDarkRoom">Set Dark Room</button><button class="system-button" onclick="setBrightRoomLDR()" data-translate-key="setBrightRoom">Set Bright Room</button></div></div></div>
 </div>
 
-<div class="control-group" id="weatherCard">
+<div class="control-group">
     <label class="card-label" data-translate-key="weatherSettings">Weather Settings</label>
     <div class="control-row"><label data-translate-key="timezone">Timezone Selection</label><select id="timezoneSelect" onchange="blockPolling(1000); fetch('/timezone?tz='+this.value).then(() => fetchSettings())"><option value="UTC0">London: 0 GMT</option><option value="HST10HDT,M3.2.0,M11.1.0">Honolulu: -10 GMT</option><option value="AKST9AKDT,M3.2.0,M11.1.0">Anchorage: -9 GMT</option><option value="PST8PDT,M3.2.0,M11.1.0">Los Angeles: -8 GMT</option><option value="MST7MDT,M3.2.0,M11.1.0">Denver: -7 GMT</option><option value="CST6CDT,M3.2.0,M11.1.0">Chicago: -6 GMT</option><option value="EST5EDT,M3.2.0,M11.1.0">New York: -5 GMT</option><option value="<-04>4">Santiago: -4 GMT</option><option value="<-03>3">Buenos Aires: -3 GMT</option><option value="WAT-1">Lagos: +1 GMT</option><option value="CET-1CEST,M3.5.0,M10.5.0/3">Paris: +1 GMT</option><option value="EET-2EEST,M3.5.0/0,M10.5.0/0">Athens: +2 GMT</option><option value="EAT-3">Nairobi: +3 GMT</option><option value="<-05>5">New Delhi: +5 GMT</option><option value="<-06>6">Dhaka: +6 GMT</option><option value="<-07>7">Bangkok: +7 GMT</option><option value="<-08>8">Shanghai: +8 GMT</option><option value="AWST-8">Perth: +8 GMT</option><option value="<-09>9">Tokyo: +9 GMT</option><option value="ACST-9:30ACDT,M10.1.0,M4.1.0/3">Adelaide: +9:30 GMT</option><option value="AEST-10">Brisbane: +10 GMT</option><option value="ACST-9:30">Darwin: +9:30 GMT</option><option value="AEST-10AEDT,M10.1.0,M4.1.0/3">Sydney: +10 GMT</option><option value="NZST-12NZDT,M9.5.0,M4.1.0/3">Auckland: +12 GMT</option><option value="NZST-12NZDT,M9.5.0,M4.1.0/3">Wellington: +12 GMT</option><option value="NZST-12NZDT,M9.5.0,M4.1.0/3">Christchurch: +12 GMT</option></select></div>
     <div class="control-row"><label data-translate-key="weatherService">Weather Service</label><select id="weatherServiceSelect" onchange="updateWeatherService(this.value)"><option value="none">None</option><option value="pirateweather">Pirateweather</option><option value="openweathermap">OpenWeatherMap</option><option value="weatherapi">WeatherAPI.com</option></select></div>
@@ -522,7 +330,7 @@ input[type=file]::file-selector-button{
     <div class="control-row"><label data-translate-key="longitude">Longitude</label><input type="text" id="gpsLon" onchange="updateGPS(true)"></div>
 </div>
 
-<div class="control-group" id="systemCard">
+<div class="control-group">
     <label class="card-label" data-translate-key="systemSettings">System Settings</label>
     <div class="control-row">
         <label data-translate-key="panelType">Panel Type (Reboot Req.)</label>
@@ -534,33 +342,31 @@ input[type=file]::file-selector-button{
     <div class="control-row system-buttons"><button class="system-button" onclick="confirmAction('reboot')" data-translate-key="reboot">Reboot</button><button class="system-button" onclick="confirmAction('clearWifi')" data-translate-key="clearWifi">Clear Wifi</button></div>
     <div class="control-row system-buttons"><button class="system-button red-button" onclick="confirmAction('formatSSD')" data-translate-key="formatSsd">Format SSD</button></div>
 
-    <hr>
+    <hr style="border: 0; border-top: 1px solid #eee; margin: 15px 0;">
     <label class="card-label" data-translate-key="uploadFirmware">Upload Firmware</label>
-    <div class="ota-drop">
+    <div style="text-align:center;padding:10px;border:1.5px dashed #ccc;border-radius:6px;">
         <input type="file" id="otaFile" accept=".bin">
-        <div class="ota-hint" data-translate-key="otaHint">Choose firmware.bin (NOT the merged SmartClock_*.bin). The clock reboots when the upload finishes.</div>
+        <div style="font-size:11px;color:#888;margin-top:6px;" data-translate-key="otaHint">Choose firmware.bin (NOT the merged SmartClock_*.bin). The clock reboots when the upload finishes.</div>
     </div>
-    <div class="ota-bar" id="otaBar"><i id="otaFill"></i></div>
-    <div class="ota-status" id="otaStatus"></div>
+    <div id="otaBar" style="display:none;height:6px;border-radius:3px;background:#eee;overflow:hidden;margin-top:10px;"><i id="otaFill" style="display:block;height:100%;width:0;background:#4CAF50;"></i></div>
+    <div id="otaStatus" style="font-size:12px;margin-top:6px;min-height:16px;"></div>
     <div class="control-row system-buttons">
         <button id="otaBtn" onclick="uploadFirmware()" data-translate-key="otaUpload">Upload</button>
     </div>
 </div>
 
-</main>
-
 <script>
     const translations = {
         en: {
-            livePreview:"Live Preview", liveRefresh:"Live Refresh", screenOptions:"Screen Options", safeMode:"Safe Mode", uploadFirmware:"Upload Firmware", otaHint:"Choose firmware.bin (NOT the merged SmartClock_*.bin). The clock reboots when the upload finishes.", otaUpload:"Upload",
+            liveRefresh:"Live Refresh", safeModeNotice:"Safe Mode active — refresh locked to 4s", uploadFirmware:"Upload Firmware", otaHint:"Choose firmware.bin (NOT the merged SmartClock_*.bin). The clock reboots when the upload finishes.", otaUpload:"Upload",
             schedules: "Schedules", scheduleSettings: "Schedule Settings", defaultScreen: "Default Screen", addSchedule: "Add", indoorOffset: "Indoor Temp Offset", language: "Language", mainTitle: "Carlson's Smart Clock", clockSettings: "Clock Settings", screenSelection: "Screen Selection", panelType: "Panel Type (Reboot Req.)", screen1: "Screen 1 - Classic Digital", screen2: "Screen 2 - Alt. Digital", screen3: "Screen 3 - Analog", screen4: "Screen 4 - World Map", screen5: "Screen 5 - Moon Phase", screen6: "Screen 6 - Gradient Clock", screen7: "Screen 7 - Digital Watch", screen8: "Screen 8 - Color Analog", screen9: "Screen 9 - Nixie Tube", fullYearAnimation: "Full Year Animation", "24hour": "24 Hour", icons: "Icons", minMaxTemps: "Min/Max Temps", ampm: "AM/PM", seconds: "Seconds", time: "Time", day: "Day", date: "Date", month: "Month", dateBg: "Date Background", divider: "Divider", temperature: "Temperature", humidity: "Humidity", clockFace: "Clock Face", option: "Option", colour: "Colour", image: "Image", clockOptions: "Clock Options", displayMode: "Display Mode", "4numbers": "4 Numbers", allNumbers: "All Numbers", "4ticks": "4 Ticks", allTicks: "All Ticks", handFuzz: "Hand Fuzziness", handLength: "Hand Length", hourHand: "Hour Hand", minuteHand: "Minute Hand", secondHand: "Second Hand", topCalendar: "Top Calendar", bottomCalendar: "Bottom Calendar", timeShadow: "Time Shadow", nightLights: "Night Lights", nightShadow: "Night Shadow", "3dEffects": "3D Effects", speedDir: "Speed & Direction", numStars: "Number of Stars", sun: "Sun", land: "Land", water: "Water", ice: "Ice", moonShadow: "Moon Shadow", moonPercent: "Moon Percentage", gradSpeed: "Gradient Speed", boxSize: "Box Size", boxFeather: "Box Feather", glowIntensity: "Glow Intensity", glow: "Glow", bgColor: "Background Colour", showMarkers: "Show Markers", cycleSpeed: "Cycle Speed", showDate: "Show Date", brightnessSettings: "Brightness Settings", brightness: "Brightness", autoBrightness: "Auto Brightness", darkRoomBrightness: "Dark Room Brightness", brightRoomBrightness: "Bright Room Brightness", currentBrightness: "Current Brightness:", setDarkRoom: "Set Dark Room", setBrightRoom: "Set Bright Room", weatherSettings: "Weather Settings", timezone: "Timezone Selection", weatherService: "Weather Service", pirateApi: "Pirate Weather API", owmApi: "OpenWeatherMap API", weatherapiApi: "WeatherAPI.com API", getKey: "Get Key", units: "Units", celsius: "Celsius", fahrenheit: "Fahrenheit", tempType: "Temperature", actualTemp: "Actual Temperature", feelsLike: "Feels Like", city: "City", search: "Search", latitude: "Latitude", longitude: "Longitude", systemSettings: "System Settings", reboot: "Reboot", clearWifi: "Clear Wifi", firmwareUpdate: "Firmware Update", formatSsd: "Format SSD"
         },
         de: {
-            livePreview:"Live-Vorschau", liveRefresh:"Aktualisierung", screenOptions:"Bildschirmoptionen", safeMode:"Sicherheitsmodus", uploadFirmware:"Firmware hochladen", otaHint:"firmware.bin wählen (NICHT die zusammengeführte SmartClock_*.bin). Die Uhr startet nach dem Hochladen neu.", otaUpload:"Hochladen",
+            liveRefresh:"Aktualisierung", safeModeNotice:"Sicherheitsmodus aktiv — Aktualisierung auf 4s festgelegt", uploadFirmware:"Firmware hochladen", otaHint:"firmware.bin wählen (NICHT die zusammengeführte SmartClock_*.bin). Die Uhr startet nach dem Hochladen neu.", otaUpload:"Hochladen",
             schedules: "Zeitpläne", scheduleSettings: "Zeitplan-Einstellungen", defaultScreen: "Standardbildschirm", addSchedule: "Hinzufügen", indoorOffset: "Innen-Temp Offset", language: "Sprache", mainTitle: "Carlson's Smart Clock", clockSettings: "Uhreinstellungen", screenSelection: "Bildschirmauswahl", panelType: "Panel-Typ (Neustart Erf.)", screen1: "Bildschirm 1 - Klassisch Digital", screen2: "Bildschirm 2 - Alt. Digital", screen3: "Bildschirm 3 - Analog", screen4: "Bildschirm 4 - Weltkarte", screen5: "Bildschirm 5 - Mondphase", screen6: "Bildschirm 6 - Farbverlauf", screen7: "Bildschirm 7 - Digitaluhr", screen8: "Bildschirm 8 - Farb-Analog", screen9: "Bildschirm 9 - Nixie-Röhre", fullYearAnimation: "Ganzjahresanimation", "24hour": "24-Stunden", icons: "Symbole", minMaxTemps: "Min/Max Temp.", ampm: "AM/PM", seconds: "Sekunden", time: "Zeit", day: "Tag", date: "Datum", month: "Monat", dateBg: "Datum-Hintergrund", divider: "Trennlinie", temperature: "Temperatur", humidity: "Luftfeuchtigkeit", clockFace: "Zifferblatt", option: "Option", colour: "Farbe", image: "Bild", clockOptions: "Uhrenoptionen", displayMode: "Anzeigemodus", "4numbers": "4 Zahlen", allNumbers: "Alle Zahlen", "4ticks": "4 Striche", allTicks: "Alle Striche", handFuzz: "Zeigerunschärfe", handLength: "Zeigerlänge", hourHand: "Stundenzeiger", minuteHand: "Minutenzeiger", secondHand: "Sekundenzeiger", topCalendar: "Oberer Kalender", bottomCalendar: "Unterer Kalender", timeShadow: "Zeitschatten", nightLights: "Nachtlichter", nightShadow: "Nachtschatten", "3dEffects": "3D-Effekte", speedDir: "Geschw. & Richtung", numStars: "Anzahl Sterne", sun: "Sonne", land: "Land", water: "Wasser", ice: "Eis", moonShadow: "Mondschatten", moonPercent: "Mond in Prozent", gradSpeed: "Farbverlaufgeschw.", boxSize: "Boxgröße", boxFeather: "Box-Weichzeichnung", glowIntensity: "Leuchtintensität", glow: "Leuchten", bgColor: "Hintergrundfarbe", showMarkers: "Markierungen", cycleSpeed: "Zyklusgeschw.", showDate: "Datum anzeigen", brightnessSettings: "Helligkeitseinstellungen", brightness: "Helligkeit", autoBrightness: "Auto-Helligkeit", darkRoomBrightness: "Dunkler Raum", brightRoomBrightness: "Heller Raum", currentBrightness: "Aktuelle Helligkeit:", setDarkRoom: "Dunkel einst.", setBrightRoom: "Hell einst.", weatherSettings: "Wettereinstellungen", timezone: "Zeitzonenauswahl", weatherService: "Wetterdienst", pirateApi: "Pirate Weather API", owmApi: "OpenWeatherMap API", weatherapiApi: "WeatherAPI.com API", getKey: "Schlüssel holen", units: "Einheiten", celsius: "Celsius", fahrenheit: "Fahrenheit", tempType: "Temperatur", actualTemp: "Tatsächliche Temp.", feelsLike: "Gefühlte Temp.", city: "Stadt", search: "Suchen", latitude: "Breitengrad", longitude: "Längengrad", systemSettings: "Systemeinstellungen", reboot: "Neustart", clearWifi: "WLAN löschen", firmwareUpdate: "Firmware-Update", formatSsd: "SSD formatieren"
         },
         sv: {
-            livePreview:"Förhandsvisning", liveRefresh:"Uppdatering", screenOptions:"Skärmalternativ", safeMode:"Säkert läge", uploadFirmware:"Ladda upp firmware", otaHint:"Välj firmware.bin (INTE den sammanslagna SmartClock_*.bin). Klockan startar om när uppladdningen är klar.", otaUpload:"Ladda upp",
+            liveRefresh:"Uppdatering", safeModeNotice:"Säkert läge aktivt — uppdatering låst till 4s", uploadFirmware:"Ladda upp firmware", otaHint:"Välj firmware.bin (INTE den sammanslagna SmartClock_*.bin). Klockan startar om när uppladdningen är klar.", otaUpload:"Ladda upp",
             schedules: "Tidsscheman", scheduleSettings: "Schemainställningar", defaultScreen: "Standardskärm", addSchedule: "Lägg till", indoorOffset: "Inomhus Temp Offset", language: "Språk", mainTitle: "Carlsons Smartklocka", clockSettings: "Klockinställningar", screenSelection: "Skärmval", panelType: "Paneltyp (Kräver omstart)", screen1: "Skärm 1 - Klassisk Digital", screen2: "Skärm 2 - Alt. Digital", screen3: "Skärm 3 - Analog", screen4: "Skärm 4 - Världskarta", screen5: "Skärm 5 - Månfas", screen6: "Skärm 6 - Gradientklocka", screen7: "Skärm 7 - Digitalt Armbandsur", screen8: "Skärm 8 - Färg-Analog", screen9: "Skärm 9 - Nixie-rör", fullYearAnimation: "Helårsanimation", "24hour": "24-timmars", icons: "Ikoner", minMaxTemps: "Min/Max Temp.", ampm: "AM/PM", seconds: "Sekunder", time: "Tid", day: "Dag", date: "Datum", month: "Månad", dateBg: "Datum-bakgrund", divider: "Avdelare", temperature: "Temperatur", humidity: "Luftfuktighet", clockFace: "Urtavla", option: "Alternativ", colour: "Färg", image: "Bild", clockOptions: "Klockalternativ", displayMode: "Visningsläge", "4numbers": "4 Siffror", allNumbers: "Alla Siffror", "4ticks": "4 Markeringar", allTicks: "Alla Markeringar", handFuzz: "Visaroskärpa", handLength: "Visarlängd", hourHand: "Timvisare", minuteHand: "Minutvisare", secondHand: "Sekundvisare", topCalendar: "Övre Kalender", bottomCalendar: "Nedre Kalender", timeShadow: "Tidsskugga", nightLights: "Nattljus", nightShadow: "Nattskugga", "3dEffects": "3D-effekter", speedDir: "Fart & Riktning", numStars: "Antal Stjärnor", sun: "Sol", land: "Land", water: "Vatten", ice: "Is", moonShadow: "Månskugga", moonPercent: "Månprocent", gradSpeed: "Gradienthastighet", boxSize: "Boxstorlek", boxFeather: "Box-ludd", glowIntensity: "Ljusintensitet", glow: "Ljus", bgColor: "Bakgrundsfärg", showMarkers: "Markörer", cycleSpeed: "Cykelfart", showDate: "Visa Datum", brightnessSettings: "Ljusstyrkeinställningar", brightness: "Ljusstyrka", autoBrightness: "Auto-ljusstyrka", darkRoomBrightness: "Mörkt Rum", brightRoomBrightness: "Ljust Rum", currentBrightness: "Nuvarande Ljusstyrka:", setDarkRoom: "Ställ in Mörkt", setBrightRoom: "Ställ in Ljust", weatherSettings: "Väderinställningar", timezone: "Tidszonsval", weatherService: "Vädertjänst", pirateApi: "Pirate Weather API", owmApi: "OpenWeatherMap API", weatherapiApi: "WeatherAPI.com API", getKey: "Hämta Nyckel", units: "Enheter", celsius: "Celsius", fahrenheit: "Fahrenheit", tempType: "Temperatur", actualTemp: "Faktisk Temp.", feelsLike: "Känns Som", city: "Stad", search: "Sök", latitude: "Latitud", longitude: "Longitud", systemSettings: "Systeminställningar", reboot: "Starta om", clearWifi: "Rensa WiFi", firmwareUpdate: "Firmware-uppdat.", formatSsd: "Formatera SSD"
         }
     };
@@ -950,22 +756,7 @@ input[type=file]::file-selector-button{
     function fetchCurrentBrightness(){fetch("/currentBrightness").then(e=>e.text()).then(e=>document.getElementById("currentBrightness").textContent=e+"%")}
     
 
-    /* ---------- theme ---------- */
-    function applyTheme(t){
-        var r=document.documentElement;
-        if(t==='light'||t==='dark'){r.setAttribute('data-theme',t);}else{r.removeAttribute('data-theme');t='auto';}
-        try{localStorage.setItem('theme',t);}catch(e){}
-        var b=document.getElementById('themeToggle');
-        if(b){b.textContent = t==='light' ? '\u2600' : (t==='dark' ? '\u263E' : '\u25D1');
-              b.title = 'Theme: '+t+' (click to change)';}
-    }
-    function cycleTheme(){
-        var cur='auto'; try{cur=localStorage.getItem('theme')||'auto';}catch(e){}
-        applyTheme(cur==='auto'?'light':(cur==='light'?'dark':'auto'));
-    }
-    function initTheme(){ var t='auto'; try{t=localStorage.getItem('theme')||'auto';}catch(e){} applyTheme(t); }
-
-    /* ---------- live preview refresh ---------- */
+    /* ---------- live preview refresh (selectable, safe-mode aware) ---------- */
     var refreshMs = 4000, refreshTimer = null, safeModeOn = false;
     var REFRESH_ALLOWED = [1000,2000,3000,4000];
 
@@ -997,8 +788,8 @@ input[type=file]::file-selector-button{
         on = !!on;
         var changed = (on !== safeModeOn);
         safeModeOn = on;
-        var chip=document.getElementById('safeModeChip');
-        if(chip) chip.classList.toggle('hidden', !on);
+        var notice=document.getElementById('safeModeNotice');
+        if(notice) notice.classList.toggle('hidden', !on);
         var sel=document.getElementById('refreshSelect');
         if(on){
             if(refreshMs !== 4000 || changed){ refreshMs = 4000; applyRefreshTimer(); }
@@ -1014,13 +805,13 @@ input[type=file]::file-selector-button{
         var f=document.getElementById('otaFile'), st=document.getElementById('otaStatus');
         var bar=document.getElementById('otaBar'), fill=document.getElementById('otaFill');
         var btn=document.getElementById('otaBtn');
-        st.className='ota-status';
-        if(!f.files || !f.files[0]){ st.className='ota-status err'; st.textContent='Choose a .bin file first.'; return; }
+        st.style.color=''; st.textContent='';
+        if(!f.files || !f.files[0]){ st.style.color='#e5484d'; st.textContent='Choose a .bin file first.'; return; }
         var file=f.files[0];
-        if(!/\.bin$/i.test(file.name)){ st.className='ota-status err'; st.textContent='That is not a .bin file.'; return; }
+        if(!/\.bin$/i.test(file.name)){ st.style.color='#e5484d'; st.textContent='That is not a .bin file.'; return; }
         if(!confirm('Flash "'+file.name+'" ('+Math.round(file.size/1024)+' KB)?\n\nThe clock will reboot into the new firmware.')) return;
         blockPolling(600000);
-        btn.disabled=true; bar.classList.add('on'); fill.style.width='0%';
+        btn.disabled=true; bar.style.display='block'; fill.style.width='0%';
         var fd=new FormData(); fd.append('update', file, file.name);
         var xhr=new XMLHttpRequest();
         xhr.open('POST','/update',true);
@@ -1033,16 +824,16 @@ input[type=file]::file-selector-button{
         xhr.onload=function(){
             if(xhr.status===200){
                 fill.style.width='100%';
-                st.className='ota-status ok';
+                st.style.color='#2ea043';
                 st.textContent='Done - clock is rebooting. Reload this page in ~20 seconds.';
             } else {
-                st.className='ota-status err';
+                st.style.color='#e5484d';
                 st.textContent='Failed ('+xhr.status+'). '+(xhr.responseText||'');
                 btn.disabled=false;
             }
         };
         xhr.onerror=function(){
-            st.className='ota-status err';
+            st.style.color='#e5484d';
             st.textContent='Upload failed - connection lost.';
             btn.disabled=false;
         };
@@ -1050,7 +841,6 @@ input[type=file]::file-selector-button{
     }
 
     window.onload=()=>{
-        initTheme();
         const savedLang = localStorage.getItem('language') || 'en';
         setLanguage(savedLang);
         fetchSettings();
