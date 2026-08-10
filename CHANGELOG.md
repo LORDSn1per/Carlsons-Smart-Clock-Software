@@ -10,6 +10,32 @@ recorded — only version numbers and short notes.
 > some numbers below are just iteration builds with no shipped change of their
 > own. Entries are written against the version that first carried the change.
 
+## 3.29 - 2026-08-11
+- **WiFi power save disabled** (`WiFi.setSleep(false)`). This had never been
+  turned off, so the radio was parking between DTIM beacons and the AP could
+  drop inbound packets — showing up as the web UI being unreachable for tens of
+  seconds while `WiFi.status()` still said `WL_CONNECTED`. Mains-powered clock,
+  so the extra current is irrelevant. Measurably steadier RSSI afterwards.
+- **Weather fetch: forced HTTP/1.0** (`http.useHTTP10(true)`). With chunked
+  encoding `getString()` intermittently returned empty on a 200, logged as
+  `JSON parsing failed: EmptyInput`, and then burned API quota retrying a
+  request that had actually succeeded. An empty body is now reported as a
+  transport failure rather than malformed JSON.
+- **Passive connectivity watchdog**: reboots only after 30 minutes with no
+  successful network activity at all (weather / NTP / a served web request).
+  Stands down entirely when the weather service is "none", since then there is
+  nothing to infer liveness from.
+- Added `GET /debug` (uptime, heap, min heap, max alloc, WiFi status, RSSI).
+- Investigated but **removed** two earlier attempts, both of which made things
+  worse and are documented in the code so they don't get retried:
+  an ICMP link watchdog (couldn't allocate its task once TLS had taken internal
+  DRAM, and its forced reconnects cost 1–3 min of downtime each), and a
+  `WiFi.hostByName()` probe (blocked `loop()` for 30 minutes when the network
+  wedged, freezing the display).
+- **Not fixed:** the clock still intermittently becomes unreachable from the
+  LAN. Established by serial capture that this is *not* a firmware crash — see
+  HANDOFF.md for the full evidence and what to try next.
+
 ## 3.11 - 2026-08-11
 - **FIXED: web UI died after ~1 minute and needed a physical reboot.** Two
   compounding causes, found by adding heartbeat logging (heap was flat and both

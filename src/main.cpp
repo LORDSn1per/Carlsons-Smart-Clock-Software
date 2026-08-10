@@ -10,7 +10,7 @@
 
 // Single source of truth for the version. Auto-incremented by +0.01 on every
 // successful build by scripts/merge_firmware.py; see CHANGELOG.md for history.
-float ver = 3.12;
+float ver = 3.30;
 
 
 /* #################### To add a new screen (example screen6) ####################
@@ -57,6 +57,7 @@ float ver = 3.12;
 #include <WiFiManager.h> // https://github.com/tzapu/WiFiManager           v2.0.17
 #include <EasyButton.h>
 #include <WebServer.h>
+#include <WiFiUdp.h> // link keep-alive (see serviceLinkKeepAlive)
 #include <Update.h> // browser-based OTA (POST /update)
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
@@ -628,6 +629,94 @@ static unsigned long stateStartTime = 0;
 static unsigned long stateNOWIFITime = 0;
 volatile bool needWeatherUpdate = false; // Already volatile if added earlier
 SemaphoreHandle_t settingsMutex = NULL; // Guards /settings.json + the settings globals serialized into it
+
+// ---------------------------------------------------------------------------
+// Link keep-alive
+//
+// A client that transmits nothing for a while can get black-holed by a mesh
+// AP. Measured on this clock, mid-outage: ARP resolved fine (broadcasts are
+// flooded, so they still reach it) and the clock's own outbound HTTPS requests
+// succeeded - but ICMP and TCP from a laptop on the same subnet were 100%
+// lost, with the clock reporting WL_CONNECTED at RSSI -52 the whole time. That
+// is the signature of a stale forwarding entry: unicast frames aimed at the
+// clock get sent down a path it is no longer on.
+//
+// Sending a tiny packet every 20s keeps our MAC current in those tables. It is
+// deliberately fire-and-forget: no listener is required, nothing is awaited,
+// and unlike the ICMP watchdog this needs no task allocation (which is what
+// made that approach fail once TLS had taken the internal DRAM).
+// ---------------------------------------------------------------------------
+static WiFiUDP keepAliveUdp;
+static uint32_t lastKeepAliveMs = 0;
+
+// ---------------------------------------------------------------------------
+// Connectivity watchdog (passive, last-resort auto-recovery)
+//
+// Observed failure, reproduced repeatedly with a serial capture attached: the
+// firmware keeps running perfectly - loop() alive, heap flat, WL_CONNECTED,
+// RSSI -45 - but its network goes dead. It stops answering ICMP/TCP from the
+// LAN *and* stops making its own outbound requests (no weather fetch for 13+
+// minutes), and it does not recover on its own. The only cure has been a
+// reboot. It is not a crash, not a heap leak, not the settings-write spiral,
+// and not TCP TIME_WAIT (it persists with zero traffic offered for 17+ min).
+//
+// Until the root cause is found, automate the cure. This version is
+// deliberately PASSIVE: it only looks at a timestamp that other code already
+// updates on success, and never performs a network call itself.
+//
+// That matters - an earlier attempt probed with WiFi.hostByName() from loop()
+// and, once the network wedged, that call blocked for 30 MINUTES. It froze
+// loop(), and with it the clock display: far worse than the bug it chased.
+// An ICMP variant failed differently (esp_ping could not allocate its task
+// once TLS had taken the internal DRAM). Hence: no probing, just observation.
+// ---------------------------------------------------------------------------
+static volatile uint32_t lastNetSuccessMs = 0; // updated by weather / NTP / web hits
+static const uint32_t NET_DEAD_REBOOT_MS = 30UL * 60UL * 1000UL; // 30 minutes
+
+// Called from the places that prove the network is genuinely working.
+static inline void noteNetworkSuccess() { lastNetSuccessMs = millis(); }
+
+static void serviceConnectivityWatchdog() {
+  if (currentState != STATE_RUNNING) { noteNetworkSuccess(); return; }
+
+  // Weather is what generates regular, unattended outbound traffic (every 7
+  // min). With it off there is nothing to infer liveness from, so stand down
+  // rather than risk rebooting a perfectly healthy clock.
+  if (selectedWeatherService == "none") { noteNetworkSuccess(); return; }
+
+  if (millis() - lastNetSuccessMs < NET_DEAD_REBOOT_MS) return;
+
+  Serial.printf("[ConnWatch] no successful network activity for %lu min - rebooting.\n",
+                (unsigned long)(NET_DEAD_REBOOT_MS / 60000UL));
+  Serial.flush();
+  delay(200);
+  ESP.restart();
+}
+
+
+static void serviceLinkKeepAlive() {
+  if (currentState != STATE_RUNNING || WiFi.status() != WL_CONNECTED) return;
+  if (millis() - lastKeepAliveMs < 20000) return;
+  lastKeepAliveMs = millis();
+
+  IPAddress gw = WiFi.gatewayIP();
+  if ((uint32_t)gw == 0) return;
+
+  // Port 9 is the standard discard port - nothing has to be listening.
+  if (keepAliveUdp.beginPacket(gw, 9)) {
+    const uint8_t b = 0;
+    keepAliveUdp.write(&b, 1);
+    keepAliveUdp.endPacket();
+  }
+}
+
+// NOTE: an ICMP "link watchdog" lived here and was removed. It pinged the
+// gateway and forced a reconnect when probes failed. Two measured problems:
+// esp_ping_new_session() could not create its task once the HTTPS weather
+// fetch had claimed internal DRAM ("create ping task failed" every 15s, and
+// misleading linkFails=0 readings), and the forced reconnect reliably cost
+// 1-3 minutes of downtime - far worse than the 15-30s dip it reacted to.
+
 // True when the Reboot Guard fired (3+ reboots inside 60s) and forced safe
 // brightness settings. Published to the web UI as doc["safe_mode"] so the
 // settings page can back off to its most conservative live-refresh rate.
@@ -1244,6 +1333,7 @@ void loadSettings() {
 }
 
 void handleSettings() {
+  noteNetworkSuccess(); // a request reached us, so inbound works
   DynamicJsonDocument doc(4096);
   
   int screenIndex = currentScreen - 1;
@@ -1953,6 +2043,11 @@ void fetchWeather() {
 
   http.setTimeout(15000);
   http.begin(url);
+  // Force HTTP/1.0 so the server sends a plain Content-Length body instead of a
+  // chunked one. With chunked encoding getString() intermittently came back
+  // empty on a 200 here, which showed up as "JSON parsing failed: EmptyInput"
+  // and then burned API quota retrying a request that had actually succeeded.
+  http.useHTTP10(true);
   int httpCode = http.GET();
   lastHttpCode = httpCode;
   Serial.println(selectedWeatherService + " API Response Code: " + String(httpCode));
@@ -1967,7 +2062,16 @@ void fetchWeather() {
 
   if (httpCode == HTTP_CODE_OK) {
     String payload = http.getString();
-    DynamicJsonDocument doc(2048); 
+    if (payload.length() == 0) {
+      // 200 but nothing arrived - the body was lost in transit. Report it as a
+      // transport failure rather than letting it look like malformed JSON.
+      Serial.println("Weather response body was empty despite HTTP 200.");
+      lastHttpCode = -3;
+      http.end();
+      if (settingsMutex) xSemaphoreGiveRecursive(settingsMutex);
+      return;
+    }
+    DynamicJsonDocument doc(2048);
     DeserializationError error;
 
     if (selectedWeatherService == "pirateweather") {
@@ -2051,6 +2155,7 @@ void fetchWeather() {
       lastHttpCode = -3;
     } else {
       Serial.printf("JSON parsed successfully for %s. Free heap: %u\n", selectedWeatherService.c_str(), ESP.getFreeHeap());
+      noteNetworkSuccess(); // proves outbound + inbound are working
       
       // Store the fetched Celsius values as strings
       currentTemp = String(currentTemperature, 1);
@@ -3432,6 +3537,7 @@ void setup() {
     d["max_alloc"] = ESP.getMaxAllocHeap();
     d["wifi_status"] = (int)WiFi.status();
     d["state"] = (int)currentState;
+    d["rssi"] = (WiFi.status() == WL_CONNECTED) ? (long)WiFi.RSSI() : 0;
     String resp; serializeJson(d, resp);
     server.send(200, "application/json", resp);
   });
@@ -3694,6 +3800,14 @@ void WIFI_SETUP() {
   // Connection attempts and state transitions are handled in loop()
 
   WiFi.mode(WIFI_STA); // Start in station mode; WiFiManager will switch to AP if needed
+
+  // Disable WiFi modem power save. By default the ESP32 parks the radio between
+  // DTIM beacons; anything that arrives while it is asleep can be dropped by the
+  // AP, which shows up as the web UI being unreachable for tens of seconds at a
+  // time even though WiFi.status() still says WL_CONNECTED. This clock is mains
+  // powered and drives an LED matrix, so the extra ~80mA is irrelevant next to
+  // having the settings page actually answer.
+  WiFi.setSleep(false);
   myWM.setConfigPortalBlocking(false); // Keep non-blocking
   myWM.setConfigPortalTimeout(0);      // Portal timeout can be set here if desired
 
@@ -3718,6 +3832,9 @@ void WIFI_SETUP() {
 void loop() {
   myWM.process(); // Keep WiFiManager alive. This is critical for the portal.
   button.read();  // Check button state
+
+  serviceLinkKeepAlive();        // keep our MAC fresh in the AP/mesh forwarding tables
+  serviceConnectivityWatchdog(); // last-resort: reboot if the network stays dead
 
   // Low-rate health line: enough to spot a heap leak or a signal collapse after
   // the fact, quiet enough to leave enabled. Live values are also at GET /debug.
@@ -6905,6 +7022,7 @@ void synchroniseWith_NTP_Time() {
 
   if (success && timeinfo_local.tm_year + 1900 >= 2000) {
     Serial.println("Time synchronized successfully via NTP.");
+    noteNetworkSuccess(); // NTP round-trip proves the network is alive
     // Update the global timeinfo struct (though getLocalTime updates internal clock)
     timeinfo = timeinfo_local;
     updateCurrentHoursMins(); // Update formatted time string
