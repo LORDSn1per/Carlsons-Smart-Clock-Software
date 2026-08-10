@@ -10,6 +10,26 @@ recorded — only version numbers and short notes.
 > some numbers below are just iteration builds with no shipped change of their
 > own. Entries are written against the version that first carried the change.
 
+## 3.11 - 2026-08-11
+- **FIXED: web UI died after ~1 minute and needed a physical reboot.** Two
+  compounding causes, found by adding heartbeat logging (heap was flat and both
+  FreeRTOS tasks stayed alive, so it was never a leak or a crash):
+  1. `fetchSettings()`'s `.catch()` cleared `isLoadingSettings` *before* calling
+     `setLanguage()`, so every failed poll fired `/language` at the device —
+     and `handleLanguage()` called `saveSettings()` unconditionally, writing 8KB
+     to SPIFFS. Flash writes stall the flash cache and therefore the WiFi stack,
+     so each write made the next poll more likely to fail: a spiral that ended
+     with the device unreachable even to ping. The `.catch()` now re-applies
+     translations before clearing the guard, matching the success path.
+  2. `saveSettings()` now fingerprints the serialized settings (FNV-1a) and
+     **skips the flash write entirely when nothing changed**. ~65 call sites
+     call it unconditionally, so this kills the whole class of problem rather
+     than just the `/language` instance of it.
+- Added `GET /debug` (uptime, heap, min heap, WiFi status/state) and a
+  once-a-minute `[Health]` serial line for diagnosing this kind of thing
+- Verified: 24/24 polls over 2 minutes with flat heap, and it now recovers on
+  its own from a bad patch instead of needing a reboot
+
 ## 3.02 - 2026-08-11
 - Reverted the visual redesign below — kept the original page look/CSS, per
   feedback that the redesign "looked crap"

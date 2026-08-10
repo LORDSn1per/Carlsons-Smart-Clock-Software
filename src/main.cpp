@@ -10,7 +10,7 @@
 
 // Single source of truth for the version. Auto-incremented by +0.01 on every
 // successful build by scripts/merge_firmware.py; see CHANGELOG.md for history.
-float ver = 3.03;
+float ver = 3.12;
 
 
 /* #################### To add a new screen (example screen6) ####################
@@ -883,18 +883,18 @@ void markSettingsChanged() {
   settingsChanged = true;
 }
 
+// FNV-1a over the serialized settings, so a save that would write byte-identical
+// content can skip the flash write entirely. See saveSettings() for why.
+static uint32_t settingsFingerprint(const String& s) {
+  uint32_t h = 2166136261u;
+  for (size_t i = 0; i < s.length(); ++i) { h ^= (uint8_t)s[i]; h *= 16777619u; }
+  return h;
+}
+static uint32_t lastSavedSettingsHash = 0;
+
 void saveSettings() {
   if (settingsMutex && xSemaphoreTakeRecursive(settingsMutex, pdMS_TO_TICKS(5000)) != pdTRUE) {
     Serial.println("[Settings] Could not acquire settingsMutex — skipping save this cycle.");
-    return;
-  }
-
-  const char* finalPath = "/settings.json";
-  const char* tmpPath   = "/settings.json.tmp";
-  File file = SPIFFS.open(tmpPath, "w");
-  if (!file) {
-    Serial.println("Failed to open settings tmp file for writing");
-    if (settingsMutex) xSemaphoreGiveRecursive(settingsMutex);
     return;
   }
 
@@ -1026,7 +1026,36 @@ void saveSettings() {
   doc["panel_type"] = panelType;
   //Serial.println("[Save Settings] Saving panel_type as: " + panelType); 
 
-  if (serializeJson(doc, file) == 0) {
+  // Serialize once into RAM so we can tell whether anything actually changed.
+  String payload;
+  serializeJson(doc, payload);
+  if (payload.length() == 0) {
+    Serial.println("Failed to serialize settings");
+    if (settingsMutex) xSemaphoreGiveRecursive(settingsMutex);
+    return;
+  }
+
+  // Skip the flash write when the content is byte-identical to what is already
+  // stored. ~65 call sites call saveSettings() unconditionally, so a client
+  // re-sending an unchanged value (e.g. /language on every failed poll) used to
+  // trigger a full erase/program cycle. Those writes stall the flash cache and
+  // therefore the WiFi stack, which caused more failed polls, which caused more
+  // writes - a spiral that ended with the whole device unreachable until reboot.
+  uint32_t hash = settingsFingerprint(payload);
+  if (hash == lastSavedSettingsHash) {
+    if (settingsMutex) xSemaphoreGiveRecursive(settingsMutex);
+    return; // nothing changed - no flash wear, no stall
+  }
+
+  const char* finalPath = "/settings.json";
+  const char* tmpPath   = "/settings.json.tmp";
+  File file = SPIFFS.open(tmpPath, "w");
+  if (!file) {
+    Serial.println("Failed to open settings tmp file for writing");
+    if (settingsMutex) xSemaphoreGiveRecursive(settingsMutex);
+    return;
+  }
+  if (file.print(payload) != payload.length()) {
     Serial.println("Failed to write to settings tmp file");
     file.close();
     SPIFFS.remove(tmpPath);
@@ -1039,6 +1068,7 @@ void saveSettings() {
   if (!SPIFFS.rename(tmpPath, finalPath)) {
     Serial.println("CRITICAL: failed to rename settings tmp file into place!");
   } else {
+    lastSavedSettingsHash = hash;
     Serial.println("Settings saved to SPIFFS (atomic)");
   }
   if (settingsMutex) xSemaphoreGiveRecursive(settingsMutex);
@@ -3394,6 +3424,17 @@ void setup() {
   // --- Setup Web Server endpoints ---
   server.on("/", handleRoot);
   server.on("/settings", handleSettings);
+  server.on("/debug", []() { // Health snapshot (heap/uptime/WiFi) - handy when the UI misbehaves
+    DynamicJsonDocument d(256);
+    d["uptime_s"] = millis() / 1000;
+    d["free_heap"] = ESP.getFreeHeap();
+    d["min_free_heap"] = ESP.getMinFreeHeap();
+    d["max_alloc"] = ESP.getMaxAllocHeap();
+    d["wifi_status"] = (int)WiFi.status();
+    d["state"] = (int)currentState;
+    String resp; serializeJson(d, resp);
+    server.send(200, "application/json", resp);
+  });
   server.on("/paneltype", handlePanelType);
   server.on("/ampm", handleAMPM);
   server.on("/seconds", handleSeconds);
@@ -3678,12 +3719,14 @@ void loop() {
   myWM.process(); // Keep WiFiManager alive. This is critical for the portal.
   button.read();  // Check button state
 
+  // Low-rate health line: enough to spot a heap leak or a signal collapse after
+  // the fact, quiet enough to leave enabled. Live values are also at GET /debug.
   static uint32_t lastDebugPrintTime = 0;
-  if (millis() - lastDebugPrintTime > 1000) { // Print state once per second
-    // Serial.print("Current State: "); Serial.print(currentState);
-    // Serial.print(", WiFi Status: "); Serial.print(WiFi.status());
-    // Serial.print(", Current Screen Variable: "); Serial.println(currentScreen);
-    // Serial.println("Apparent Temperature: " + currentApparentTemp + "°C");
+  if (millis() - lastDebugPrintTime > 60000) {
+    Serial.printf("[Health] t=%lus heap=%u minHeap=%u wifi=%d state=%d rssi=%ld\n",
+                  millis() / 1000, ESP.getFreeHeap(), ESP.getMinFreeHeap(),
+                  (int)WiFi.status(), (int)currentState,
+                  WiFi.status() == WL_CONNECTED ? (long)WiFi.RSSI() : 0);
     lastDebugPrintTime = millis();
   }
 

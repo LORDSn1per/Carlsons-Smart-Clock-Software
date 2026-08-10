@@ -678,8 +678,14 @@
             })
             .catch(error => {
                 console.error("Fetch settings failed:", error);
-                isLoadingSettings = false;
+                // Re-apply translations locally BEFORE clearing the guard.
+                // setLanguage() POSTs to /language whenever isLoadingSettings is
+                // false, and that endpoint writes settings to flash. Clearing the
+                // guard first meant every failed poll triggered a flash write,
+                // which stalls the WiFi stack and causes the next poll to fail
+                // too - a spiral that locked the device up until a reboot.
                 setLanguage(localStorage.getItem('language') || 'en');
+                isLoadingSettings = false;
             });
     }
     
