@@ -10,7 +10,7 @@
 
 // Single source of truth for the version. Auto-incremented by +0.01 on every
 // successful build by scripts/merge_firmware.py; see CHANGELOG.md for history.
-float ver = 2.98;
+float ver = 3.01;
 
 
 /* #################### To add a new screen (example screen6) ####################
@@ -57,6 +57,7 @@ float ver = 2.98;
 #include <WiFiManager.h> // https://github.com/tzapu/WiFiManager           v2.0.17
 #include <EasyButton.h>
 #include <WebServer.h>
+#include <Update.h> // browser-based OTA (POST /update)
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <qrcoderm.h> 
@@ -627,6 +628,10 @@ static unsigned long stateStartTime = 0;
 static unsigned long stateNOWIFITime = 0;
 volatile bool needWeatherUpdate = false; // Already volatile if added earlier
 SemaphoreHandle_t settingsMutex = NULL; // Guards /settings.json + the settings globals serialized into it
+// True when the Reboot Guard fired (3+ reboots inside 60s) and forced safe
+// brightness settings. Published to the web UI as doc["safe_mode"] so the
+// settings page can back off to its most conservative live-refresh rate.
+bool safeModeActive = false;
 
 
 
@@ -1220,6 +1225,7 @@ void handleSettings() {
   const auto& settings = allScreenSettings[screenIndex];
 
   doc["version"] = ver;
+  doc["safe_mode"] = safeModeActive; // Reboot Guard tripped; UI backs off to its slowest refresh
   doc["ampm_switch"] = settings.ampmSwitch;
   doc["seconds_switch"] = settings.secondsSwitch;
   doc["24hour_switch"] = settings.twentyFourHourSwitch;
@@ -3215,7 +3221,7 @@ void setup() {
 
   settingsMutex = xSemaphoreCreateRecursiveMutex();
 
-  bool emergencyBrightnessApplied = false;
+  safeModeActive = false; // global, published to the web UI as doc["safe_mode"]
   int rebootCount = 1; // Default to 1 for a normal boot
 
   // --- REBOOT GUARD V3: Using External RTC and SPIFFS ---
@@ -3275,7 +3281,7 @@ void setup() {
     // Now, check if the trigger condition is met.
     if (rebootCount >= 3) {
       Serial.println("!!! [Reboot Guard] TRIGGERED: 3+ reboots in under 60 seconds!");
-      emergencyBrightnessApplied = true;
+      safeModeActive = true;
       // We delete the file so the next boot is clean.
       SPIFFS.remove(guardFile); 
       Serial.println("[Reboot Guard] Log file deleted to prevent re-triggering.");
@@ -3302,7 +3308,7 @@ void setup() {
   loadSettings(); 
   
   // If the guard was triggered, OVERWRITE the loaded settings with safe ones and SAVE them.
-  if (emergencyBrightnessApplied) {
+  if (safeModeActive) {
     autoBrightnessEnabled = false;
     brightness = 40; // Approx 15% (40/255)
     
@@ -3359,7 +3365,7 @@ void setup() {
   // dma_canvas.print(bootCountMsg);
 
   // Display Safe Mode message on splash screen if triggered
-  if (emergencyBrightnessApplied) {
+  if (safeModeActive) {
       dma_canvas.setFont(&TomThumb);
       dma_canvas.setTextColor(cc_bred);
       drawCentreString("Safe Mode On", 0, 25);
@@ -3465,6 +3471,46 @@ void setup() {
   server.on("/weatherupdate", [](){ if (currentState == STATE_RUNNING) { needWeatherUpdate = true; server.send(200, "text/plain", "Weather update requested."); } else { server.send(503, "text/plain", "Cannot update weather: Not connected or not in running state."); } });
   server.on("/reboot", []() { server.send(200, "text/plain", "Rebooting..."); delay(1000); ESP.restart(); });
   server.on("/clearWifi", []() { server.send(200, "text/plain", "Clearing WiFi settings & Rebooting..."); myWM.resetSettings(); delay(1000); ESP.restart(); });
+
+  // --- Browser-based OTA: POST a firmware image to /update -----------------
+  // NOTE: this expects the APP-ONLY image (.pio/build/esp32dev/firmware.bin),
+  // NOT the merged SmartClock_vX.XX.bin in ../BIN/ (that one also contains the
+  // bootloader + partition table and is only valid written to offset 0x0 over
+  // USB). Uploading the merged image here would brick the app partition, so
+  // the size is sanity-checked against the free OTA partition below.
+  server.on("/update", HTTP_POST,
+    []() { // called once the whole upload has been received
+      bool ok = !Update.hasError();
+      server.sendHeader("Connection", "close");
+      server.send(ok ? 200 : 500, "text/plain", ok ? "OK" : "FAIL");
+      if (ok) {
+        Serial.println("[OTA] Update accepted - rebooting into new firmware.");
+        delay(500);
+        ESP.restart();
+      }
+    },
+    []() { // streamed while the upload is arriving
+      HTTPUpload& upload = server.upload();
+      if (upload.status == UPLOAD_FILE_START) {
+        Serial.printf("[OTA] Receiving %s\n", upload.filename.c_str());
+        if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
+          Update.printError(Serial);
+        }
+      } else if (upload.status == UPLOAD_FILE_WRITE) {
+        if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
+          Update.printError(Serial);
+        }
+      } else if (upload.status == UPLOAD_FILE_END) {
+        if (Update.end(true)) {
+          Serial.printf("[OTA] Success: %u bytes written.\n", upload.totalSize);
+        } else {
+          Update.printError(Serial);
+        }
+      } else if (upload.status == UPLOAD_FILE_ABORTED) {
+        Update.abort();
+        Serial.println("[OTA] Upload aborted.");
+      }
+    });
   server.on("/clockdisplaymode", HTTP_GET, []() { if (server.hasArg("screen") && server.hasArg("value")) { int screenIndex = server.arg("screen").toInt() - 1; String value = server.arg("value"); if (screenIndex >= 0 && screenIndex < allScreenSettings.size()) { if (value == "4 numbers" || value == "All numbers" || value == "4 ticks" || value == "All ticks") { allScreenSettings[screenIndex].clockDisplayMode = value; saveSettings(); server.send(200, "text/plain", "OK"); } else { server.send(400, "text/plain", "Invalid display mode value"); } } else { server.send(400, "text/plain", "Invalid screen number"); } } else { server.send(400, "text/plain", "Missing parameters"); } });
 
   // Configure WiFiManager

@@ -10,6 +10,23 @@ recorded — only version numbers and short notes.
 > some numbers below are just iteration builds with no shipped change of their
 > own. Entries are written against the version that first carried the change.
 
+## 3.00 - 2026-08-11
+- Settings page completely redesigned: new light/dark design system (follows the
+  system theme, with a manual toggle in the header), responsive grid layout
+  (live preview + compact cards in a left rail, screen controls in the main
+  column on desktop; single column on mobile), modern cards, toggles, sliders
+  and inputs. No external fonts or CDNs — everything is self-contained
+- Live preview refresh is now selectable: **1s / 2s / 3s / 4s**, defaulting to
+  4s, remembered per browser in `localStorage`
+- **Safe Mode** (the Reboot Guard: 3+ reboots within 60s) is now published to
+  the web UI as `safe_mode` in `/settings`. When active, a badge appears in the
+  header and the refresh rate is forced to 4s and locked
+- **Firmware Update button now works.** It previously called
+  `/startUpdatePortal`, which never existed in the firmware. Added a real
+  `POST /update` OTA endpoint plus an upload UI with a progress bar. Upload the
+  app-only `firmware.bin` — *not* the merged `SmartClock_*.bin`
+- Live preview no longer starts a request while the previous one is in flight
+
 ## 2.96 - 2026-08-10
 - Live preview polling (`/screenshot.bin`, 4 KB) reduced from every 1s to every 4s
 - Preview now pauses while the browser tab is hidden, and will not start a new

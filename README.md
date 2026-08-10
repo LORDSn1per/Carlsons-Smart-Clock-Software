@@ -1,4 +1,4 @@
-# SmartClock — firmware (v2.98)
+# SmartClock — firmware (v3.01)
 
 ESP32 + HUB75 64×32 LED matrix clock: NTP time, PirateWeather / OpenWeatherMap,
 day-night terminator world map, analogue faces, moon phase, and a web settings UI.
@@ -38,6 +38,13 @@ to the clock's IP in the `[env:ota]` section of `platformio.ini`, then
 ```bash
 pio run -e ota -t upload
 ```
+
+Or upload from a browser: open the clock's web UI → **System Settings → Upload
+Firmware**, and pick `.pio/build/esp32dev/firmware.bin`. ⚠️ That is the
+**app-only** image — do *not* upload the merged `../BIN/SmartClock_*.bin` here;
+that one also contains the bootloader and partition table and is only valid
+written to offset `0x0` over USB. An invalid image is rejected and the clock
+keeps running the old firmware.
 
 ---
 
