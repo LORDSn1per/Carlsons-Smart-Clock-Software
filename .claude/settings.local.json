@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls -la /Users/phillipcarlson/Documents/Arduino/MyClock/MyClock_2.89/)",
+      "Bash(ls -la /Volumes/home/Documents/Arduino/SmartClock/Software/Firmware/)"
+    ]
+  }
+}

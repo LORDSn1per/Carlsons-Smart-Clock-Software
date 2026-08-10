@@ -1,0 +1,26 @@
+{
+  "files.associations": {
+    "*.ino": "cpp",
+    "*.h": "c",
+    "Clock_Faces.h": "c",
+    "Maps.h": "c",
+    "WeatherIcons.h": "c",
+    "WEB_Settings_HTML.h": "c"
+  },
+  "files.exclude": {
+    "**/.pio": true
+  },
+  "search.exclude": {
+    "**/.pio": true,
+    "src/Maps.h": true,
+    "src/Clock_Faces.h": true,
+    "src/WeatherIcons.h": true
+  },
+  "C_Cpp.default.cppStandard": "gnu++2b",
+  "C_Cpp.default.cStandard": "gnu17",
+  "C_Cpp.intelliSenseEngine": "default",
+  "editor.detectIndentation": true,
+  "terminal.integrated.env.osx": {
+    "PLATFORMIO_CORE_DIR": "${env:HOME}/.platformio"
+  }
+}

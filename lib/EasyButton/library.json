@@ -1,0 +1,10 @@
+{
+  "name": "EasyButton",
+  "version": "2.0.3",
+  "description": "Evert Arias' EasyButton, vendored from the Arduino libraries folder. The EasyButtonTouch variant was left out on purpose: it includes a third-party Filter.h that this project does not use and that is not on the PlatformIO registry, so shipping it would break the build.",
+  "keywords": ["button", "debounce"],
+  "license": "MIT",
+  "authors": [{ "name": "Evert Arias", "url": "https://github.com/evert-arias/EasyButton" }],
+  "frameworks": "arduino",
+  "platforms": "*"
+}

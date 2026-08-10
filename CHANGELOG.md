@@ -1,0 +1,408 @@
+# SmartClock Changelog
+
+Version history for the SmartClock firmware. Entries from 2.90 onward have
+real dates; everything before that is migrated verbatim from the
+commented-out changelog that used to live at the top of `src/main.cpp`
+(going back to the original Arduino IDE sketch), where no dates were ever
+recorded — only version numbers and short notes.
+
+## 2.90 - 2026-08-10
+- Converted from the Arduino IDE sketch (`MyClock_2.89.ino`) to a PlatformIO / VS Code project
+- No functional/behavioral changes — build-system conversion only
+
+## 2.89
+- Added Swedish Language
+
+## 2.88
+- Disabled autobrightness fluctuations under 11%
+
+## 2.87
+- Added ability to schedule screens
+- BUG FIX: City search now works with iOS26
+
+## 2.86
+- BUG FIX: After 3 reboots within 1 minute, clock will revert to 15% brightness
+
+## 2.85
+- Added Temperature offset
+- BUG FIX: Webpage now shows screen brightness when auto brightness is enabled by default
+
+## 2.84
+- Added Display Type selection to swap the RGB pins to correct the colours on the P2.5 or P5.0 display
+
+## 2.83
+- Added Language option: English/German
+
+## 2.82
+- Updated MenuButtonPressed() to now cycle through screen 90 and 91 when required
+
+## 2.81
+- Updated Screen3 to include seconds hand a length slider
+
+## 2.80
+- FIXED: Screen3 tick/numbers now work
+
+## 2.79
+- Added Screen9 Nixie Tube Clock
+
+## 2.78
+- BUG: Screen3 tick/numbers not working
+
+## 2.77
+- Perfected Screen7 and renamed it to "Digital Watch"
+
+## 2.76
+- Added Screen 7 & 8
+
+## 2.75
+- Refactoring entire screen selection/creation/saving/loading
+- Added screen6 = Gradient Clock
+
+## 2.74
+- Added c/f option
+
+## 2.73
+- Added wifi RSSI in Menu page (Perfect WIFI)
+
+## 2.72
+- Solid savepoint
+
+## 2.71
+- Added Pirateweather, OpenWeatherMap, WeatherAPI services
+
+## 2.70
+- Clamped temp/humidity values to +- 99
+
+## 2.69
+- (no description recorded)
+
+## 2.68
+- Changed Fetchweather from `http.getString()` to `WiFiClient& stream = http.getStream();`
+- Changed Fetchweather back to `http.getString()` but this time filtered to ONLY receive the values needed
+- Removed "FetchWeatherTask Stack remaining" from Serial print
+- Improved fetchweather rate limits and removed canMakeAPIcall
+
+## 2.67
+- Added live image of clock to webpage with simulated grid effect
+
+## 2.66
+- Added `dma_canvas.setRotation(2);` into SETUP
+
+## 2.65
+- BUG: JSON parsing failed: IncompleteInput, however v2.35 worked flawlessly
+- Fixed: reverted to the simpler `http.getString()` method from v2.35, but this brought back the SPIFFS corruption bug from v2.47
+- Fixed: fixed SPIFFS corruption by moving the saveSettings call within fetchWeather to AFTER `http.end();`
+
+## 2.64
+- Added fuzziness slider to page 3 for analogue clock hands
+
+## 2.63
+- Fixed: GPS dot accuracy on 3D map
+- Stars now move opposite direction when you change earth's rotation
+- Updated website with Speed & Direction ranging from -50 to +50
+- Fixed 3D spin during animation
+
+## 2.62
+- FIXED: Screen4 and webpage now fixed and working, but during year animation it stops spinning the earth (should continue)
+
+## 2.61
+- Website no longer flickers and all controls working again, but the 3D switch doesn't expand the box anymore
+
+## 2.60
+- Added 2 sliders: rotation speed, number of stars
+- Extra switch to turn sun on/off
+- BUG: Website flickers between screen4 and screen1 causing a lot of SPIFFS activity
+
+## 2.59
+- Adding working 3D switch to webpage
+
+## 2.57
+- Good sun fuzz, stars, speed but GPS dot not in line with rotation speed
+- Ability to switch 2D/3D manually using "SpareSwitch"
+
+## 2.56
+- Made sun fuzzy and corrected it from suddenly disappearing
+
+## 2.55
+- Added Sun to space and star rotation
+
+## 2.54
+- Added a fully working 3D rotating earth screen with working day/night terminator
+
+## 2.53
+- Added a pageslider for each page
+- Updated webpage for screen4 and 5; slider now adjusts the shadow intensity and it is saved to SPIFFS
+
+## 2.52
+- Added new animation logic "renderAnimatedValue_Down_Up" and "renderAnimatedValue_Left_Right", implemented into all screens
+- Added internal and wifi temp/humidity values
+
+## 2.51
+- FIXED: stopped program from constantly calling "getInternalAHT10" after API rate limit exceeded
+
+## 2.50
+- BUG: clock will boot to clock screen when saved wifi is not available, but it starts the AP portal, even when reconnected AP portal remains
+- FIXED: rewrote STATE machine logic
+
+## 2.49
+- Added anti-aliasing to minute/hour hands on Screen3
+
+## 2.48
+- Improved red dot functionality and clock now loads from RTC before NTP
+
+## 2.47
+- BUG: sometimes SPIFFS gets corrupted if reset button is used (v2.42 not affected)
+- FIXED: fixed SPIFFS corruption bug by changing fetchweather to `WiFiClient& stream = http.getStream();` instead of `String payload = http.getString();`
+- FIXED: moon percentage during animation up/down arrow now working
+
+## 2.46
+- Fixed date 23/5/25 on Screen2 and 5; all working perfectly
+
+## 2.45
+- Fixed Screen 6 and 7
+- BUG: cannot load webpage — FIXED, was not calling server.begin
+
+## 2.44
+- Narrowed down to something wrong in choosescreen()
+- SOLVED: 5v regulator only provided 4.1v; replaced board
+- Red dot works good now
+
+## 2.43
+- Found cause of CAPTIVE portal not working: switch machine state in loop
+
+## 2.42
+- Added Arduino OTA
+- BUG: WiFi manager no longer loads captive portal
+
+## 2.41
+- Fixed large Sunny Icon
+
+## 2.40
+- Added red dot to signify WiFi lost; clock now works without WiFi if no credentials
+
+## 2.39
+- Added large weather icons
+
+## 2.38
+- Fixed date colour and spacing for screen 2 & 5 — no longer shows "02 Mar", now shows "2 Mar"
+
+## 2.37
+- Added RTC ability
+
+## 2.36
+- Added code for AHT10 temp/humidity sensor
+
+## 2.35
+- Fully working Screen5 Moon Phase screen; implementing into year animation so moon percentage works
+
+## 2.34
+- Screen5 now has working moon phase, gets data from Weather API, but does not save/load from SPIFFS
+- Year animation also works
+
+## 2.33
+- Screen5 Moon phase clock, animated terminator line working
+
+## 2.32
+- FIXED: SPI crash caused by FetchWeatherTask only having 2048 byte stack size, increased to 8192 bytes
+- Added default colours and switch settings, enhanced Screen5 QR code page
+- Added "colour" serial command to print the current state of all colours/switches on each page
+
+## 2.31
+- Replaced "CheckWifi" function with a state machine
+- Added better splash screen and QR code to set up WiFi
+
+## 2.30
+- Updated screens 1, 2, 5, 6 by moving Day row above Time row
+
+## 2.29
+- Updated website to complete Screen 4
+
+## 2.28
+- Fully completed webpage for screen 3; all screen pages now non-global and working independently
+
+## 2.27
+- Webpage modifications, moved brightness controls to own card
+- In process of making screen controls non-global to allow show/hide/edit of switches and labels
+
+## 2.26
+- Added ability to choose image or colour for screen 3; all settings saved to SPIFFS
+
+## 2.25
+- Added 11 clock images and 3 masks
+
+## 2.24
+- Added numbers/ticks to clock
+- Added MSK clock bitmap for personal colour iteration
+
+## 2.23
+- Started trying to add numbers/ticks to clock
+
+## 2.22
+- Successfully added QR code generation pointing to local IP
+
+## 2.21
+- Added year-centred animation button to HTML
+
+## 2.20
+- Restored v2.17 (still had working webpage for buttons/colours)
+- Added ability to turn on/off time shadow using Month switch/colour
+
+## 2.19
+- Forked
+
+## 2.18
+- Added year animation button to webpage; unable to center (forked)
+
+## 2.17
+- Added 13 images for World clock face
+
+## 2.16
+- Skipped 2.15 (poor performing); working perfectly now
+
+## 2.142
+- Fixed slow website; everything works on world map
+
+## 2.141
+- Added apparent temp
+
+## 2.14
+- Screen4 is good, but webpage slow
+
+## 2.13
+- Added ability to use a single world map mask to mask map images and/or choose colours
+- Changed Serial to 115200
+- Added LAND/WATER/ICE switches on HTML with expandable colour/image pickers (website sluggish)
+
+## 2.12
+- Added fully custom colourable world map
+
+## 2.11
+- Save point
+
+## 2.10
+- Added test function to "emulate" a day of the year via serial ("d135" or "YEAR" to animate a year)
+
+## 2.095
+- Added 2 pixel transition from night to day
+- Working terminator line (adapted from amCharts day/night world map demo)
+
+## 2.085
+- Added terminatorOffset (value of 31 works well, hard transition)
+
+## 2.08
+- Finally got good mercator projection but wrong location
+
+## 2.07
+- Terminator line travels the wrong direction (right instead of left with time)
+
+## 2.06
+- Added Day/Night Terminator Map Clock
+
+## 2.05
+- Added Screen3: Analogue clock with calendar
+
+## 2.04
+- Animated Temp/Humidity to swap when both selected
+
+## 2.03
+- Added working animated seconds on Screen2
+- Added PM indicator and all colours/switches active
+- Enabled min/max temps and added % sign to Tidbyt_Numbers1
+
+## 2.02
+- Added working animated seconds on Screen2
+
+## 2.01
+- Adding Screen2 and 1 large weather icon
+
+## 2.00
+- Added webserver/fetchweather to core 0
+
+## 1.99
+- BUG: weather values not saved/read from SPIFFS — FIXED
+- BUG: glitchy auto brightness — FIXED
+
+## 1.98
+- BUG: colours no longer saving to SPIFFS — FIXED
+- BUG: weather API causes slow webpage — FIXED
+
+## 1.97
+- Fixed lux values on webpage; auto brightness added; webpage loads fine without weather API
+
+## 1.96
+- Fixed lux values on webpage
+
+## 1.95
+- Perfected webpage brightness sliders and now show lux, but lux pushes the slider off the page
+
+## 1.94
+- Added Screen2
+- BUG: button menu no longer works — FIXED, now cycles through screens 1, 2, 3 etc
+
+## 1.93
+- Ability to save/load colours/switches for each screen (fully working Screen1)
+
+## 1.92
+- Added multiple screens
+
+## 1.91
+- Fixed non-loading webpage bug by enabling dual-core mode
+
+## 1.90
+- Updated webpage and added reboot/clear wifi to the webpage
+- Clock now displays after gettime, no longer waiting for weather
+- Fixed bug where weather data could be lost during an API update — values are now saved and read from SPIFFS
+
+## 1.89
+- Weather icons now update
+
+## 1.88
+- Added ability for day/date/month colours, added switch code, all centering works
+
+## 1.87
+- Weather icon switch is working, added brightness slider
+
+## 1.86
+- Added weather info from PirateWeather
+- All settings now saved/loaded in SPIFFS
+- PirateWeather API working and displaying temp/humidity
+
+## 1.85
+- Added custom colours, switches, and the ability to set the time zone/daylight savings info from the web server
+
+## 1.84
+- Used GROK-3 AI to create a nice web UI for the settings page
+- Can now parse chosen colour to the clock
+
+## 1.82
+- Code clean-up
+
+## 1.81
+- Converted whole program to use CANVAS
+
+## 1.8
+- Changed page order; added CANVAS to remove text/images being overwritten
+
+## 1.7
+- Added basic settings menu
+
+## 1.6
+- Added button on GPIO 18
+
+## 1.5
+- Fixed bug when time switching from 12 to 1 would overwrite numbers on display
+
+## 1.4
+- Fixed crash bug
+
+## 1.3
+- Added NTP
+
+## 1.2
+- Added WiFi
+
+## 1.1
+- Fixed green and blue being mixed by swapping pins in ESP32-HUB75-MatrixPanel-I2S-DMA.h
+
+## 1.0
+- Initial working demo

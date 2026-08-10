@@ -1,0 +1,754 @@
+#ifndef WEB_SETTINGS_HTML_H
+#define WEB_SETTINGS_HTML_H
+
+const char* htmlPage_Part1 = R"PAGE_DELIM(
+<!DOCTYPE HTML>
+<html>
+<head>
+    <title>Carlson's Smart Clock - v2</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f0f0f0; font-size: 18px; }
+        .header-bar { display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid #ccc; margin-bottom: 20px; }
+        .header-bar h2 { color: #333; text-align: left; margin: 0; flex-grow: 1; }
+        .language-selector { display: flex; align-items: center; }
+        .language-selector label { font-size: 16px; margin-right: 8px; color: #555; }
+        .language-selector select { font-size: 16px; padding: 5px; border-radius: 4px; }
+        .control-group { background: #fff; padding: 20px; margin: 15px 0; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,.1); }
+        .control-row { display: flex; align-items: center; margin-bottom: 15px; }
+        .control-row label { width: 180px; margin-bottom: 0; text-align: left; color: #555; font-weight: 700; font-size: 18px; }
+        .card-label { display: block; margin-bottom: 15px; color: #222; font-weight: 700; font-size: 24px; text-align: center; text-shadow: 2px 2px 4px rgba(0,0,0,.2); }
+        .switch { position: relative; display: inline-block; width: 60px !important; height: 34px !important; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: #ccc; transition: .4s; border-radius: 34px !important; }
+        .slider:before { position: absolute; content: ""; height: 26px !important; width: 26px !important; left: 4px !important; bottom: 4px !important; background: #fff; transition: .4s; border-radius: 50%; }
+        input:checked+.slider { background: #2196f3 !important; }
+        input:checked+.slider:before { transform: translateX(26px) !important; }
+        input[type=color] { width: 60px; height: 30px; border: 1px solid #ccc; border-radius: 4px; padding: 0; cursor: pointer; margin-right: 20px; }
+        input[type=range] { width: 170px; }
+        input[type=range]:disabled, input[type=checkbox]:disabled+.slider { opacity: 0.5; cursor: not-allowed; }
+        input[type=text] { width: 250px; height: 30px; border: 1px solid #ccc; border-radius: 4px; padding: 5px; cursor: pointer; }
+        button { font-size: 18px; padding: 5px 10px; border-radius: 4px; cursor: pointer; background: #4caf50; color: #fff; border: none; }
+        button:hover { background: #45a049; }
+        .color-picker { width: 80px; text-align: center; }
+        .switch-col { width: 80px; text-align: right; }
+        .control-row.system-buttons { justify-content: center; }
+        button.system-button { width: 120px; margin: 0 5px; }
+        button.red-button { background: #f44336; }
+        button.red-button:hover { background: #d32f2f; }
+        select { font-size: 18px; padding: 5px; border-radius: 4px; cursor: pointer; width: 250px; }
+        span.brightness-value { margin-right: 5px; }
+        span.lux-value { font-size: 12px; color: #777; }
+        .value-container { display: flex; align-items: center; margin-top: 5px; }
+        .current-brightness-container { text-align: center; margin-bottom: 10px; }
+        .current-brightness-label { font-size: 16px; font-weight: 700; margin-right: 10px; }
+        .current-brightness-value { font-size: 16px; }
+        .hidden { display: none !important; }
+        .expandable-container.expanded { border: 2px solid rgba(0,0,0,.1); padding: 10px; border-radius: 8px; }
+        .expandable-container .control-row { display: flex; align-items: center; }
+        .expandable { display: none; margin-left: 0; text-align: center; }
+        .expandable.active { display: block; }
+        .expandable .control-row { display: flex; justify-content: center; }
+        .expandable label { width: 120px; }
+        a.provider-link { font-size: 14px; margin-left: 10px; }
+        
+        /* Schedule Card Styles */
+        .schedule-row { 
+            display: flex; 
+            flex-direction: column; 
+            margin-bottom: 12px; 
+            background: #f8f9fa; 
+            padding: 12px; 
+            border-radius: 6px; 
+            border: 1px solid #e0e0e0; 
+        }
+        .schedule-screen-select {
+            width: 100%;
+            margin-bottom: 10px; 
+            padding: 6px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+        }
+        .schedule-time-group {
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 10px;
+            width: 100%;
+        }
+        .sched-label { 
+            font-size: 14px; 
+            font-weight: bold; 
+            color: #555; 
+        }
+        .schedule-item input[type=time] { 
+            width: 100px; 
+            padding: 5px; 
+            font-size: 16px; 
+            border: 1px solid #ccc; 
+            border-radius: 4px; 
+        }
+        .remove-btn { 
+            background: #f44336; 
+            color: white; 
+            border: none; 
+            border-radius: 50%; 
+            width: 30px; 
+            height: 30px; 
+            cursor: pointer; 
+            font-weight: bold; 
+            margin-left: auto;
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            padding: 0; 
+        }
+        .remove-btn:hover { background: #d32f2f; }
+        
+        #activeScreenLabel {
+            font-size: 16px;
+            font-weight: bold;
+            color: #2196f3;
+            margin-top: 5px;
+            margin-bottom: 10px;
+        }
+
+        @media (max-width: 480px) {
+            .schedule-time-group {
+                flex-wrap: wrap;
+                justify-content: space-between;
+            }
+            .remove-btn { margin-left: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header-bar">
+        <h2 data-translate-key="mainTitle">Carlson's Smart Clock</h2>
+        <div class="language-selector">
+            <label for="languageSelect" data-translate-key="language">Language</label>
+            <select id="languageSelect" onchange="setLanguage(this.value)">
+                <option value="en">English</option>
+                <option value="de">German</option>
+                <option value="sv">Swedish</option>
+            </select>
+        </div>
+    </div>
+
+<div class="control-group">
+    <label class="card-label" data-translate-key="clockSettings">Clock Settings</label>
+    <div style="text-align: center; margin-bottom: 10px;">
+        <span id="clockVersion" style="font-size: 12px; color: #777;"></span>
+    </div>
+    
+    <div class="control-row">
+        <label data-translate-key="screenSelection">Screen Selection</label>
+        <select id="screenSelect" onchange="updateScreen(this.value)">
+            <option value="1" data-translate-key="screen1">Screen 1 - Classic Digital</option>
+            <option value="2" data-translate-key="screen2">Screen 2 - Alt. Digital</option>
+            <option value="3" data-translate-key="screen3">Screen 3 - Analog</option>
+            <option value="4" data-translate-key="screen4">Screen 4 - World Map</option>
+            <option value="5" data-translate-key="screen5">Screen 5 - Moon Phase</option>
+            <option value="6" data-translate-key="screen6">Screen 6 - Gradient Clock</option>
+            <option value="7" data-translate-key="screen7">Screen 7 - Digital Watch</option>
+            <option value="8" data-translate-key="screen8">Screen 8 - Color Analog</option>
+            <option value="9" data-translate-key="screen9">Screen 9 - Nixie Tube</option>
+            <option value="99" data-translate-key="schedules">Schedules</option>
+        </select>
+    </div>
+
+    <div class="control-row system-buttons">
+        <button class="system-button" onclick="startFullYearAnimation()" data-translate-key="fullYearAnimation">Full Year Animation</button>
+    </div>
+    
+    <div style="text-align: center; margin-top: 15px; margin-bottom: 5px;">
+        <canvas id="screenshotCanvas" width="320" height="160" style="border: 1px solid #ccc; width: 332px; height: 166px; image-rendering: pixelated; background-color: #000;"></canvas>
+    </div>
+
+    <!-- Schedules Control Area (Hidden unless Schedules selected) -->
+    <div id="schedulesContainer" class="hidden">
+        <hr style="border: 0; border-top: 1px solid #eee; margin: 15px 0;">
+        <h3 style="text-align:center; color:#555; margin-bottom:15px;" data-translate-key="scheduleSettings">Schedule Settings</h3>
+        
+        <div class="control-row">
+            <label data-translate-key="defaultScreen">Default Screen</label>
+            <select id="defaultScreenSelect" onchange="updateDefaultScreen(this.value)">
+                <option value="1" data-translate-key="screen1">Screen 1 - Classic Digital</option>
+                <option value="2" data-translate-key="screen2">Screen 2 - Alt. Digital</option>
+                <option value="3" data-translate-key="screen3">Screen 3 - Analog</option>
+                <option value="4" data-translate-key="screen4">Screen 4 - World Map</option>
+                <option value="5" data-translate-key="screen5">Screen 5 - Moon Phase</option>
+                <option value="6" data-translate-key="screen6">Screen 6 - Gradient Clock</option>
+                <option value="7" data-translate-key="screen7">Screen 7 - Digital Watch</option>
+                <option value="8" data-translate-key="screen8">Screen 8 - Color Analog</option>
+                <option value="9" data-translate-key="screen9">Screen 9 - Nixie Tube</option>
+            </select>
+        </div>
+        
+        <div id="scheduleList">
+            <!-- Dynamic schedule lines go here -->
+        </div>
+
+        <div class="control-row system-buttons">
+             <button class="system-button" style="background-color: #4caf50;" onclick="addScheduleLine()" data-translate-key="addSchedule">Add</button>
+        </div>
+        <hr style="border: 0; border-top: 1px solid #eee; margin: 15px 0;">
+    </div>
+
+<div id="screen1ClockControls" class="screen-clock-controls">
+    <div class="control-row"><label data-translate-key="24hour">24 Hour</label><div class="color-picker"></div><label class="switch switch-col"><input type="checkbox" id="24hourSwitch1" onchange="updateSwitch('24hour',this.checked,1)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="icons">Icons</label><div class="color-picker"></div><label class="switch switch-col"><input type="checkbox" id="iconsSwitch1" onchange="updateSwitch('icons',this.checked,1)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="minMaxTemps">Min/Max Temps</label><div class="color-picker"></div><label class="switch switch-col"><input type="checkbox" id="minmaxTempsSwitch1" onchange="updateSwitch('minmaxtemps',this.checked,1)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="ampm">AM/PM</label><div class="color-picker"><input type="color" id="ampmColorPicker1" onchange="updateColor('ampmcolor',this.value.substring(1),1)"></div><label class="switch switch-col"><input type="checkbox" id="ampmSwitch1" onchange="updateSwitch('ampm',this.checked,1)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="seconds">Seconds</label><div class="color-picker"><input type="color" id="secondsColorPicker1" onchange="updateColor('secondscolor',this.value.substring(1),1)"></div><label class="switch switch-col"><input type="checkbox" id="secondsSwitch1" onchange="updateSwitch('seconds',this.checked,1)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="time">Time</label><div class="color-picker"><input type="color" id="timeColorPicker1" onchange="updateColor('timecolor',this.value.substring(1),1)"></div><div class="switch-col"></div></div>
+    <div class="control-row" id="clockOptionsRow1"><label id="dayLabel1" data-translate-key="day">Day</label><div class="color-picker"><input type="color" id="dayColorPicker1" onchange="updateColor('daycolor',this.value.substring(1),1)"></div><label class="switch switch-col"><input type="checkbox" id="daySwitch1" onchange="updateSwitch('day',this.checked,1);toggleClockOptions(this.checked,1)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="date">Date</label><div class="color-picker"><input type="color" id="dateColorPicker1" onchange="updateColor('datecolor',this.value.substring(1),1)"></div><label class="switch switch-col"><input type="checkbox" id="dateSwitch1" onchange="updateSwitch('date',this.checked,1)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="month">Month</label><div class="color-picker"><input type="color" id="monthColorPicker1" onchange="updateColor('monthcolor',this.value.substring(1),1)"></div><label class="switch switch-col"><input type="checkbox" id="monthSwitch1" onchange="updateSwitch('month',this.checked,1)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="dateBg">Date Background</label><div class="color-picker"><input type="color" id="dateBGColorPicker1" onchange="updateColor('datebgcolor',this.value.substring(1),1)"></div><div class="switch-col"></div></div>
+    <div class="control-row"><label data-translate-key="temperature">Temperature</label><div class="color-picker"><input type="color" id="tempColorPicker1" onchange="updateColor('tempcolor',this.value.substring(1),1)"></div><label class="switch switch-col"><input type="checkbox" id="temperatureSwitch1" onchange="updateSwitch('temperature',this.checked,1)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="humidity">Humidity</label><div class="color-picker"><input type="color" id="humidityColorPicker1" onchange="updateColor('humiditycolor',this.value.substring(1),1)"></div><label class="switch switch-col"><input type="checkbox" id="humiditySwitch1" onchange="updateSwitch('humidity',this.checked,1)"><span class="slider"></span></label></div>
+</div>
+<div id="screen2ClockControls" class="screen-clock-controls hidden">
+    <div class="control-row"><label data-translate-key="24hour">24 Hour</label><div class="color-picker"></div><label class="switch switch-col"><input type="checkbox" id="24hourSwitch2" onchange="updateSwitch('24hour',this.checked,2)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="icons">Icons</label><div class="color-picker"></div><label class="switch switch-col"><input type="checkbox" id="iconsSwitch2" onchange="updateSwitch('icons',this.checked,2)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="minMaxTemps">Min/Max Temps</label><div class="color-picker"></div><label class="switch switch-col"><input type="checkbox" id="minmaxTempsSwitch2" onchange="updateSwitch('minmaxtemps',this.checked,2)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="ampm">AM/PM</label><div class="color-picker"><input type="color" id="ampmColorPicker2" onchange="updateColor('ampmcolor',this.value.substring(1),2)"></div><label class="switch switch-col"><input type="checkbox" id="ampmSwitch2" onchange="updateSwitch('ampm',this.checked,2)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="seconds">Seconds</label><div class="color-picker"><input type="color" id="secondsColorPicker2" onchange="updateColor('secondscolor',this.value.substring(1),2)"></div><label class="switch switch-col"><input type="checkbox" id="secondsSwitch2" onchange="updateSwitch('seconds',this.checked,2)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="time">Time</label><div class="color-picker"><input type="color" id="timeColorPicker2" onchange="updateColor('timecolor',this.value.substring(1),2)"></div><div class="switch-col"></div></div>
+    <div class="control-row" id="clockOptionsRow2"><label id="dayLabel2" data-translate-key="day">Day</label><div class="color-picker"><input type="color" id="dayColorPicker2" onchange="updateColor('daycolor',this.value.substring(1),2)"></div><label class="switch switch-col"><input type="checkbox" id="daySwitch2" onchange="updateSwitch('day',this.checked,2);toggleClockOptions(this.checked,2)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="date">Date</label><div class="color-picker"><input type="color" id="dateColorPicker2" onchange="updateColor('datecolor',this.value.substring(1),2)"></div><label class="switch switch-col"><input type="checkbox" id="dateSwitch2" onchange="updateSwitch('date',this.checked,2)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="month">Month</label><div class="color-picker"><input type="color" id="monthColorPicker2" onchange="updateColor('monthcolor',this.value.substring(1),2)"></div><label class="switch switch-col"><input type="checkbox" id="monthSwitch2" onchange="updateSwitch('month',this.checked,2)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="divider">Divider</label><div class="color-picker"><input type="color" id="dateBGColorPicker2" onchange="updateColor('datebgcolor',this.value.substring(1),2)"></div><div class="switch-col"></div></div>
+    <div class="control-row"><label data-translate-key="temperature">Temperature</label><div class="color-picker"><input type="color" id="tempColorPicker2" onchange="updateColor('tempcolor',this.value.substring(1),2)"></div><label class="switch switch-col"><input type="checkbox" id="temperatureSwitch2" onchange="updateSwitch('temperature',this.checked,2)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="humidity">Humidity</label><div class="color-picker"><input type="color" id="humidityColorPicker2" onchange="updateColor('humiditycolor',this.value.substring(1),2)"></div><label class="switch switch-col"><input type="checkbox" id="humiditySwitch2" onchange="updateSwitch('humidity',this.checked,2)"><span class="slider"></span></label></div>
+</div>
+<div id="screen3ClockControls" class="screen-clock-controls hidden">
+    <div class="expandable-container" id="clockContainer"><div class="control-row"><label data-translate-key="clockFace">Clock Face</label><label class="switch switch-col"><input type="checkbox" id="clockSwitch" onchange="updateSwitch('clock',this.checked,3);toggleExpandableByIds('clockContainer','clockExpandable',this.checked,document.getElementById('clockOption').value,'clockColourRow','clockImageRow')"><span class="slider"></span></label></div><div id="clockExpandable" class="expandable"><div class="control-row"><label data-translate-key="option">Option</label><select id="clockOption" onchange="updateOption('clock_option',this.value,3)"><option value="colour" data-translate-key="colour">Colour</option><option value="image" data-translate-key="image">Image</option></select></div><div class="control-row" id="clockColourRow"><label data-translate-key="colour">Colour</label><div class="color-picker"><input type="color" id="clockColorPicker" onchange="updateColor('timecolor',this.value.substring(1),3)"></div></div><div class="control-row hidden" id="clockImageRow"><label data-translate-key="image">Image</label><select id="clockImageSelect" onchange="updateBitmap('clock_bitmap',this.value,3)"><option value="0">Frame Neon Brick</option><option value="1">Frame Neon Fog</option><option value="2">Frame Tron</option><option value="3">Ring Blue</option><option value="4">Ring Cyberpunk</option><option value="5">Ring Neon Clock 1</option><option value="6">Ring Neon Clock 2</option><option value="7">Ring Pink and Blue</option><option value="8">Ring Stargate</option><option value="9">Square Pink</option><option value="10">Square Pink 2</option></select></div></div></div>
+    <div class="expandable-container" id="clockOptionsContainer"><div class="control-row" id="clockOptionsRow3"><label id="dayLabel3" data-translate-key="clockOptions">Clock Options</label><label class="switch switch-col"><input type="checkbox" id="daySwitch3" onchange="updateSwitch('day',this.checked,3);toggleClockOptions(this.checked,3)"><span class="slider"></span></label></div><div id="clockOptionsExpandable" class="expandable"><div class="control-row"><label data-translate-key="displayMode">Display Mode</label><select id="clockDisplayMode" onchange="updateClockDisplayMode('clockdisplaymode',this.value,3)"><option value="4 numbers" data-translate-key="4numbers">4 Numbers</option><option value="All numbers" data-translate-key="allNumbers">All Numbers</option><option value="4 ticks" data-translate-key="4ticks">4 Ticks</option><option value="All ticks" data-translate-key="allTicks">All Ticks</option></select></div><div class="control-row" id="clockOptionsColourRow"><label data-translate-key="colour">Colour</label><div class="color-picker"><input type="color" id="dayColorPicker3" onchange="updateColor('daycolor',this.value.substring(1),3)"></div></div></div></div>
+    <div class="control-row"><label data-translate-key="handFuzz">Hand Fuzziness</label><div class="color-picker" style="display:flex;align-items:center;width:auto"><input type="range" id="pageSlider3" min="0" max="100" value="50" style="width:130px;margin-right:5px" oninput="handlePageSliderInput(this.value,3)"><span class="brightness-value" id="pageSliderValue3" style="width:35px;text-align:right">50%</span></div></div>
+    <div class="control-row"><label data-translate-key="handLength">Hand Length</label><div class="color-picker" style="display:flex;align-items:center;width:auto"><input type="range" id="pageSlider2_s3" min="0" max="100" value="80" style="width:130px;margin-right:5px" oninput="handlePageSlider2Input(this.value, 3)"><span class="brightness-value" id="pageSlider2Value_s3" style="width:35px;text-align:right">80%</span></div></div>
+    <div class="control-row"><label data-translate-key="hourHand">Hour Hand</label><div class="color-picker"><input type="color" id="timeColorPicker3" onchange="updateColor('timecolor',this.value.substring(1),3)"></div><div class="switch-col"></div></div>
+    <div class="control-row"><label data-translate-key="minuteHand">Minute Hand</label><div class="color-picker"><input type="color" id="ampmColorPicker3" onchange="updateColor('ampmcolor',this.value.substring(1),3)"></div><div class="switch-col"></div></div>
+    <div class="control-row"><label data-translate-key="secondHand">Second Hand</label><div class="color-picker"><input type="color" id="secondsColorPicker3" onchange="updateColor('secondscolor',this.value.substring(1),3)"></div><label class="switch switch-col"><input type="checkbox" id="secondsSwitch3" onchange="updateSwitch('seconds',this.checked,3)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="topCalendar">Top Calendar</label><div class="color-picker"><input type="color" id="tempColorPicker3" onchange="updateColor('tempcolor',this.value.substring(1),3)"></div><label class="switch switch-col"><input type="checkbox" id="temperatureSwitch3" onchange="updateSwitch('temperature',this.checked,3)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="bottomCalendar">Bottom Calendar</label><div class="color-picker"><input type="color" id="dateBGColorPicker3" onchange="updateColor('datebgcolor',this.value.substring(1),3)"></div><div class="switch-col"></div></div>
+    <div class="control-row"><label data-translate-key="date">Date</label><div class="color-picker"><input type="color" id="dateColorPicker3" onchange="updateColor('datecolor',this.value.substring(1),3)"></div><label class="switch switch-col"><input type="checkbox" id="dateSwitch3" onchange="updateSwitch('date',this.checked,3)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="month">Month</label><div class="color-picker"><input type="color" id="monthColorPicker3" onchange="updateColor('monthcolor',this.value.substring(1),3)"></div><label class="switch switch-col"><input type="checkbox" id="monthSwitch3" onchange="updateSwitch('month',this.checked,3)"><span class="slider"></span></label></div>
+</div>
+<div id="screen4ClockControls" class="screen-clock-controls hidden">
+    <div class="control-row"><label data-translate-key="time">Time</label><div class="color-picker"><input type="color" id="timeColorPicker4" onchange="updateColor('timecolor',this.value.substring(1),4)"></div><div class="switch-col"></div></div>
+    <div class="control-row"><label data-translate-key="timeShadow">Time Shadow</label><div class="color-picker"><input type="color" id="monthColorPicker4" onchange="updateColor('monthcolor',this.value.substring(1),4)"></div><label class="switch switch-col"><input type="checkbox" id="monthSwitch4" onchange="updateSwitch('month',this.checked,4)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="nightLights">Night Lights</label><div class="color-picker"><input type="color" id="humidityColorPicker4" onchange="updateColor('humiditycolor',this.value.substring(1),4)"></div><label class="switch switch-col"><input type="checkbox" id="humiditySwitch4" onchange="updateSwitch('humidity',this.checked,4)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="nightShadow">Night Shadow</label><div class="color-picker" style="display:flex;align-items:center;width:auto"><input type="range" id="pageSlider4" min="0" max="100" value="50" style="width:130px;margin-right:5px" oninput="handlePageSliderInput(this.value,4)"><span class="brightness-value" id="pageSliderValue4" style="width:35px;text-align:right">50%</span></div><div class="switch-col"></div></div>
+    <div class="expandable-container" id="sfxContainer"><div class="control-row"><label data-translate-key="3dEffects">3D Effects</label><div class="color-picker"></div><label class="switch switch-col"><input type="checkbox" id="spareSwitch4" onchange="updateSwitch('spare_switch',this.checked,4);toggleExpandableByIds('sfxContainer','sfxExpandable',this.checked,null,null,null)"><span class="slider"></span></label></div><div id="sfxExpandable" class="expandable"><div class="control-row"><label data-translate-key="speedDir">Speed & Direction</label><div class="color-picker" style="display:flex;align-items:center;width:auto"><input type="range" id="pageSlider2_s4" min="0" max="100" value="50" style="width:130px;margin-right:5px" oninput="handlePageSlider2Input(this.value,4)"><span class="brightness-value" id="pageSlider2Value_s4" style="width:35px;text-align:right">0</span></div><div class="switch-col"></div></div><div class="control-row"><label data-translate-key="numStars">Number of Stars</label><div class="color-picker" style="display:flex;align-items:center;width:auto"><input type="range" id="pageSlider3_s4" min="0" max="100" value="50" style="width:130px;margin-right:5px" oninput="handlePageSlider3Input(this.value,4)"><span class="brightness-value" id="pageSlider3Value_s4" style="width:35px;text-align:right">50%</span></div><div class="switch-col"></div></div><div class="control-row"><label data-translate-key="sun">Sun</label><div class="color-picker"></div><label class="switch switch-col"><input type="checkbox" id="spareSwitch2_s4" onchange="updateSwitch('spare_switch2',this.checked,4)"><span class="slider"></span></label></div></div></div>
+    <div class="expandable-container" id="landContainer"><div class="control-row"><label data-translate-key="land">Land</label><label class="switch switch-col"><input type="checkbox" id="landSwitch" onchange="updateSwitch('land',this.checked,4);toggleExpandableByIds('landContainer','landExpandable',this.checked,document.getElementById('landOption').value,'landColourRow','landImageRow')"><span class="slider"></span></label></div><div id="landExpandable" class="expandable"><div class="control-row"><label data-translate-key="option">Option</label><select id="landOption" onchange="updateOption('land_option',this.value,4)"><option value="colour" data-translate-key="colour">Colour</option><option value="image" data-translate-key="image">Image</option></select></div><div class="control-row" id="landColourRow"><label data-translate-key="colour">Colour</label><div class="color-picker"><input type="color" id="landColorPicker" onchange="updateColor('landcolor',this.value.substring(1),4)"></div></div><div class="control-row hidden" id="landImageRow"><label data-translate-key="image">Image</label><select id="landImageSelect" onchange="updateBitmap('land_bitmap',this.value,4)"><option value="0">Blue Marble</option><option value="1">Continents 1</option><option value="2">Continents 2</option><option value="3">Golden</option><option value="4">Grassy</option><option value="5">Icy</option><option value="6">Light Marble</option><option value="7">Nasa</option><option value="8">Neon 1</option><option value="9">Neon 2</option><option value="10">Neon 3</option><option value="11">Neon 4</option><option value="12">Night</option></select></div></div></div>
+    <div class="expandable-container" id="waterContainer"><div class="control-row"><label data-translate-key="water">Water</label><label class="switch switch-col"><input type="checkbox" id="waterSwitch" onchange="updateSwitch('water',this.checked,4);toggleExpandableByIds('waterContainer','waterExpandable',this.checked,document.getElementById('waterOption').value,'waterColourRow','waterImageRow')"><span class="slider"></span></label></div><div id="waterExpandable" class="expandable"><div class="control-row"><label data-translate-key="option">Option</label><select id="waterOption" onchange="updateOption('water_option',this.value,4)"><option value="colour" data-translate-key="colour">Colour</option><option value="image" data-translate-key="image">Image</option></select></div><div class="control-row" id="waterColourRow"><label data-translate-key="colour">Colour</label><div class="color-picker"><input type="color" id="waterColorPicker" onchange="updateColor('watercolor',this.value.substring(1),4)"></div></div><div class="control-row hidden" id="waterImageRow"><label data-translate-key="image">Image</label><select id="waterImageSelect" onchange="updateBitmap('water_bitmap',this.value,4)"><option value="0">Blue Marble</option><option value="1">Continents 1</option><option value="2">Continents 2</option><option value="3">Golden</option><option value="4">Grassy</option><option value="5">Icy</option><option value="6">Light Marble</option><option value="7">Nasa</option><option value="8">Neon 1</option><option value="9">Neon 2</option><option value="10">Neon 3</option><option value="11">Neon 4</option><option value="12">Night</option></select></div></div></div>
+    <div class="expandable-container" id="iceContainer"><div class="control-row"><label data-translate-key="ice">Ice</label><label class="switch switch-col"><input type="checkbox" id="iceSwitch" onchange="updateSwitch('ice',this.checked,4);toggleExpandableByIds('iceContainer','iceExpandable',this.checked,document.getElementById('iceOption').value,'iceColourRow','iceImageRow')"><span class="slider"></span></label></div><div id="iceExpandable" class="expandable"><div class="control-row"><label data-translate-key="option">Option</label><select id="iceOption" onchange="updateOption('ice_option',this.value,4)"><option value="colour" data-translate-key="colour">Colour</option><option value="image" data-translate-key="image">Image</option></select></div><div class="control-row" id="iceColourRow"><label data-translate-key="colour">Colour</label><div class="color-picker"><input type="color" id="iceColorPicker" onchange="updateColor('icecolor',this.value.substring(1),4)"></div></div><div class="control-row hidden" id="iceImageRow"><label data-translate-key="image">Image</label><select id="iceImageSelect" onchange="updateBitmap('ice_bitmap',this.value,4)"><option value="0">Blue Marble</option><option value="1">Continents 1</option><option value="2">Continents 2</option><option value="3">Golden</option><option value="4">Grassy</option><option value="5">Icy</option><option value="6">Light Marble</option><option value="7">Nasa</option><option value="8">Neon 1</option><option value="9">Neon 2</option><option value="10">Neon 3</option><option value="11">Neon 4</option><option value="12">Night</option></select></div></div></div>
+</div>
+<div id="screen5ClockControls" class="screen-clock-controls hidden">
+    <div class="control-row"><label data-translate-key="24hour">24 Hour</label><div class="color-picker"></div><label class="switch switch-col"><input type="checkbox" id="24hourSwitch5" onchange="updateSwitch('24hour',this.checked,5)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="icons">Icons</label><div class="color-picker"></div><label class="switch switch-col"><input type="checkbox" id="iconsSwitch5" onchange="updateSwitch('icons',this.checked,5)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="moonShadow">Moon Shadow</label><div class="color-picker" style="display:flex;align-items:center;width:auto"><input type="range" id="pageSlider5" min="0" max="100" value="50" style="width:130px;margin-right:5px" oninput="handlePageSliderInput(this.value,5)"><span class="brightness-value" id="pageSliderValue5" style="width:35px;text-align:right">50%</span></div><div class="switch-col"></div></div>
+    <div class="control-row"><label data-translate-key="moonPercent">Moon percentage</label><div class="color-picker"><input type="color" id="dateBGColorPicker5" onchange="updateColor('datebgcolor',this.value.substring(1),5)"></div><label class="switch switch-col"><input type="checkbox" id="minmaxTempsSwitch5" onchange="updateSwitch('minmaxtemps',this.checked,5)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="ampm">AM/PM</label><div class="color-picker"><input type="color" id="ampmColorPicker5" onchange="updateColor('ampmcolor',this.value.substring(1),5)"></div><label class="switch switch-col"><input type="checkbox" id="ampmSwitch5" onchange="updateSwitch('ampm',this.checked,5)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="seconds">Seconds</label><div class="color-picker"><input type="color" id="secondsColorPicker5" onchange="updateColor('secondscolor',this.value.substring(1),5)"></div><label class="switch switch-col"><input type="checkbox" id="secondsSwitch5" onchange="updateSwitch('seconds',this.checked,5)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="time">Time</label><div class="color-picker"><input type="color" id="timeColorPicker5" onchange="updateColor('timecolor',this.value.substring(1),5)"></div><div class="switch-col"></div></div>
+    <div class="control-row" id="clockOptionsRow5"><label id="dayLabel5" data-translate-key="day">Day</label><div class="color-picker"><input type="color" id="dayColorPicker5" onchange="updateColor('daycolor',this.value.substring(1),5)"></div><label class="switch switch-col"><input type="checkbox" id="daySwitch5" onchange="updateSwitch('day',this.checked,5);toggleClockOptions(this.checked,5)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="date">Date</label><div class="color-picker"><input type="color" id="dateColorPicker5" onchange="updateColor('datecolor',this.value.substring(1),5)"></div><label class="switch switch-col"><input type="checkbox" id="dateSwitch5" onchange="updateSwitch('date',this.checked,5)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="month">Month</label><div class="color-picker"><input type="color" id="monthColorPicker5" onchange="updateColor('monthcolor',this.value.substring(1),5)"></div><label class="switch switch-col"><input type="checkbox" id="monthSwitch5" onchange="updateSwitch('month',this.checked,5)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="temperature">Temperature</label><div class="color-picker"><input type="color" id="tempColorPicker5" onchange="updateColor('tempcolor',this.value.substring(1),5)"></div><label class="switch switch-col"><input type="checkbox" id="temperatureSwitch5" onchange="updateSwitch('temperature',this.checked,5)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="humidity">Humidity</label><div class="color-picker"><input type="color" id="humidityColorPicker5" onchange="updateColor('humiditycolor',this.value.substring(1),5)"></div><label class="switch switch-col"><input type="checkbox" id="humiditySwitch5" onchange="updateSwitch('humidity',this.checked,5)"><span class="slider"></span></label></div>
+</div>
+<div id="screen6ClockControls" class="screen-clock-controls hidden">
+    <div class="control-row"><label data-translate-key="gradSpeed">Gradient Speed</label><div class="color-picker" style="display:flex;align-items:center;width:auto"><input type="range" id="pageSlider6" min="0" max="100" value="50" style="width:130px;margin-right:5px" oninput="handlePageSliderInput(this.value, 6)"><span class="brightness-value" id="pageSliderValue6" style="width:35px;text-align:right">50%</span></div><div class="switch-col"></div></div>
+    <div class="control-row"><label data-translate-key="boxSize">Box Size</label><div class="color-picker" style="display:flex;align-items:center;width:auto"><input type="range" id="pageSlider2_s6" min="0" max="100" value="50" style="width:130px;margin-right:5px" oninput="handlePageSlider2Input(this.value, 6)"><span class="brightness-value" id="pageSlider2Value_s6" style="width:35px;text-align:right">50%</span></div><div class="switch-col"></div></div>
+    <div class="control-row"><label data-translate-key="boxFeather">Box Feather</label><div class="color-picker" style="display:flex;align-items:center;width:auto"><input type="range" id="pageSlider3_s6" min="0" max="100" value="50" style="width:130px;margin-right:5px" oninput="handlePageSlider3Input(this.value, 6)"><span class="brightness-value" id="pageSlider3Value_s6" style="width:35px;text-align:right">50%</span></div><div class="switch-col"></div></div>
+    <div class="control-row"><label data-translate-key="24hour">24 Hour</label><div class="color-picker"></div><label class="switch switch-col"><input type="checkbox" id="24hourSwitch6" onchange="updateSwitch('24hour',this.checked,6)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="ampm">AM/PM</label><div class="color-picker"><input type="color" id="ampmColorPicker6" onchange="updateColor('ampmcolor',this.value.substring(1),6)"></div><label class="switch switch-col"><input type="checkbox" id="ampmSwitch6" onchange="updateSwitch('ampm',this.checked,6)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="time">Time</label><div class="color-picker"><input type="color" id="timeColorPicker6" onchange="updateColor('timecolor',this.value.substring(1),6)"></div><div class="switch-col"></div></div>
+    <div class="control-row"><label data-translate-key="timeShadow">Time Shadow</label><div class="color-picker"><input type="color" id="dateBGColorPicker6" onchange="updateColor('datebgcolor',this.value.substring(1),6)"></div><div class="switch-col"></div></div>
+</div>
+<div id="screen7ClockControls" class="screen-clock-controls hidden">
+    <div class="control-row"><label data-translate-key="glowIntensity">Glow Intensity</label><div class="color-picker" style="display:flex;align-items:center;width:auto"><input type="range" id="pageSlider7" min="0" max="100" value="50" style="width:130px;margin-right:5px" oninput="handlePageSliderInput(this.value, 7)"><span class="brightness-value" id="pageSliderValue7" style="width:35px;text-align:right">50%</span></div></div>
+    <div class="control-row"><label data-translate-key="24hour">24 Hour</label><div class="color-picker"></div><label class="switch switch-col"><input type="checkbox" id="24hourSwitch7" onchange="updateSwitch('24hour',this.checked,7)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="ampm">AM/PM</label><div class="color-picker"><input type="color" id="secondsColorPicker7" onchange="updateColor('secondscolor',this.value.substring(1),7)"></div><label class="switch switch-col"><input type="checkbox" id="ampmSwitch7" onchange="updateSwitch('ampm',this.checked,7)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="time">Time</label><div class="color-picker"><input type="color" id="timeColorPicker7" onchange="updateColor('timecolor',this.value.substring(1),7)"></div></div>
+    <div class="control-row"><label data-translate-key="glow">Glow</label><div class="color-picker"><input type="color" id="ampmColorPicker7" onchange="updateColor('ampmcolor',this.value.substring(1),7)"></div></div>
+    <div class="control-row"><label data-translate-key="date">Date</label><div class="color-picker"><input type="color" id="dateColorPicker7" onchange="updateColor('datecolor',this.value.substring(1),7)"></div><label class="switch switch-col"><input type="checkbox" id="dateSwitch7" onchange="updateSwitch('date',this.checked,7)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="month">Month</label><div class="color-picker"><input type="color" id="monthColorPicker7" onchange="updateColor('monthcolor',this.value.substring(1),7)"></div><label class="switch switch-col"><input type="checkbox" id="monthSwitch7" onchange="updateSwitch('month',this.checked,7)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="bgColor">Background Colour</label><div class="color-picker"><input type="color" id="dateBGColorPicker7" onchange="updateColor('datebgcolor',this.value.substring(1),7)"></div><label class="switch switch-col"><input type="checkbox" id="backgroundSwitch7" onchange="updateSwitch('backgroundSwitch',this.checked,7)"><span class="slider"></span></label></div>
+</div>
+<div id="screen8ClockControls" class="screen-clock-controls hidden">
+    <div class="expandable-container" id="markerContainer8"><div class="control-row"><label data-translate-key="showMarkers">Show Markers</label><label class="switch switch-col"><input type="checkbox" id="daySwitch8" onchange="updateSwitch('day',this.checked,8);toggleExpandableByIds('markerContainer8','markerExpandable8',this.checked,null,null,null)"><span class="slider"></span></label></div><div id="markerExpandable8" class="expandable"><div class="control-row"><label data-translate-key="displayMode">Display Mode</label><select id="markerDisplayMode8" onchange="updateNamedSetting('markerDisplayMode', this.value, 8)"><option value="4 Numbers + Stars">4 Numbers + Stars</option><option value="4 Numbers">4 Numbers</option><option value="All Numbers">All Numbers</option><option value="4 Stars">4 Stars</option><option value="All Stars">All Stars</option></select></div><div class="control-row"><label>Numbers</label><select id="numberColorMode8" onchange="updateNamedSetting('numberColorMode', this.value, 8); toggleColorPicker(this.value, 'numberColorPickerContainer8')"><option value="Rainbow">Rainbow</option><option value="Colour">Colour</option></select></div><div class="control-row hidden" id="numberColorPickerContainer8"><label>Number Color</label><div class="color-picker"><input type="color" id="numberColorPicker8" onchange="updateColor('number_color', this.value.substring(1), 8)"></div></div><div class="control-row"><label>Stars</label><select id="starColorMode8" onchange="updateNamedSetting('starColorMode', this.value, 8); toggleColorPicker(this.value, 'starColorPickerContainer8')"><option value="Rainbow">Rainbow</option><option value="Colour">Colour</option></select></div><div class="control-row hidden" id="starColorPickerContainer8"><label>Star Color</label><div class="color-picker"><input type="color" id="starColorPicker8" onchange="updateColor('star_color', this.value.substring(1), 8)"></div></div></div></div>
+    <div class="control-row"><label data-translate-key="cycleSpeed">Cycle Speed</label><div class="color-picker" style="display:flex;align-items:center;width:auto"><input type="range" id="pageSlider8" min="0" max="100" value="50" style="width:130px;margin-right:5px" oninput="handlePageSliderInput(this.value, 8)"><span class="brightness-value" id="pageSliderValue8" style="width:35px;text-align:right">50%</span></div></div>
+    <div class="control-row"><label data-translate-key="handFuzz">Hand Fuzziness</label><div class="color-picker" style="display:flex;align-items:center;width:auto"><input type="range" id="pageSlider2_s8" min="0" max="100" value="50" style="width:130px;margin-right:5px" oninput="handlePageSlider2Input(this.value, 8)"><span class="brightness-value" id="pageSlider2Value_s8" style="width:35px;text-align:right">50%</span></div></div>
+    <div class="control-row"><label data-translate-key="handLength">Hand Length</label><div class="color-picker" style="display:flex;align-items:center;width:auto"><input type="range" id="pageSlider3_s8" min="0" max="100" value="50" style="width:130px;margin-right:5px" oninput="handlePageSlider3Input(this.value, 8)"><span class="brightness-value" id="pageSlider3Value_s8" style="width:35px;text-align:right">50%</span></div></div>
+    <div class="control-row"><label data-translate-key="hourHand">Hour Hand</label><div class="color-picker"><input type="color" id="timeColorPicker8" onchange="updateColor('timecolor',this.value.substring(1),8)"></div><label class="switch switch-col"><input type="checkbox" id="hourHandSwitch8" onchange="updateSwitch('hourHandSwitch',this.checked,8)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="minuteHand">Minute Hand</label><div class="color-picker"><input type="color" id="ampmColorPicker8" onchange="updateColor('ampmcolor',this.value.substring(1),8)"></div><label class="switch switch-col"><input type="checkbox" id="minuteHandSwitch8" onchange="updateSwitch('minuteHandSwitch',this.checked,8)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="secondHand">Second Hand</label><div class="color-picker"><input type="color" id="secondsColorPicker8" onchange="updateColor('secondscolor',this.value.substring(1),8)"></div><label class="switch switch-col"><input type="checkbox" id="secondHandSwitch8" onchange="updateSwitch('secondHandSwitch',this.checked,8)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="day">Day (e.g. Tue)</label><div class="color-picker"><input type="color" id="monthColorPicker8" onchange="updateColor('monthcolor',this.value.substring(1),8)"></div><label class="switch switch-col"><input type="checkbox" id="monthSwitch8" onchange="updateSwitch('month',this.checked,8)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="date">Date (e.g. 19)</label><div class="color-picker"><input type="color" id="dateColorPicker8" onchange="updateColor('datecolor',this.value.substring(1),8)"></div><label class="switch switch-col"><input type="checkbox" id="dateSwitch8" onchange="updateSwitch('date',this.checked,8)"><span class="slider"></span></label></div>
+</div>
+<div id="screen9ClockControls" class="screen-clock-controls hidden">
+    <div class="control-row"><label data-translate-key="24hour">24 Hour</label><div class="color-picker"></div><label class="switch switch-col"><input type="checkbox" id="24hourSwitch9" onchange="updateSwitch('24hour',this.checked,9)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="showDate">Show Date</label><div class="color-picker"></div><label class="switch switch-col"><input type="checkbox" id="dateSwitch9" onchange="updateSwitch('date',this.checked,9)"><span class="slider"></span></label></div>
+</div>
+</div>
+
+<div class="control-group">
+    <label class="card-label" data-translate-key="brightnessSettings">Brightness Settings</label>
+    <div class="control-row"><label data-translate-key="brightness">Brightness</label><div class="color-picker"><input type="range" id="brightnessSlider" min="0" max="255" oninput="updateBrightness(this.value)"><span class="brightness-value" id="brightnessValue"></span></div><div class="switch-col"></div></div>
+    <div class="expandable-container" id="autoBrightnessContainer"><div class="control-row"><label data-translate-key="autoBrightness">Auto Brightness</label><div class="color-picker"></div><label class="switch switch-col"><input type="checkbox" id="autoBrightnessSwitch" onchange="toggleAutoBrightness(this.checked);toggleAutoBrightnessExpandable(this.checked)"><span class="slider"></span></label></div><div id="autoBrightnessExpandable" class="expandable"><div class="control-row"><label data-translate-key="darkRoomBrightness">Dark Room Brightness</label><div class="color-picker"><input type="range" id="darkRoomBrightnessSlider" min="0" max="255" oninput="updateDarkRoomBrightness(this.value)"><div class="value-container"><span class="brightness-value" id="darkRoomBrightnessValue"></span><span class="lux-value" id="darkRoomLux"></span></div></div><div class="switch-col"></div></div><div class="control-row"><label data-translate-key="brightRoomBrightness">Bright Room Brightness</label><div class="color-picker"><input type="range" id="brightRoomBrightnessSlider" min="0" max="255" oninput="updateBrightRoomBrightness(this.value)"><div class="value-container"><span class="brightness-value" id="brightRoomBrightnessValue"></span><span class="lux-value" id="brightRoomLux"></span></div></div><div class="switch-col"></div></div><div class="current-brightness-container"><span class="current-brightness-label" data-translate-key="currentBrightness">Current Brightness:</span><span class="current-brightness-value" id="currentBrightness">0%</span></div><div class="control-row system-buttons"><button class="system-button" onclick="setDarkRoomLDR()" data-translate-key="setDarkRoom">Set Dark Room</button><button class="system-button" onclick="setBrightRoomLDR()" data-translate-key="setBrightRoom">Set Bright Room</button></div></div></div>
+</div>
+
+<div class="control-group">
+    <label class="card-label" data-translate-key="weatherSettings">Weather Settings</label>
+    <div class="control-row"><label data-translate-key="timezone">Timezone Selection</label><select id="timezoneSelect" onchange="blockPolling(1000); fetch('/timezone?tz='+this.value).then(() => fetchSettings())"><option value="UTC0">London: 0 GMT</option><option value="HST10HDT,M3.2.0,M11.1.0">Honolulu: -10 GMT</option><option value="AKST9AKDT,M3.2.0,M11.1.0">Anchorage: -9 GMT</option><option value="PST8PDT,M3.2.0,M11.1.0">Los Angeles: -8 GMT</option><option value="MST7MDT,M3.2.0,M11.1.0">Denver: -7 GMT</option><option value="CST6CDT,M3.2.0,M11.1.0">Chicago: -6 GMT</option><option value="EST5EDT,M3.2.0,M11.1.0">New York: -5 GMT</option><option value="<-04>4">Santiago: -4 GMT</option><option value="<-03>3">Buenos Aires: -3 GMT</option><option value="WAT-1">Lagos: +1 GMT</option><option value="CET-1CEST,M3.5.0,M10.5.0/3">Paris: +1 GMT</option><option value="EET-2EEST,M3.5.0/0,M10.5.0/0">Athens: +2 GMT</option><option value="EAT-3">Nairobi: +3 GMT</option><option value="<-05>5">New Delhi: +5 GMT</option><option value="<-06>6">Dhaka: +6 GMT</option><option value="<-07>7">Bangkok: +7 GMT</option><option value="<-08>8">Shanghai: +8 GMT</option><option value="AWST-8">Perth: +8 GMT</option><option value="<-09>9">Tokyo: +9 GMT</option><option value="ACST-9:30ACDT,M10.1.0,M4.1.0/3">Adelaide: +9:30 GMT</option><option value="AEST-10">Brisbane: +10 GMT</option><option value="ACST-9:30">Darwin: +9:30 GMT</option><option value="AEST-10AEDT,M10.1.0,M4.1.0/3">Sydney: +10 GMT</option><option value="NZST-12NZDT,M9.5.0,M4.1.0/3">Auckland: +12 GMT</option><option value="NZST-12NZDT,M9.5.0,M4.1.0/3">Wellington: +12 GMT</option><option value="NZST-12NZDT,M9.5.0,M4.1.0/3">Christchurch: +12 GMT</option></select></div>
+    <div class="control-row"><label data-translate-key="weatherService">Weather Service</label><select id="weatherServiceSelect" onchange="updateWeatherService(this.value)"><option value="none">None</option><option value="pirateweather">Pirateweather</option><option value="openweathermap">OpenWeatherMap</option><option value="weatherapi">WeatherAPI.com</option></select></div>
+    <div id="pirateWeatherRow" class="control-row api-key-row"><label data-translate-key="pirateApi">Pirate Weather API</label><input type="text" id="pirateWeatherAPI" onchange="blockPolling(2000); fetch('/pirateweatherapi?api='+encodeURIComponent(this.value)).then(() => fetchSettings())"><a id="pirateWeatherLink" href="https://pirateweather.net/" target="_blank" class="provider-link hidden" data-translate-key="getKey">Get Key</a></div>
+    <div id="openWeatherMapRow" class="control-row api-key-row hidden"><label data-translate-key="owmApi">OpenWeatherMap API</label><input type="text" id="openWeatherMapAPI" onchange="blockPolling(2000); fetch('/openweathermapapi?api='+encodeURIComponent(this.value)).then(() => fetchSettings())"><a id="openWeatherMapLink" href="https://openweathermap.org/api" target="_blank" class="provider-link hidden" data-translate-key="getKey">Get Key</a></div>
+    <div id="weatherApiRow" class="control-row api-key-row hidden"><label data-translate-key="weatherapiApi">WeatherAPI.com API</label><input type="text" id="weatherAPI_API" onchange="blockPolling(2000); fetch('/weatherapi_api?api='+encodeURIComponent(this.value)).then(() => fetchSettings())"><a id="weatherApiLink" href="https://www.weatherapi.com/" target="_blank" class="provider-link hidden" data-translate-key="getKey">Get Key</a></div>
+    <div class="control-row"><label data-translate-key="units">Units</label><select id="unitsSelect" onchange="updateNamedSetting('units', this.value)"><option value="celsius" data-translate-key="celsius">Celsius</option><option value="fahrenheit" data-translate-key="fahrenheit">Fahrenheit</option></select></div>
+    <div class="control-row"><label data-translate-key="tempType">Temperature</label><select id="tempTypeSelect" onchange="updateNamedSetting('temp_type', this.value)"><option value="actual" data-translate-key="actualTemp">Actual Temperature</option><option value="feels_like" data-translate-key="feelsLike">Feels Like</option></select></div>
+    <div class="control-row">
+        <label data-translate-key="indoorOffset">Indoor Temp Offset</label>
+        <div class="color-picker" style="display:flex;align-items:center;width:auto">
+            <input type="range" id="indoorTempOffsetSlider" min="-100" max="100" value="0" style="width:130px;margin-right:5px" oninput="updateIndoorTempOffset(this.value)">
+            <span class="brightness-value" id="indoorTempOffsetValue" style="width:55px;text-align:right">0.0&deg;</span>
+        </div>
+    </div>
+    <div class="control-row"><label data-translate-key="city">City</label><input type="text" id="cityInput" style="width:145px; margin-right:5px;"><button onclick="searchCity()" data-translate-key="search">Search</button></div>
+    <div class="control-row"><label data-translate-key="latitude">Latitude</label><input type="text" id="gpsLat" onchange="updateGPS(true)"></div>
+    <div class="control-row"><label data-translate-key="longitude">Longitude</label><input type="text" id="gpsLon" onchange="updateGPS(true)"></div>
+</div>
+
+<div class="control-group">
+    <label class="card-label" data-translate-key="systemSettings">System Settings</label>
+    <div class="control-row">
+        <label data-translate-key="panelType">Panel Type (Reboot Req.)</label>
+        <select id="panelTypeSelect" onchange="updatePanelType(this.value)">
+            <option value="P5.0">P5.0</option>
+            <option value="P2.5">P2.5</option>
+        </select>
+    </div>
+    <div class="control-row system-buttons"><button class="system-button" onclick="confirmAction('reboot')" data-translate-key="reboot">Reboot</button><button class="system-button" onclick="confirmAction('clearWifi')" data-translate-key="clearWifi">Clear Wifi</button></div>
+    <div class="control-row system-buttons"><button class="system-button" style="background:#ff9800" onclick="confirmUpdate()" data-translate-key="firmwareUpdate">Firmware Update</button><button class="system-button red-button" onclick="confirmAction('formatSSD')" data-translate-key="formatSsd">Format SSD</button></div>
+</div>
+
+<script>
+    const translations = {
+        en: {
+            schedules: "Schedules", scheduleSettings: "Schedule Settings", defaultScreen: "Default Screen", addSchedule: "Add", indoorOffset: "Indoor Temp Offset", language: "Language", mainTitle: "Carlson's Smart Clock", clockSettings: "Clock Settings", screenSelection: "Screen Selection", panelType: "Panel Type (Reboot Req.)", screen1: "Screen 1 - Classic Digital", screen2: "Screen 2 - Alt. Digital", screen3: "Screen 3 - Analog", screen4: "Screen 4 - World Map", screen5: "Screen 5 - Moon Phase", screen6: "Screen 6 - Gradient Clock", screen7: "Screen 7 - Digital Watch", screen8: "Screen 8 - Color Analog", screen9: "Screen 9 - Nixie Tube", fullYearAnimation: "Full Year Animation", "24hour": "24 Hour", icons: "Icons", minMaxTemps: "Min/Max Temps", ampm: "AM/PM", seconds: "Seconds", time: "Time", day: "Day", date: "Date", month: "Month", dateBg: "Date Background", divider: "Divider", temperature: "Temperature", humidity: "Humidity", clockFace: "Clock Face", option: "Option", colour: "Colour", image: "Image", clockOptions: "Clock Options", displayMode: "Display Mode", "4numbers": "4 Numbers", allNumbers: "All Numbers", "4ticks": "4 Ticks", allTicks: "All Ticks", handFuzz: "Hand Fuzziness", handLength: "Hand Length", hourHand: "Hour Hand", minuteHand: "Minute Hand", secondHand: "Second Hand", topCalendar: "Top Calendar", bottomCalendar: "Bottom Calendar", timeShadow: "Time Shadow", nightLights: "Night Lights", nightShadow: "Night Shadow", "3dEffects": "3D Effects", speedDir: "Speed & Direction", numStars: "Number of Stars", sun: "Sun", land: "Land", water: "Water", ice: "Ice", moonShadow: "Moon Shadow", moonPercent: "Moon Percentage", gradSpeed: "Gradient Speed", boxSize: "Box Size", boxFeather: "Box Feather", glowIntensity: "Glow Intensity", glow: "Glow", bgColor: "Background Colour", showMarkers: "Show Markers", cycleSpeed: "Cycle Speed", showDate: "Show Date", brightnessSettings: "Brightness Settings", brightness: "Brightness", autoBrightness: "Auto Brightness", darkRoomBrightness: "Dark Room Brightness", brightRoomBrightness: "Bright Room Brightness", currentBrightness: "Current Brightness:", setDarkRoom: "Set Dark Room", setBrightRoom: "Set Bright Room", weatherSettings: "Weather Settings", timezone: "Timezone Selection", weatherService: "Weather Service", pirateApi: "Pirate Weather API", owmApi: "OpenWeatherMap API", weatherapiApi: "WeatherAPI.com API", getKey: "Get Key", units: "Units", celsius: "Celsius", fahrenheit: "Fahrenheit", tempType: "Temperature", actualTemp: "Actual Temperature", feelsLike: "Feels Like", city: "City", search: "Search", latitude: "Latitude", longitude: "Longitude", systemSettings: "System Settings", reboot: "Reboot", clearWifi: "Clear Wifi", firmwareUpdate: "Firmware Update", formatSsd: "Format SSD"
+        },
+        de: {
+            schedules: "Zeitpläne", scheduleSettings: "Zeitplan-Einstellungen", defaultScreen: "Standardbildschirm", addSchedule: "Hinzufügen", indoorOffset: "Innen-Temp Offset", language: "Sprache", mainTitle: "Carlson's Smart Clock", clockSettings: "Uhreinstellungen", screenSelection: "Bildschirmauswahl", panelType: "Panel-Typ (Neustart Erf.)", screen1: "Bildschirm 1 - Klassisch Digital", screen2: "Bildschirm 2 - Alt. Digital", screen3: "Bildschirm 3 - Analog", screen4: "Bildschirm 4 - Weltkarte", screen5: "Bildschirm 5 - Mondphase", screen6: "Bildschirm 6 - Farbverlauf", screen7: "Bildschirm 7 - Digitaluhr", screen8: "Bildschirm 8 - Farb-Analog", screen9: "Bildschirm 9 - Nixie-Röhre", fullYearAnimation: "Ganzjahresanimation", "24hour": "24-Stunden", icons: "Symbole", minMaxTemps: "Min/Max Temp.", ampm: "AM/PM", seconds: "Sekunden", time: "Zeit", day: "Tag", date: "Datum", month: "Monat", dateBg: "Datum-Hintergrund", divider: "Trennlinie", temperature: "Temperatur", humidity: "Luftfeuchtigkeit", clockFace: "Zifferblatt", option: "Option", colour: "Farbe", image: "Bild", clockOptions: "Uhrenoptionen", displayMode: "Anzeigemodus", "4numbers": "4 Zahlen", allNumbers: "Alle Zahlen", "4ticks": "4 Striche", allTicks: "Alle Striche", handFuzz: "Zeigerunschärfe", handLength: "Zeigerlänge", hourHand: "Stundenzeiger", minuteHand: "Minutenzeiger", secondHand: "Sekundenzeiger", topCalendar: "Oberer Kalender", bottomCalendar: "Unterer Kalender", timeShadow: "Zeitschatten", nightLights: "Nachtlichter", nightShadow: "Nachtschatten", "3dEffects": "3D-Effekte", speedDir: "Geschw. & Richtung", numStars: "Anzahl Sterne", sun: "Sonne", land: "Land", water: "Wasser", ice: "Eis", moonShadow: "Mondschatten", moonPercent: "Mond in Prozent", gradSpeed: "Farbverlaufgeschw.", boxSize: "Boxgröße", boxFeather: "Box-Weichzeichnung", glowIntensity: "Leuchtintensität", glow: "Leuchten", bgColor: "Hintergrundfarbe", showMarkers: "Markierungen", cycleSpeed: "Zyklusgeschw.", showDate: "Datum anzeigen", brightnessSettings: "Helligkeitseinstellungen", brightness: "Helligkeit", autoBrightness: "Auto-Helligkeit", darkRoomBrightness: "Dunkler Raum", brightRoomBrightness: "Heller Raum", currentBrightness: "Aktuelle Helligkeit:", setDarkRoom: "Dunkel einst.", setBrightRoom: "Hell einst.", weatherSettings: "Wettereinstellungen", timezone: "Zeitzonenauswahl", weatherService: "Wetterdienst", pirateApi: "Pirate Weather API", owmApi: "OpenWeatherMap API", weatherapiApi: "WeatherAPI.com API", getKey: "Schlüssel holen", units: "Einheiten", celsius: "Celsius", fahrenheit: "Fahrenheit", tempType: "Temperatur", actualTemp: "Tatsächliche Temp.", feelsLike: "Gefühlte Temp.", city: "Stadt", search: "Suchen", latitude: "Breitengrad", longitude: "Längengrad", systemSettings: "Systemeinstellungen", reboot: "Neustart", clearWifi: "WLAN löschen", firmwareUpdate: "Firmware-Update", formatSsd: "SSD formatieren"
+        },
+        sv: {
+            schedules: "Tidsscheman", scheduleSettings: "Schemainställningar", defaultScreen: "Standardskärm", addSchedule: "Lägg till", indoorOffset: "Inomhus Temp Offset", language: "Språk", mainTitle: "Carlsons Smartklocka", clockSettings: "Klockinställningar", screenSelection: "Skärmval", panelType: "Paneltyp (Kräver omstart)", screen1: "Skärm 1 - Klassisk Digital", screen2: "Skärm 2 - Alt. Digital", screen3: "Skärm 3 - Analog", screen4: "Skärm 4 - Världskarta", screen5: "Skärm 5 - Månfas", screen6: "Skärm 6 - Gradientklocka", screen7: "Skärm 7 - Digitalt Armbandsur", screen8: "Skärm 8 - Färg-Analog", screen9: "Skärm 9 - Nixie-rör", fullYearAnimation: "Helårsanimation", "24hour": "24-timmars", icons: "Ikoner", minMaxTemps: "Min/Max Temp.", ampm: "AM/PM", seconds: "Sekunder", time: "Tid", day: "Dag", date: "Datum", month: "Månad", dateBg: "Datum-bakgrund", divider: "Avdelare", temperature: "Temperatur", humidity: "Luftfuktighet", clockFace: "Urtavla", option: "Alternativ", colour: "Färg", image: "Bild", clockOptions: "Klockalternativ", displayMode: "Visningsläge", "4numbers": "4 Siffror", allNumbers: "Alla Siffror", "4ticks": "4 Markeringar", allTicks: "Alla Markeringar", handFuzz: "Visaroskärpa", handLength: "Visarlängd", hourHand: "Timvisare", minuteHand: "Minutvisare", secondHand: "Sekundvisare", topCalendar: "Övre Kalender", bottomCalendar: "Nedre Kalender", timeShadow: "Tidsskugga", nightLights: "Nattljus", nightShadow: "Nattskugga", "3dEffects": "3D-effekter", speedDir: "Fart & Riktning", numStars: "Antal Stjärnor", sun: "Sol", land: "Land", water: "Vatten", ice: "Is", moonShadow: "Månskugga", moonPercent: "Månprocent", gradSpeed: "Gradienthastighet", boxSize: "Boxstorlek", boxFeather: "Box-ludd", glowIntensity: "Ljusintensitet", glow: "Ljus", bgColor: "Bakgrundsfärg", showMarkers: "Markörer", cycleSpeed: "Cykelfart", showDate: "Visa Datum", brightnessSettings: "Ljusstyrkeinställningar", brightness: "Ljusstyrka", autoBrightness: "Auto-ljusstyrka", darkRoomBrightness: "Mörkt Rum", brightRoomBrightness: "Ljust Rum", currentBrightness: "Nuvarande Ljusstyrka:", setDarkRoom: "Ställ in Mörkt", setBrightRoom: "Ställ in Ljust", weatherSettings: "Väderinställningar", timezone: "Tidszonsval", weatherService: "Vädertjänst", pirateApi: "Pirate Weather API", owmApi: "OpenWeatherMap API", weatherapiApi: "WeatherAPI.com API", getKey: "Hämta Nyckel", units: "Enheter", celsius: "Celsius", fahrenheit: "Fahrenheit", tempType: "Temperatur", actualTemp: "Faktisk Temp.", feelsLike: "Känns Som", city: "Stad", search: "Sök", latitude: "Latitud", longitude: "Longitud", systemSettings: "Systeminställningar", reboot: "Starta om", clearWifi: "Rensa WiFi", firmwareUpdate: "Firmware-uppdat.", formatSsd: "Formatera SSD"
+        }
+    };
+
+    function setLanguage(lang) {
+        if (!lang || !translations[lang]) lang = 'en';
+        localStorage.setItem('language', lang);
+        document.querySelectorAll('[data-translate-key]').forEach(element => {
+            const key = element.getAttribute('data-translate-key');
+            if (translations[lang][key]) {
+                element.textContent = translations[lang][key];
+            } else if (translations['en'][key]) {
+                element.textContent = translations['en'][key];
+            }
+        });
+        document.getElementById('languageSelect').value = lang;
+        if (!isLoadingSettings) {
+            fetch(`/language?lang=${lang}`);
+        }
+    }
+    
+    let timeoutOffset;
+    function updateIndoorTempOffset(value) {
+        if (isLoadingSettings) return;
+        let isFahrenheit = (document.getElementById('unitsSelect').value === 'fahrenheit');
+        let displayVal = (value / 10.0).toFixed(1);
+        document.getElementById('indoorTempOffsetValue').innerHTML = displayVal + '&deg;';
+        clearTimeout(timeoutOffset);
+        timeoutOffset = setTimeout(() => {
+            let offsetToSend = parseFloat(displayVal);
+            if (isFahrenheit) {
+                offsetToSend = (offsetToSend / 1.8);
+            }
+            fetch(`/indoortempoffset?value=${offsetToSend.toFixed(2)}`);
+        }, 250);
+    }
+    
+    // Schedules Logic
+    const screenNames = [
+        "Screen 1 - Classic Digital", "Screen 2 - Alt. Digital", "Screen 3 - Analog",
+        "Screen 4 - World Map", "Screen 5 - Moon Phase", "Screen 6 - Gradient Clock",
+        "Screen 7 - Digital Watch", "Screen 8 - Color Analog", "Screen 9 - Nixie Tube"
+    ];
+    let currentSchedules = [];
+
+    function updateScreen(value) {
+        blockPolling(2000);
+        if(isLoadingSettings) return;
+        
+        const isSchedules = (value === "99");
+        
+        fetch('/schedulesenabled?state=' + isSchedules).then(() => {
+            document.getElementById('schedulesContainer').classList.toggle('hidden', !isSchedules);
+            
+            if (!isSchedules) {
+                // Manually selecting a screen
+                const t = parseInt(value, 10);
+                if (t >= 1 && t <= 9) {
+                    updateScreenVisibility(t);
+                    fetch("/screen?value=" + t).finally(() => { setTimeout(fetchSettings, 200); });
+                }
+            } else {
+                // Switching to schedules: Hide individual screen controls
+                updateScreenVisibility(99); 
+                setTimeout(fetchSettings, 200);
+            }
+        });
+    }
+
+    function updateDefaultScreen(val) {
+        blockPolling(2000);
+        if(isLoadingSettings) return;
+        saveSchedules();
+    }
+
+    function renderSchedules() {
+        const list = document.getElementById('scheduleList');
+        list.innerHTML = '';
+        currentSchedules.forEach((sched, index) => {
+            const div = document.createElement('div');
+            div.className = 'schedule-row';
+            div.innerHTML = `
+                <select class="schedule-screen-select" onchange="updateScheduleData(${index}, 'screen', this.value)">
+                    ${generateScreenOptions(sched.screen)}
+                </select>
+                <div class="schedule-time-group">
+                    <span class="sched-label">Start:</span>
+                    <input type="time" value="${sched.start}" onchange="updateScheduleData(${index}, 'start', this.value)">
+                    <span class="sched-label">Stop:</span>
+                    <input type="time" value="${sched.end}" onchange="updateScheduleData(${index}, 'end', this.value)">
+                    <button class="remove-btn" onclick="removeSchedule(${index})">X</button>
+                </div>
+            `;
+            list.appendChild(div);
+        });
+    }
+
+    function generateScreenOptions(selected) {
+        let opts = "";
+        for(let i=0; i<screenNames.length; i++) {
+            opts += `<option value="${i+1}" ${(i+1)==selected?'selected':''}>${screenNames[i]}</option>`;
+        }
+        return opts;
+    }
+
+    function updateScheduleData(index, field, value) {
+        blockPolling(2000);
+        if(field === 'screen') currentSchedules[index].screen = parseInt(value);
+        if(field === 'start') currentSchedules[index].start = value;
+        if(field === 'end') currentSchedules[index].end = value;
+        saveSchedules();
+    }
+
+    function addScheduleLine() {
+        blockPolling(2000);
+        let startT = "09:00";
+        let endT = "10:00";
+
+        if (currentSchedules.length > 0) {
+            const lastSched = currentSchedules[currentSchedules.length - 1];
+            if (lastSched.end) {
+                startT = lastSched.end;
+                
+                // Calculate end time (Start + 1 Hour)
+                let [h, m] = startT.split(':').map(Number);
+                let endH = (h + 1) % 24;
+                // Pad with leading zero if needed
+                endT = (endH < 10 ? '0' : '') + endH + ':' + (m < 10 ? '0' : '') + m;
+            }
+        }
+
+        currentSchedules.push({screen: 1, start: startT, end: endT});
+        renderSchedules();
+        saveSchedules();
+    }
+
+    function removeSchedule(index) {
+        blockPolling(2000);
+        currentSchedules.splice(index, 1);
+        renderSchedules();
+        saveSchedules();
+    }
+
+    function saveSchedules() {
+        if(hasOverlap(currentSchedules)) {
+            alert("Schedule overlap detected! Please fix times.");
+            return; 
+        }
+        const payload = {
+            defaultScreen: document.getElementById('defaultScreenSelect').value,
+            schedules: currentSchedules
+        };
+        fetch('/updateschedules', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: 'defaultScreen=' + payload.defaultScreen + '&schedules=' + JSON.stringify(payload.schedules)
+        })
+        .then(() => fetchSettings()); 
+    }
+
+    function hasOverlap(schedules) {
+        let day = new Int8Array(1440).fill(0);
+        for(let s of schedules) {
+            let [sh, sm] = s.start.split(':').map(Number);
+            let [eh, em] = s.end.split(':').map(Number);
+            let start = sh * 60 + sm;
+            let end = eh * 60 + em;
+            
+            if (start === end) continue;
+            
+            if (start < end) {
+                for(let i=start; i<end; i++) {
+                    if(day[i] === 1) return true;
+                    day[i] = 1;
+                }
+            } else {
+                for(let i=start; i<1440; i++) {
+                    if(day[i] === 1) return true;
+                    day[i] = 1;
+                }
+                for(let i=0; i<end; i++) {
+                    if(day[i] === 1) return true;
+                    day[i] = 1;
+                }
+            }
+        }
+        return false;
+    }
+
+    function updatePanelType(value) {
+        if (isLoadingSettings) return;
+        fetch('/paneltype?value=' + value);
+        alert('Panel type has been saved. Please reboot the clock for the pin changes to take effect.');
+    }
+
+    function rgb565ToRgb(e){let t=(e&63488)>>11,n=(e&2016)>>5,o=e&31;return t=t*255/31,n=n*255/63,o=o*255/31,`rgb(${t},${n},${o})`}async function fetchAndDrawScreenshot(){try{const e=await fetch("/screenshot.bin");if(!e.ok)return;const t=await e.arrayBuffer(),n=new Uint16Array(t),o=document.getElementById("screenshotCanvas");if(!o)return;const c=o.getContext("2d"),i=5,d=i-1;c.clearRect(0,0,o.width,o.height);let s=0;for(let l=0;l<32;l++)for(let a=0;a<64;a++)c.fillStyle=rgb565ToRgb(n[s++]),c.fillRect(a*i,l*i,d,d)}catch(e){}}
+    
+    let isLoadingSettings=!0,tB,tD,tBr,tPS,tPS2,tPS3,autoBrightnessInterval=null,pendingOptions={};
+    
+    // NEW: Global flag to pause polling during interactions
+    let pollingPaused = false;
+    let pollingPauseTimeout;
+    
+    function blockPolling(duration) {
+        pollingPaused = true;
+        clearTimeout(pollingPauseTimeout);
+        pollingPauseTimeout = setTimeout(() => { pollingPaused = false; }, duration);
+    }
+
+    function showApiKeyField(service){document.getElementById("pirateWeatherRow").classList.toggle("hidden","pirateweather"!==service),document.getElementById("openWeatherMapRow").classList.toggle("hidden","openweathermap"!==service),document.getElementById("weatherApiRow").classList.toggle("hidden","weatherapi"!==service),document.getElementById("pirateWeatherLink").classList.toggle("hidden","pirateweather"!==service),document.getElementById("openWeatherMapLink").classList.toggle("hidden","openweathermap"!==service),document.getElementById("weatherApiLink").classList.toggle("hidden","weatherapi"!==service);const e="none"===service;["1","2","5"].forEach(t=>{const n=document.getElementById(`minmaxTempsSwitch${t}`);n&&(n.disabled=e)})}
+    function updateWeatherService(e){blockPolling(2000);if(isLoadingSettings)return;showApiKeyField(e),fetch(`/weather_service?service=${e}`)}
+    
+    // *** MODIFIED fetchSettings() FUNCTION ***
+    function fetchSettings(){
+        // If user is interacting, skip this poll entirely
+        if (pollingPaused || document.hidden) return;
+        
+        isLoadingSettings = true;
+        // Add cache busting for iOS
+        fetch("/settings?_=" + new Date().getTime())
+            .then(response => {
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                return response.json();
+            })
+            .then(e => {
+                let schedulesOn = e.schedulesEnabled || false;
+                
+                // Determine dropdown value
+                let mainDropdownVal = schedulesOn ? "99" : String(e.current_screen || 1);
+                document.getElementById("screenSelect").value = mainDropdownVal;
+                
+                // Toggle Container Visibility
+                // AND IMPORTANTLY: HIDE specific screen controls if schedule is on
+                if(schedulesOn) {
+                    document.getElementById('schedulesContainer').classList.remove('hidden');
+                    updateScreenVisibility(99); // This hides 1-9 controls
+                } else {
+                    document.getElementById('schedulesContainer').classList.add('hidden');
+                    updateScreenVisibility(parseInt(mainDropdownVal));
+                }
+
+                document.getElementById('panelTypeSelect').value = e.panel_type || 'P5.0';
+                
+                // Schedules Data Population
+                document.getElementById("defaultScreenSelect").value = e.defaultScreen || "1";
+                if(e.schedules) {
+                    // Only update if schedule list is empty or we just loaded page to avoid jitter during editing
+                    if(currentSchedules.length === 0) {
+                         currentSchedules = e.schedules;
+                         renderSchedules();
+                    }
+                }
+
+                const autoBrightnessSwitch = document.getElementById("autoBrightnessSwitch");
+                autoBrightnessSwitch.checked = e.auto_brightness || false;
+                toggleAutoBrightnessExpandable(autoBrightnessSwitch.checked);
+
+                const brightnessSlider = document.getElementById("brightnessSlider");
+                if (autoBrightnessSwitch.checked) {
+                    brightnessSlider.disabled = true;
+                    fetchCurrentBrightness(); 
+                    if (autoBrightnessInterval) clearInterval(autoBrightnessInterval);
+                    autoBrightnessInterval = setInterval(fetchCurrentBrightness, 1000);
+                } else {
+                    brightnessSlider.disabled = false;
+                    if (autoBrightnessInterval) clearInterval(autoBrightnessInterval);
+                }
+
+                document.getElementById("clockVersion").textContent = e.version ? "Version: " + e.version.toFixed(2) : "";
+                document.getElementById("timezoneSelect").value = e.timezone || "UTC0";
+                document.getElementById('weatherServiceSelect').value = e.weather_service || 'pirateweather';
+                showApiKeyField(e.weather_service || 'pirateweather');
+                document.getElementById('pirateWeatherAPI').value = e.pirate_weather_api || '';
+                document.getElementById('openWeatherMapAPI').value = e.openweathermap_api || '';
+                document.getElementById('weatherAPI_API').value = e.weatherapi_api || '';
+                document.getElementById('unitsSelect').value = e.units || 'celsius';
+                document.getElementById('tempTypeSelect').value = e.temp_type || 'actual';
+                const offsetC = e.indoor_temp_offset || 0.0;
+                const offsetSlider = document.getElementById('indoorTempOffsetSlider');
+                const offsetDisplay = document.getElementById('indoorTempOffsetValue');
+                const isFahrenheit = (document.getElementById('unitsSelect').value === 'fahrenheit');
+                if (isFahrenheit) {
+                    offsetSlider.min = "-180";
+                    offsetSlider.max = "180";
+                    const offsetF = (offsetC * 1.8);
+                    offsetSlider.value = Math.round(offsetF * 10);
+                    offsetDisplay.innerHTML = offsetF.toFixed(1) + '&deg;';
+                } else {
+                    offsetSlider.min = "-100";
+                    offsetSlider.max = "100";
+                    offsetSlider.value = Math.round(offsetC * 10);
+                    offsetDisplay.innerHTML = offsetC.toFixed(1) + '&deg;';
+                }
+                if (e.gps_lat && e.gps_lon) {
+                    document.getElementById("gpsLat").value = e.gps_lat;
+                    document.getElementById("gpsLon").value = e.gps_lon;
+                }
+                
+                // Populate Settings (even if hidden, good to keep state)
+                for(let idx_loop_t=1;idx_loop_t<=9;idx_loop_t++){let i;if(idx_loop_t!==3){i=document.getElementById("ampmSwitch"+idx_loop_t);if(i&&e.hasOwnProperty("ampm_switch"))i.checked=e.ampm_switch;i=document.getElementById("secondsSwitch"+idx_loop_t);if(i&&e.hasOwnProperty("seconds_switch"))i.checked=e.seconds_switch;i=document.getElementById("24hourSwitch"+idx_loop_t);if(i&&e.hasOwnProperty("24hour_switch"))i.checked=e["24hour_switch"];i=document.getElementById("iconsSwitch"+idx_loop_t);if(i&&e.hasOwnProperty("icons_switch"))i.checked=e.icons_switch;i=document.getElementById("minmaxTempsSwitch"+idx_loop_t);if(i&&e.hasOwnProperty("minmax_temps_switch"))i.checked=e.minmax_temps_switch;i=document.getElementById("timeColorPicker"+idx_loop_t);if(i&&e.time_color)i.value=rgbToHex(e.time_color.r,e.time_color.g,e.time_color.b);i=document.getElementById("humiditySwitch"+idx_loop_t);if(i&&e.hasOwnProperty("humidity_switch"))i.checked=e.humidity_switch;i=document.getElementById("humidityColorPicker"+idx_loop_t);if(i&&e.humidity_color)i.value=rgbToHex(e.humidity_color.r,e.humidity_color.g,e.humidity_color.b)}i=document.getElementById("temperatureSwitch"+idx_loop_t);if(i&&e.hasOwnProperty("temperature_switch"))i.checked=e.temperature_switch;i=document.getElementById("daySwitch"+idx_loop_t);if(i&&e.hasOwnProperty("day_switch"))i.checked=e.day_switch;i=document.getElementById("dateSwitch"+idx_loop_t);if(i&&e.hasOwnProperty("date_switch"))i.checked=e.date_switch;i=document.getElementById("monthSwitch"+idx_loop_t);if(i&&e.hasOwnProperty("month_switch"))i.checked=e.month_switch;i=document.getElementById("dayColorPicker"+idx_loop_t);if(i&&e.day_color)i.value=rgbToHex(e.day_color.r,e.day_color.g,e.day_color.b);i=document.getElementById("dateColorPicker"+idx_loop_t);if(i&&e.date_color)i.value=rgbToHex(e.date_color.r,e.date_color.g,e.date_color.b);i=document.getElementById("monthColorPicker"+idx_loop_t);if(i&&e.month_color)i.value=rgbToHex(e.month_color.r,e.month_color.g,e.month_color.b);i=document.getElementById("dateBGColorPicker"+idx_loop_t);if(i&&e.date_bg_color)i.value=rgbToHex(e.date_bg_color.r,e.date_bg_color.g,e.date_bg_color.b);i=document.getElementById("tempColorPicker"+idx_loop_t);if(i&&e.temp_color)i.value=rgbToHex(e.temp_color.r,e.temp_color.g,e.temp_color.b);i=document.getElementById("ampmColorPicker"+idx_loop_t);if(i&&e.ampm_color)i.value=rgbToHex(e.ampm_color.r,e.ampm_color.g,e.ampm_color.b);i=document.getElementById("secondsColorPicker"+idx_loop_t);if(i&&e.seconds_color)i.value=rgbToHex(e.seconds_color.r,e.seconds_color.g,e.seconds_color.b);let bg=document.getElementById('backgroundSwitch'+idx_loop_t);if(bg&&e.hasOwnProperty("backgroundSwitch"))bg.checked=e.backgroundSwitch;i=document.getElementById("dayLabel"+idx_loop_t);if(i){if(idx_loop_t==3){if(e.current_screen===3&&e.hasOwnProperty("day_switch"))toggleClockOptions(e.day_switch,3)}else{}}}
+                if(e.hasOwnProperty("clock_switch"))document.getElementById("clockSwitch").checked=e.clock_switch;
+                document.getElementById("clockOption").value=e.clock_option||"colour";
+                document.getElementById("clockImageSelect").value=e.clock_bitmap_index||0;
+                if(e.time_color)document.getElementById("clockColorPicker").value=rgbToHex(e.time_color.r,e.time_color.g,e.time_color.b);
+                if(e.hasOwnProperty("clock_switch"))toggleExpandableByIds("clockContainer","clockExpandable",e.clock_switch,e.clock_option||"colour","clockColourRow","clockImageRow");
+                document.getElementById("clockDisplayMode").value=e.clockDisplayMode||"4 numbers";
+                document.getElementById("brightnessSlider").value=e.brightness||150;document.getElementById("darkRoomBrightnessSlider").value=e.dark_room_brightness||0;document.getElementById("brightRoomBrightnessSlider").value=e.bright_room_brightness||255;document.getElementById("darkRoomLux").textContent=(e.dark_room_ldr_value?Math.round(e.dark_room_ldr_value/4095*360+40):0)+" lux";document.getElementById("brightRoomLux").textContent=(e.bright_room_ldr_value?Math.round(e.bright_room_ldr_value/4095*360+40):400)+" lux";updateBrightnessPercentage();updateDarkRoomBrightnessPercentage();updateBrightRoomBrightnessPercentage();setLanguage(e.language);isLoadingSettings=!1
+            })
+            .catch(error => {
+                console.error("Fetch settings failed:", error);
+                isLoadingSettings = false;
+                setLanguage(localStorage.getItem('language') || 'en');
+            });
+    }
+    
+    function searchCity(){
+        const e=document.getElementById("cityInput").value;
+        if(!e) { alert("Please enter a city name."); return; }
+        
+        // 1. Pause polling to prevent overwrites
+        blockPolling(10000); 
+
+        // 2. Use Open-Meteo Geocoding API
+        const url = "https://geocoding-api.open-meteo.com/v1/search?name=" + encodeURIComponent(e) + "&count=1&format=json";
+
+        fetch(url)
+        .then(r => r.json())
+        .then(data => {
+            if(data.results && data.results.length > 0) {
+                // 3. Update DOM immediately
+                document.getElementById("gpsLat").value = data.results[0].latitude;
+                document.getElementById("gpsLon").value = data.results[0].longitude;
+                // 4. Force GPS update (pass true to bypass blockPolling check inside updateGPS)
+                updateGPS(true);
+                alert("Found: " + data.results[0].name);
+            } else {
+                alert("City not found.");
+                pollingPaused = false; // Resume polling
+            }
+        })
+        .catch(err => {
+            alert("City search failed. Check internet connection.");
+            pollingPaused = false; // Resume polling
+        });
+    }
+
+    function updateGPS(force){
+        // Bypass isLoadingSettings check if force is true (e.g. from search button)
+        if(isLoadingSettings && !force) return;
+        if(!force) blockPolling(2000); // Pause if triggered by manual input
+        
+        const e=document.getElementById("gpsLat").value,t=document.getElementById("gpsLon").value;
+        if(e&&t) fetch("/gps?lat="+encodeURIComponent(e)+"&lon="+encodeURIComponent(t)).then(() => {
+            if(force) fetchSettings(); // Update settings after forced save
+        });
+    }
+
+    function updateScreenVisibility(e){for(let t=0;t<=9;t++){let n=0===t?"globalSettingsControls":"screen"+t+"ClockControls",o=document.getElementById(n);o&&o.classList.toggle("hidden",t!==e)}}
+    function updateSwitch(e,t,n){blockPolling(2000);if(isLoadingSettings)return;fetch(`/${e}?state=${t}&screen=${n}`)}
+    function updateColor(e,t,n){blockPolling(2000);if(isLoadingSettings)return;fetch(`/${e}?value=${t}&screen=${n}`)}
+    function updateBitmap(e,t,n){blockPolling(2000);if(isLoadingSettings)return;fetch(`/${e}?value=${t}&screen=${n}`)}
+    function updateClockDisplayMode(e,t,n){blockPolling(2000);if(isLoadingSettings)return;fetch(`/${e}?value=${t}&screen=${n}`)}
+    function updateNamedSetting(e,t,n){blockPolling(2000);if(isLoadingSettings)return;fetch(`/${e}?value=${encodeURIComponent(t)}&screen=${n}`)}
+    function updateOption(e,t,n){blockPolling(2000);if(isLoadingSettings)return;const o=document.getElementById(e.split("_")[0]+"ColourRow"),i=document.getElementById(e.split("_")[0]+"ImageRow");"colour"===t?(o.classList.remove("hidden"),i.classList.add("hidden")):(o.classList.add("hidden"),i.classList.remove("hidden")),pendingOptions[e]=t,document.getElementById(e.split("_")[0]+"Option").value=t,fetch(`/${e}?value=${t}&screen=${n}`)}
+    function toggleExpandableByIds(e,t,n,o,c,i){const d=document.getElementById(e),s=document.getElementById(t);if(!s||!d)return;s.classList.toggle("active",n),d.classList.toggle("expanded",n);if(null!==o&&c&&i){const l=document.getElementById(c),a=document.getElementById(i);n?"colour"===o?(l&&l.classList.remove("hidden"),a&&a.classList.add("hidden")):(a&&a.classList.remove("hidden"),l&&l.classList.add("hidden")):l&&i&&(l.classList.add("hidden"),i.classList.add("hidden"))}}
+    function toggleAutoBrightness(e){blockPolling(2000);if(isLoadingSettings)return;fetch("/autoBrightness?state="+e).then(()=>{const t=document.getElementById("brightnessSlider");t.disabled=e,e?(fetchCurrentBrightness(),autoBrightnessInterval=setInterval(fetchCurrentBrightness,1e3)):clearInterval(autoBrightnessInterval)})}
+    function toggleAutoBrightnessExpandable(e){const t=document.getElementById("autoBrightnessContainer"),n=document.getElementById("autoBrightnessExpandable");n.classList.toggle("active",e),t.classList.toggle("expanded",e)}
+    function toggleClockOptions(e,t){if(3!=t)return;const n=document.getElementById("clockOptionsContainer"),o=document.getElementById("clockOptionsExpandable");o.classList.toggle("active",e),n.classList.toggle("expanded",e)}
+    function toggleColorPicker(e,t){const n=document.getElementById(t);n&&n.classList.toggle("hidden","Colour"!==e)}
+    function rgbToHex(r,g,b){return"#"+[r,g,b].map(x=>(x||0).toString(16).padStart(2,"0")).join("")}
+    function updateBrightnessPercentage(){let e=document.getElementById("brightnessSlider");e&&(document.getElementById("brightnessValue").textContent=Math.round(e.value/255*100)+"%")}
+    function updateDarkRoomBrightnessPercentage(){let e=document.getElementById("darkRoomBrightnessSlider");e&&(document.getElementById("darkRoomBrightnessValue").textContent=Math.round(e.value/255*100)+"%")}
+    function updateBrightRoomBrightnessPercentage(){let e=document.getElementById("brightRoomBrightnessSlider");e&&(document.getElementById("brightRoomBrightnessValue").textContent=Math.round(e.value/255*100)+"%")}
+    function handlePageSliderInput(e,t){const n=document.getElementById("pageSlider"+t),o=document.getElementById("pageSliderValue"+t);n&&(n.value=e),o&&(o.textContent=e+"%"),clearTimeout(tPS),tPS=setTimeout(()=>{if(isLoadingSettings)return;const val=Math.round(parseInt(n.value,10)/100*255);fetch(`/pageslider?value=${val}&screen=${t}`)},200)}
+    function handlePageSlider2Input(e,t){const n=document.getElementById("pageSlider2_s"+t),o=document.getElementById("pageSlider2Value_s"+t);if(n&&(n.value=e),o)if(4==t){let t=parseInt(e)-50;o.textContent=(t>0?"+":"")+t}else o.textContent=e+"%";clearTimeout(tPS2),tPS2=setTimeout(()=>{if(isLoadingSettings)return;const e=Math.round(parseInt(n.value,10)/100*255);fetch(`/pageslider2?value=${e}&screen=${t}`)},200)}
+    function handlePageSlider3Input(e,t){const n=document.getElementById("pageSlider3_s"+t),o=document.getElementById("pageSlider3Value_s"+t);n&&(n.value=e),o&&(o.textContent=e+"%"),clearTimeout(tPS3),tPS3=setTimeout(()=>{if(isLoadingSettings)return;const e=Math.round(parseInt(n.value,10)/100*255);fetch(`/pageslider3?value=${e}&screen=${t}`)},200)}
+    function updateBrightness(e){blockPolling(2000);if(isLoadingSettings)return;document.getElementById("brightnessSlider").value=e,updateBrightnessPercentage(),clearTimeout(tB),tB=setTimeout(()=>fetch("/brightness?value="+e),200)}
+    function updateDarkRoomBrightness(e){blockPolling(2000);if(isLoadingSettings)return;document.getElementById("darkRoomBrightnessSlider").value=e,updateDarkRoomBrightnessPercentage(),clearTimeout(tD),tD=setTimeout(()=>fetch("/darkRoomBrightness?value="+e),200)}
+    function updateBrightRoomBrightness(e){blockPolling(2000);if(isLoadingSettings)return;document.getElementById("brightRoomBrightnessSlider").value=e,updateBrightRoomBrightnessPercentage(),clearTimeout(tBr),tBr=setTimeout(()=>fetch("/brightRoomBrightness?value="+e),200)}
+    function setDarkRoomLDR(){blockPolling(2000);if(isLoadingSettings)return;fetch("/setDarkRoomLDR").then(e=>e.text()).then(e=>{document.getElementById("darkRoomLux").textContent=e+" lux",fetchSettings()})}
+    function setBrightRoomLDR(){blockPolling(2000);if(isLoadingSettings)return;fetch("/setBrightRoomLDR").then(e=>e.text()).then(e=>{document.getElementById("brightRoomLux").textContent=e+" lux",fetchSettings()})}
+    function startFullYearAnimation(){blockPolling(2000);if(isLoadingSettings)return;fetch("/fullYearAnimation").then(e=>e.text())}
+    function updateWeather(){if(isLoadingSettings)return;fetch("/weatherupdate")}
+    function confirmAction(e){let t="Are you sure you want to "+e+"?";"formatSSD"==e&&(t="This will DELETE ALL SAVED SETTINGS. Are you sure?"),confirm(t)&&fetch("/"+e).then(e=>e.text())}
+    function confirmUpdate(){if(confirm("This will take the clock offline and open the firmware update portal. You will need to reconnect to your normal WiFi after updating. Continue?")){fetch("/startUpdatePortal")}}
+    function fetchCurrentBrightness(){fetch("/currentBrightness").then(e=>e.text()).then(e=>document.getElementById("currentBrightness").textContent=e+"%")}
+    
+    window.onload=()=>{
+        const savedLang = localStorage.getItem('language') || 'en';
+        setLanguage(savedLang);
+        fetchSettings();
+        setInterval(fetchAndDrawScreenshot,1e3);
+        setInterval(updateWeather,3e5);
+        // Poll for active screen changes every 5 seconds
+        setInterval(() => { if (!document.hidden) fetchSettings(); }, 5000); 
+    };
+</script>
+</body>
+</html>
+)PAGE_DELIM";
+
+const char* htmlPage_Part2 = "";
+const char* htmlPage_Part3 = "";
+const char* htmlPage_Part4 = "";
+const char* htmlPage_Part5 = "";
+
+#endif

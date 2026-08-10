@@ -1,0 +1,13 @@
+{
+  "name": "Adafruit_GFX",
+  "version": "1.11.9-myclock",
+  "description": "Locally patched copy of the Adafruit GFX graphics core, plus the custom fonts used by SmartClock. Kept in-tree because it was modified in the original Arduino sketch folder - do NOT replace with the registry version.",
+  "keywords": ["display", "graphics"],
+  "license": "BSD-3-Clause",
+  "frameworks": "arduino",
+  "platforms": "espressif32",
+  "build": {
+    "srcFilter": ["+<*.cpp>", "-<glcdfont.c>"],
+    "includeDir": "."
+  }
+}

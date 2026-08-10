@@ -1,0 +1,10 @@
+{
+  "name": "qrcoderm",
+  "version": "0.0.1",
+  "description": "Richard Moore's simple QR code generation library (the 'MUST HAVE LIBRARY' from the original Arduino sketch folder). Not on the PlatformIO registry, so it is vendored here.",
+  "keywords": ["qrcode"],
+  "license": "MIT",
+  "authors": [{ "name": "Richard Moore", "url": "https://github.com/ricmoo/qrcode/" }],
+  "frameworks": "arduino",
+  "platforms": "*"
+}
