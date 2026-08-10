@@ -6,9 +6,47 @@ commented-out changelog that used to live at the top of `src/main.cpp`
 (going back to the original Arduino IDE sketch), where no dates were ever
 recorded — only version numbers and short notes.
 
+> Note: from 2.90 onward the version auto-increments on **every** build, so
+> some numbers below are just iteration builds with no shipped change of their
+> own. Entries are written against the version that first carried the change.
+
+## 2.96 - 2026-08-10
+- Live preview polling (`/screenshot.bin`, 4 KB) reduced from every 1s to every 4s
+- Preview now pauses while the browser tab is hidden, and will not start a new
+  request while the previous one is still in flight (they used to pile up faster
+  than they completed and saturate the single-threaded web server)
+- Flashed and verified on hardware
+
+## 2.93 - 2026-08-10
+- Settings page moved out of the 93 KB `src/WEB_Settings_HTML.h` string literal
+  into a normal editable file, `web/index.html`
+- Page is now gzipped into the firmware at build time by `scripts/build_web.py`
+  and served with `Content-Encoding: gzip`: ~93 KB → ~16 KB over the air (5.8x
+  fewer bytes). Fixes the settings page stalling / rendering half-drawn on a
+  weak WiFi link
+- Flash usage 79.1% → 75.2%
+- Weather API rate limiting fixed three ways: attempts that never reach the
+  network (no GPS, no API key) no longer consume the hourly quota; the counter
+  stops at 10/10 instead of climbing forever (15/10, 21/10, ...); and the retry
+  loop no longer hammers every 30s on states that cannot recover on their own
+  (missing config, rate limited)
+- `pio run -t uploadfs` is no longer part of the workflow (no `data/` directory)
+
+## 2.91, 2.92, 2.94, 2.95, 2.97 - 2026-08-10
+- Iteration/verification builds, no shipped changes of their own
+
 ## 2.90 - 2026-08-10
 - Converted from the Arduino IDE sketch (`MyClock_2.89.ino`) to a PlatformIO / VS Code project
-- No functional/behavioral changes — build-system conversion only
+- WiFi now actively reconnects after a router reboot (fixed a 1-hour-instead-of-1-minute
+  timeout typo; retries stored credentials for ~5 min before falling back to the AP portal)
+- Weather API calls no longer block the web server for up to 15s
+- `/settings.json` writes are atomic (temp file + rename), so a power loss
+  mid-write can no longer corrupt saved settings
+- SPIFFS now mounts unconditionally (it was skipped entirely if the RTC was
+  missing) and logs loudly if it ever reformats
+- Added a recursive mutex around settings reads/writes shared across both cores
+- Added `esp_reset_reason()` logging at boot
+- Menu button no longer does a full settings flash-write on every press
 
 ## 2.89
 - Added Swedish Language

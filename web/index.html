@@ -1,7 +1,3 @@
-#ifndef WEB_SETTINGS_HTML_H
-#define WEB_SETTINGS_HTML_H
-
-const char* htmlPage_Part1 = R"PAGE_DELIM(
 <!DOCTYPE HTML>
 <html>
 <head>
@@ -540,7 +536,7 @@ const char* htmlPage_Part1 = R"PAGE_DELIM(
         alert('Panel type has been saved. Please reboot the clock for the pin changes to take effect.');
     }
 
-    function rgb565ToRgb(e){let t=(e&63488)>>11,n=(e&2016)>>5,o=e&31;return t=t*255/31,n=n*255/63,o=o*255/31,`rgb(${t},${n},${o})`}async function fetchAndDrawScreenshot(){try{const e=await fetch("/screenshot.bin");if(!e.ok)return;const t=await e.arrayBuffer(),n=new Uint16Array(t),o=document.getElementById("screenshotCanvas");if(!o)return;const c=o.getContext("2d"),i=5,d=i-1;c.clearRect(0,0,o.width,o.height);let s=0;for(let l=0;l<32;l++)for(let a=0;a<64;a++)c.fillStyle=rgb565ToRgb(n[s++]),c.fillRect(a*i,l*i,d,d)}catch(e){}}
+    function rgb565ToRgb(e){let t=(e&63488)>>11,n=(e&2016)>>5,o=e&31;return t=t*255/31,n=n*255/63,o=o*255/31,`rgb(${t},${n},${o})`}let screenshotInFlight=false;async function fetchAndDrawScreenshot(){if(screenshotInFlight)return;screenshotInFlight=true;try{const e=await fetch("/screenshot.bin");if(!e.ok)return;const t=await e.arrayBuffer(),n=new Uint16Array(t),o=document.getElementById("screenshotCanvas");if(!o)return;const c=o.getContext("2d"),i=5,d=i-1;c.clearRect(0,0,o.width,o.height);let s=0;for(let l=0;l<32;l++)for(let a=0;a<64;a++)c.fillStyle=rgb565ToRgb(n[s++]),c.fillRect(a*i,l*i,d,d)}catch(e){}finally{screenshotInFlight=false}}
     
     let isLoadingSettings=!0,tB,tD,tBr,tPS,tPS2,tPS3,autoBrightnessInterval=null,pendingOptions={};
     
@@ -736,19 +732,17 @@ const char* htmlPage_Part1 = R"PAGE_DELIM(
         const savedLang = localStorage.getItem('language') || 'en';
         setLanguage(savedLang);
         fetchSettings();
-        setInterval(fetchAndDrawScreenshot,1e3);
+        // Live preview refresh. 4s (was 1s): a 4KB screenshot could not
+        // complete within 1s on a marginal WiFi link, so requests piled up
+        // faster than they finished and saturated the single-threaded ESP32
+        // web server. Skipped entirely while the tab is hidden, and
+        // fetchAndDrawScreenshot() additionally refuses to start if the
+        // previous request is still in flight.
+        setInterval(() => { if (!document.hidden) fetchAndDrawScreenshot(); }, 4000);
         setInterval(updateWeather,3e5);
         // Poll for active screen changes every 5 seconds
-        setInterval(() => { if (!document.hidden) fetchSettings(); }, 5000); 
+        setInterval(() => { if (!document.hidden) fetchSettings(); }, 5000);
     };
 </script>
 </body>
 </html>
-)PAGE_DELIM";
-
-const char* htmlPage_Part2 = "";
-const char* htmlPage_Part3 = "";
-const char* htmlPage_Part4 = "";
-const char* htmlPage_Part5 = "";
-
-#endif

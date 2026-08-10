@@ -8,7 +8,9 @@
 // PARTITION: Minimal SPIFFS (1.9Mb app with OTA/190Kb SPIFFS)
 // Sketchbook Location: /Users/phillipcarlson/Documents/Arduino/SLS/Test
 
-float ver = 2.92; // Converted from the Arduino IDE sketch to a PlatformIO / VS Code project
+// Single source of truth for the version. Auto-incremented by +0.01 on every
+// successful build by scripts/merge_firmware.py; see CHANGELOG.md for history.
+float ver = 2.98;
 
 
 /* #################### To add a new screen (example screen6) ####################
@@ -61,7 +63,7 @@ float ver = 2.92; // Converted from the Arduino IDE sketch to a PlatformIO / VS 
 #include <SPIFFS.h>
 #include <math.h> // Required for sin, cos, asin, atan2, sqrt, fmaxf, fminf
 #include <algorithm> // Required for std::min, std::max
-#include "WEB_Settings_HTML.h"
+#include "WebPage_gz.h" // generated from web/index.html by scripts/build_web.py
 #include "Maps.h"
 #include "Clock_Faces.h"
 #include "WeatherIcons.h"
@@ -1843,28 +1845,12 @@ void fetchWeather() {
   
   unsigned long currentTime = millis();
 
-  // --- RATE LIMITING LOGIC ---
-  if (apiCallCount > 0 && currentTime - lastApiCallTime >= HOUR_MS) {
-    apiCallCount = 0;
-  }
-  int minutesRemaining = (apiCallCount > 0 && (currentTime - lastApiCallTime < HOUR_MS)) ? (HOUR_MS - (currentTime - lastApiCallTime)) / 60000 : 60;
-  apiCallCount++;
-  if (apiCallCount == 1) {
-    lastApiCallTime = currentTime;
-    minutesRemaining = 60;
-  }
-  if (apiCallCount > MAX_API_CALLS) {
-    static unsigned long lastLimitPrint = 0;
-    if (currentTime - lastLimitPrint >= 60000) {
-      Serial.printf("API rate limit exceeded (%d/%d attempts). API reset in %d minutes.\n", apiCallCount, MAX_API_CALLS, minutesRemaining);
-      lastLimitPrint = currentTime;
-    }
-    lastHttpCode = -2;
-    return;
-  }
-  Serial.printf("Starting fetchWeather() for service '%s' (requesting Celsius)... (Attempt %d of %d)\n", selectedWeatherService.c_str(), apiCallCount, MAX_API_CALLS);
-
-  // --- SYSTEM CHECKS ---
+  // --- SYSTEM / CONFIG CHECKS ---
+  // These deliberately run BEFORE any rate-limit accounting: an attempt that
+  // never reaches the network (no GPS set, no API key, unknown service) must
+  // not consume the hourly API quota. It used to, which is why an
+  // unconfigured clock burned all 10 "calls" without making a single HTTP
+  // request, then reported a count that climbed forever (15/10, 21/10, ...).
   if (currentState != STATE_RUNNING) {
     Serial.println("Skipping fetchWeather() - System not in STATE_RUNNING.");
     lastHttpCode = -99; return;
@@ -1901,6 +1887,33 @@ void fetchWeather() {
     lastHttpCode = -1;
     return;
   }
+
+  // --- RATE LIMITING (only genuine outbound API calls are counted) ---
+  if (apiCallCount > 0 && currentTime - lastApiCallTime >= HOUR_MS) {
+    apiCallCount = 0; // hourly window elapsed - fresh allowance
+  }
+  int minutesRemaining = (apiCallCount > 0 && (currentTime - lastApiCallTime < HOUR_MS))
+                           ? (HOUR_MS - (currentTime - lastApiCallTime)) / 60000
+                           : 60;
+  if (apiCallCount >= MAX_API_CALLS) {
+    // Checked BEFORE incrementing so the count stops at the limit (10/10)
+    // instead of climbing forever. fetchWeatherTask also stops retrying on
+    // -2, so we genuinely back off until the window resets.
+    static unsigned long lastLimitPrint = 0;
+    if (currentTime - lastLimitPrint >= 60000) {
+      Serial.printf("API rate limit reached (%d/%d calls this hour). Paused until reset in %d minutes.\n",
+                    apiCallCount, MAX_API_CALLS, minutesRemaining);
+      lastLimitPrint = currentTime;
+    }
+    lastHttpCode = -2;
+    return;
+  }
+  apiCallCount++;
+  if (apiCallCount == 1) {
+    lastApiCallTime = currentTime; // start of this hour's window
+  }
+  Serial.printf("Starting fetchWeather() for service '%s' (requesting Celsius)... (Attempt %d of %d)\n",
+                selectedWeatherService.c_str(), apiCallCount, MAX_API_CALLS);
 
   http.setTimeout(15000);
   http.begin(url);
@@ -2041,23 +2054,20 @@ void printSettings(){
 
 
 void handleRoot() {
-  Serial.println("Serving webpage using correct chunked method...");
+  // The page is stored gzip-compressed in flash (src/WebPage_gz.h, generated
+  // from web/index.html by scripts/build_web.py at build time). We hand the
+  // compressed bytes straight to the browser and let it inflate them.
+  //
+  // This replaced a chunked, uncompressed send of ~93 KB. That was the cause
+  // of the settings page loading slowly or arriving half-rendered over a weak
+  // WiFi link: chunked encoding has no up-front length, so a stall partway
+  // through just left the browser drawing a partial page. Now it's ~16 KB
+  // with a known Content-Length - roughly 5.8x fewer bytes over the air, in
+  // one response.
+  Serial.printf("Serving gzipped webpage (%u bytes)...\n", WEBPAGE_GZ_LEN);
 
-  // 1. Set Content-Length to unknown to start chunked transfer encoding.
-  server.setContentLength(CONTENT_LENGTH_UNKNOWN);
-  // 2. Send the 200 OK header and content type. DO NOT send any content here.
-  server.send(200, "text/html", "");
-
-  // 3. Send each part of the webpage as a separate chunk.
-  //    Using sendContent_P is a slight optimization for data in PROGMEM.
-  server.sendContent_P(htmlPage_Part1);
-  server.sendContent_P(htmlPage_Part2);
-  server.sendContent_P(htmlPage_Part3);
-  server.sendContent_P(htmlPage_Part4);
-  server.sendContent_P(htmlPage_Part5); // We will add more parts
-  
-  // 4. Send a final, zero-length chunk to signal the end of the response.
-  server.sendContent(""); 
+  server.sendHeader("Content-Encoding", "gzip");
+  server.send_P(200, "text/html", (const char*)WEBPAGE_GZ, WEBPAGE_GZ_LEN);
 }
 
 
@@ -3025,8 +3035,19 @@ void fetchWeatherTask(void *pvParameters) {
         lastWeatherSyncTime = currentTime; // Update sync time regardless of success
         lastRetryTime = currentTime;     // Reset retry timer on scheduled attempt
       }
-      // Retry on failure
-      else if (lastHttpCode != 200 && lastHttpCode != -99 && currentTime - lastRetryTime >= retryInterval) {
+      // Retry only on genuinely transient failures (HTTP/network errors, bad
+      // JSON). These codes are deliberately excluded because retrying every
+      // 30s achieves nothing but log spam:
+      //   -99 = not in RUNNING state (the outer `if` already covers this)
+      //   -1  = missing/invalid config (no GPS, no API key, unknown service).
+      //         Nothing changes until the user edits settings - and when they
+      //         do, the web handlers set needWeatherUpdate, which fires an
+      //         immediate attempt below.
+      //   -2  = hourly rate limit hit. Back off until the window resets; the
+      //         7-minute scheduled sync will pick it up again on its own.
+      else if (lastHttpCode != 200 && lastHttpCode != -99 &&
+               lastHttpCode != -1 && lastHttpCode != -2 &&
+               currentTime - lastRetryTime >= retryInterval) {
          Serial.println("Retrying weather fetch attempt from Core 1 due to previous failure...");
          fetchWeather();
          lastRetryTime = currentTime; // Update retry time

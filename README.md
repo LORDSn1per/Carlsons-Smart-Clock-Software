@@ -1,4 +1,4 @@
-# SmartClock — firmware (v2.92)
+# SmartClock — firmware (v2.98)
 
 ESP32 + HUB75 64×32 LED matrix clock: NTP time, PirateWeather / OpenWeatherMap,
 day-night terminator world map, analogue faces, moon phase, and a web settings UI.
@@ -30,7 +30,6 @@ see CHANGELOG.md for a running history of what changed at each version.
 | Build | ✔ Build | `pio run` |
 | Upload over USB | → Upload | `pio run -t upload` |
 | Serial monitor (115200) | 🔌 Monitor | `pio device monitor` |
-| Upload `data/` to SPIFFS | Platform → Upload Filesystem Image | `pio run -t uploadfs` |
 | Clean | 🗑 Clean | `pio run -t clean` |
 
 Upload over WiFi instead of USB (the sketch runs ArduinoOTA): set `upload_port`
@@ -52,13 +51,14 @@ Other/                        <- open THIS folder in VS Code
 │   ├── Clock_Faces.h         clock face bitmaps
 │   ├── Maps.h                world map bitmaps
 │   ├── WeatherIcons.h        weather icon bitmaps
-│   └── WEB_Settings_HTML.h   the settings web page
+│   └── WebPage_gz.h          GENERATED from web/index.html at build time
 ├── lib/                      libraries that must NOT come from the registry
 │   ├── Adafruit_GFX/         modified + this project's fonts
 │   ├── ESP32-HUB75-...-DMA/  modified R/G/B pin mapping
 │   ├── EasyButton/           touch variant removed
 │   └── qrcoderm/             not published on the registry
-├── data/index.html           SPIFFS contents (`pio run -t uploadfs`)
+├── web/index.html            the settings page — EDIT THIS (gzipped into the
+│                             firmware at build time by scripts/build_web.py)
 ├── partitions/min_spiffs.csv partition table
 ├── scripts/merge_firmware.py post-build single-file image builder
 ├── extras/                   not compiled — source art, old IDE tool
@@ -101,8 +101,9 @@ esptool.py --chip esp32 --port /dev/cu.usbserial-0001 --baud 921600 write_flash 
 ```
 
 It deliberately does **not** contain a SPIFFS image, so flashing it leaves saved
-settings, WiFi credentials and the weather cache intact. On a genuinely blank
-board, follow up with `pio run -t uploadfs` to write `data/`.
+settings, WiFi credentials and the weather cache intact. Nothing further is
+needed on a blank board — the settings page is compiled into the firmware, and
+the clock creates its own `/settings.json` on SPIFFS at first run.
 
 Every `pio run` produces a new one of these (version auto-increments each
 build — see below) and adds it to `../BIN/` alongside every previous build,
@@ -125,9 +126,19 @@ peripheral. `platformio.ini` pins `espressif32@6.12.0` (core 2.0.17) for this re
 `Adafruit_GFX` or the HUB75 driver with a registry version will lose the
 green/blue pin-swap fix and the custom fonts.
 
+**Editing the settings web page:** edit `web/index.html` — a normal HTML file
+with normal syntax highlighting. On every build, `scripts/build_web.py` gzips
+it into `src/WebPage_gz.h` (generated, gitignored, never edit by hand) and
+`handleRoot()` serves those bytes with `Content-Encoding: gzip`. This takes the
+page from ~93 KB to ~16 KB over the air — it used to be a 93 KB raw literal in
+a `.h` file sent uncompressed in chunks, which on a weak WiFi link regularly
+stalled or arrived half-rendered. Just rebuild and upload as usual; there is no
+separate filesystem-upload step.
+
 **Adding a new function?** Add a prototype to the *Forward declarations* block
 near the top of `main.cpp`. The Arduino IDE used to generate these invisibly;
 plain C++ has no such step, so a function must be declared before it is called.
 
-**Flash is 79% full** (1.55 MB of the 1.875 MB app partition). There is room,
-but the bitmap headers in `src/` are what fill it.
+**Flash is 75% full** (1.48 MB of the 1.875 MB app partition). There is room,
+but the bitmap headers in `src/` are what fill it. It was 79% before the web
+page moved to a gzipped blob (see above), which freed ~77 KB.
