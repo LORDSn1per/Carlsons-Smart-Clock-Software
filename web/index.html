@@ -346,7 +346,7 @@
     <label class="card-label" data-translate-key="uploadFirmware">Upload Firmware</label>
     <div style="text-align:center;padding:10px;border:1.5px dashed #ccc;border-radius:6px;">
         <input type="file" id="otaFile" accept=".bin">
-        <div style="font-size:11px;color:#888;margin-top:6px;" data-translate-key="otaHint">Choose firmware.bin (NOT the merged SmartClock_*.bin). The clock reboots when the upload finishes.</div>
+        <div style="font-size:11px;color:#888;margin-top:6px;" data-translate-key="otaHint">Pick any SmartClock_vX.XX.bin from the BIN folder (or firmware.bin). Uploads in 32KB chunks over WiFi - about 5-10 minutes. Settings are kept; the clock reboots when done.</div>
     </div>
     <div id="otaBar" style="display:none;height:6px;border-radius:3px;background:#eee;overflow:hidden;margin-top:10px;"><i id="otaFill" style="display:block;height:100%;width:0;background:#4CAF50;"></i></div>
     <div id="otaStatus" style="font-size:12px;margin-top:6px;min-height:16px;"></div>
@@ -358,15 +358,15 @@
 <script>
     const translations = {
         en: {
-            liveRefresh:"Live Refresh", safeModeNotice:"Safe Mode active — refresh locked to 4s", uploadFirmware:"Upload Firmware", otaHint:"Choose firmware.bin (NOT the merged SmartClock_*.bin). The clock reboots when the upload finishes.", otaUpload:"Upload",
+            liveRefresh:"Live Refresh", safeModeNotice:"Safe Mode active — refresh locked to 4s", uploadFirmware:"Upload Firmware", otaHint:"Pick any SmartClock_vX.XX.bin from the BIN folder (or firmware.bin). Uploads in 32KB chunks over WiFi - about 5-10 minutes. Settings are kept; the clock reboots when done.", otaUpload:"Upload",
             schedules: "Schedules", scheduleSettings: "Schedule Settings", defaultScreen: "Default Screen", addSchedule: "Add", indoorOffset: "Indoor Temp Offset", language: "Language", mainTitle: "Carlson's Smart Clock", clockSettings: "Clock Settings", screenSelection: "Screen Selection", panelType: "Panel Type (Reboot Req.)", screen1: "Screen 1 - Classic Digital", screen2: "Screen 2 - Alt. Digital", screen3: "Screen 3 - Analog", screen4: "Screen 4 - World Map", screen5: "Screen 5 - Moon Phase", screen6: "Screen 6 - Gradient Clock", screen7: "Screen 7 - Digital Watch", screen8: "Screen 8 - Color Analog", screen9: "Screen 9 - Nixie Tube", fullYearAnimation: "Full Year Animation", "24hour": "24 Hour", icons: "Icons", minMaxTemps: "Min/Max Temps", ampm: "AM/PM", seconds: "Seconds", time: "Time", day: "Day", date: "Date", month: "Month", dateBg: "Date Background", divider: "Divider", temperature: "Temperature", humidity: "Humidity", clockFace: "Clock Face", option: "Option", colour: "Colour", image: "Image", clockOptions: "Clock Options", displayMode: "Display Mode", "4numbers": "4 Numbers", allNumbers: "All Numbers", "4ticks": "4 Ticks", allTicks: "All Ticks", handFuzz: "Hand Fuzziness", handLength: "Hand Length", hourHand: "Hour Hand", minuteHand: "Minute Hand", secondHand: "Second Hand", topCalendar: "Top Calendar", bottomCalendar: "Bottom Calendar", timeShadow: "Time Shadow", nightLights: "Night Lights", nightShadow: "Night Shadow", "3dEffects": "3D Effects", speedDir: "Speed & Direction", numStars: "Number of Stars", sun: "Sun", land: "Land", water: "Water", ice: "Ice", moonShadow: "Moon Shadow", moonPercent: "Moon Percentage", gradSpeed: "Gradient Speed", boxSize: "Box Size", boxFeather: "Box Feather", glowIntensity: "Glow Intensity", glow: "Glow", bgColor: "Background Colour", showMarkers: "Show Markers", cycleSpeed: "Cycle Speed", showDate: "Show Date", brightnessSettings: "Brightness Settings", brightness: "Brightness", autoBrightness: "Auto Brightness", darkRoomBrightness: "Dark Room Brightness", brightRoomBrightness: "Bright Room Brightness", currentBrightness: "Current Brightness:", setDarkRoom: "Set Dark Room", setBrightRoom: "Set Bright Room", weatherSettings: "Weather Settings", timezone: "Timezone Selection", weatherService: "Weather Service", pirateApi: "Pirate Weather API", owmApi: "OpenWeatherMap API", weatherapiApi: "WeatherAPI.com API", getKey: "Get Key", units: "Units", celsius: "Celsius", fahrenheit: "Fahrenheit", tempType: "Temperature", actualTemp: "Actual Temperature", feelsLike: "Feels Like", city: "City", search: "Search", latitude: "Latitude", longitude: "Longitude", systemSettings: "System Settings", reboot: "Reboot", clearWifi: "Clear Wifi", firmwareUpdate: "Firmware Update", formatSsd: "Format SSD"
         },
         de: {
-            liveRefresh:"Aktualisierung", safeModeNotice:"Sicherheitsmodus aktiv — Aktualisierung auf 4s festgelegt", uploadFirmware:"Firmware hochladen", otaHint:"firmware.bin wählen (NICHT die zusammengeführte SmartClock_*.bin). Die Uhr startet nach dem Hochladen neu.", otaUpload:"Hochladen",
+            liveRefresh:"Aktualisierung", safeModeNotice:"Sicherheitsmodus aktiv — Aktualisierung auf 4s festgelegt", uploadFirmware:"Firmware hochladen", otaHint:"Beliebige SmartClock_vX.XX.bin aus dem BIN-Ordner wählen (oder firmware.bin). Upload in 32KB-Blöcken über WLAN - ca. 5-10 Minuten. Einstellungen bleiben erhalten; die Uhr startet danach neu.", otaUpload:"Hochladen",
             schedules: "Zeitpläne", scheduleSettings: "Zeitplan-Einstellungen", defaultScreen: "Standardbildschirm", addSchedule: "Hinzufügen", indoorOffset: "Innen-Temp Offset", language: "Sprache", mainTitle: "Carlson's Smart Clock", clockSettings: "Uhreinstellungen", screenSelection: "Bildschirmauswahl", panelType: "Panel-Typ (Neustart Erf.)", screen1: "Bildschirm 1 - Klassisch Digital", screen2: "Bildschirm 2 - Alt. Digital", screen3: "Bildschirm 3 - Analog", screen4: "Bildschirm 4 - Weltkarte", screen5: "Bildschirm 5 - Mondphase", screen6: "Bildschirm 6 - Farbverlauf", screen7: "Bildschirm 7 - Digitaluhr", screen8: "Bildschirm 8 - Farb-Analog", screen9: "Bildschirm 9 - Nixie-Röhre", fullYearAnimation: "Ganzjahresanimation", "24hour": "24-Stunden", icons: "Symbole", minMaxTemps: "Min/Max Temp.", ampm: "AM/PM", seconds: "Sekunden", time: "Zeit", day: "Tag", date: "Datum", month: "Monat", dateBg: "Datum-Hintergrund", divider: "Trennlinie", temperature: "Temperatur", humidity: "Luftfeuchtigkeit", clockFace: "Zifferblatt", option: "Option", colour: "Farbe", image: "Bild", clockOptions: "Uhrenoptionen", displayMode: "Anzeigemodus", "4numbers": "4 Zahlen", allNumbers: "Alle Zahlen", "4ticks": "4 Striche", allTicks: "Alle Striche", handFuzz: "Zeigerunschärfe", handLength: "Zeigerlänge", hourHand: "Stundenzeiger", minuteHand: "Minutenzeiger", secondHand: "Sekundenzeiger", topCalendar: "Oberer Kalender", bottomCalendar: "Unterer Kalender", timeShadow: "Zeitschatten", nightLights: "Nachtlichter", nightShadow: "Nachtschatten", "3dEffects": "3D-Effekte", speedDir: "Geschw. & Richtung", numStars: "Anzahl Sterne", sun: "Sonne", land: "Land", water: "Wasser", ice: "Eis", moonShadow: "Mondschatten", moonPercent: "Mond in Prozent", gradSpeed: "Farbverlaufgeschw.", boxSize: "Boxgröße", boxFeather: "Box-Weichzeichnung", glowIntensity: "Leuchtintensität", glow: "Leuchten", bgColor: "Hintergrundfarbe", showMarkers: "Markierungen", cycleSpeed: "Zyklusgeschw.", showDate: "Datum anzeigen", brightnessSettings: "Helligkeitseinstellungen", brightness: "Helligkeit", autoBrightness: "Auto-Helligkeit", darkRoomBrightness: "Dunkler Raum", brightRoomBrightness: "Heller Raum", currentBrightness: "Aktuelle Helligkeit:", setDarkRoom: "Dunkel einst.", setBrightRoom: "Hell einst.", weatherSettings: "Wettereinstellungen", timezone: "Zeitzonenauswahl", weatherService: "Wetterdienst", pirateApi: "Pirate Weather API", owmApi: "OpenWeatherMap API", weatherapiApi: "WeatherAPI.com API", getKey: "Schlüssel holen", units: "Einheiten", celsius: "Celsius", fahrenheit: "Fahrenheit", tempType: "Temperatur", actualTemp: "Tatsächliche Temp.", feelsLike: "Gefühlte Temp.", city: "Stadt", search: "Suchen", latitude: "Breitengrad", longitude: "Längengrad", systemSettings: "Systemeinstellungen", reboot: "Neustart", clearWifi: "WLAN löschen", firmwareUpdate: "Firmware-Update", formatSsd: "SSD formatieren"
         },
         sv: {
-            liveRefresh:"Uppdatering", safeModeNotice:"Säkert läge aktivt — uppdatering låst till 4s", uploadFirmware:"Ladda upp firmware", otaHint:"Välj firmware.bin (INTE den sammanslagna SmartClock_*.bin). Klockan startar om när uppladdningen är klar.", otaUpload:"Ladda upp",
+            liveRefresh:"Uppdatering", safeModeNotice:"Säkert läge aktivt — uppdatering låst till 4s", uploadFirmware:"Ladda upp firmware", otaHint:"Välj valfri SmartClock_vX.XX.bin från BIN-mappen (eller firmware.bin). Laddas upp i 32KB-block över WiFi - cirka 5-10 minuter. Inställningarna behålls; klockan startar om när den är klar.", otaUpload:"Ladda upp",
             schedules: "Tidsscheman", scheduleSettings: "Schemainställningar", defaultScreen: "Standardskärm", addSchedule: "Lägg till", indoorOffset: "Inomhus Temp Offset", language: "Språk", mainTitle: "Carlsons Smartklocka", clockSettings: "Klockinställningar", screenSelection: "Skärmval", panelType: "Paneltyp (Kräver omstart)", screen1: "Skärm 1 - Klassisk Digital", screen2: "Skärm 2 - Alt. Digital", screen3: "Skärm 3 - Analog", screen4: "Skärm 4 - Världskarta", screen5: "Skärm 5 - Månfas", screen6: "Skärm 6 - Gradientklocka", screen7: "Skärm 7 - Digitalt Armbandsur", screen8: "Skärm 8 - Färg-Analog", screen9: "Skärm 9 - Nixie-rör", fullYearAnimation: "Helårsanimation", "24hour": "24-timmars", icons: "Ikoner", minMaxTemps: "Min/Max Temp.", ampm: "AM/PM", seconds: "Sekunder", time: "Tid", day: "Dag", date: "Datum", month: "Månad", dateBg: "Datum-bakgrund", divider: "Avdelare", temperature: "Temperatur", humidity: "Luftfuktighet", clockFace: "Urtavla", option: "Alternativ", colour: "Färg", image: "Bild", clockOptions: "Klockalternativ", displayMode: "Visningsläge", "4numbers": "4 Siffror", allNumbers: "Alla Siffror", "4ticks": "4 Markeringar", allTicks: "Alla Markeringar", handFuzz: "Visaroskärpa", handLength: "Visarlängd", hourHand: "Timvisare", minuteHand: "Minutvisare", secondHand: "Sekundvisare", topCalendar: "Övre Kalender", bottomCalendar: "Nedre Kalender", timeShadow: "Tidsskugga", nightLights: "Nattljus", nightShadow: "Nattskugga", "3dEffects": "3D-effekter", speedDir: "Fart & Riktning", numStars: "Antal Stjärnor", sun: "Sol", land: "Land", water: "Vatten", ice: "Is", moonShadow: "Månskugga", moonPercent: "Månprocent", gradSpeed: "Gradienthastighet", boxSize: "Boxstorlek", boxFeather: "Box-ludd", glowIntensity: "Ljusintensitet", glow: "Ljus", bgColor: "Bakgrundsfärg", showMarkers: "Markörer", cycleSpeed: "Cykelfart", showDate: "Visa Datum", brightnessSettings: "Ljusstyrkeinställningar", brightness: "Ljusstyrka", autoBrightness: "Auto-ljusstyrka", darkRoomBrightness: "Mörkt Rum", brightRoomBrightness: "Ljust Rum", currentBrightness: "Nuvarande Ljusstyrka:", setDarkRoom: "Ställ in Mörkt", setBrightRoom: "Ställ in Ljust", weatherSettings: "Väderinställningar", timezone: "Tidszonsval", weatherService: "Vädertjänst", pirateApi: "Pirate Weather API", owmApi: "OpenWeatherMap API", weatherapiApi: "WeatherAPI.com API", getKey: "Hämta Nyckel", units: "Enheter", celsius: "Celsius", fahrenheit: "Fahrenheit", tempType: "Temperatur", actualTemp: "Faktisk Temp.", feelsLike: "Känns Som", city: "Stad", search: "Sök", latitude: "Latitud", longitude: "Longitud", systemSettings: "Systeminställningar", reboot: "Starta om", clearWifi: "Rensa WiFi", firmwareUpdate: "Firmware-uppdat.", formatSsd: "Formatera SSD"
         }
     };
@@ -807,6 +807,29 @@
     }
 
     /* ---------- browser OTA upload ---------- */
+    /* Upload the firmware in sequential chunks.
+       A single POST is useless for progress: the browser buffers the whole
+       file and xhr.upload fires 100% immediately, long before the ESP32 has
+       flashed anything. Posting chunk-by-chunk gives a true byte count, and
+       lets a chunk lost to a WiFi dip be retried on its own instead of
+       restarting the entire ~1.6MB transfer.
+       Each chunk names its own offset: ota_<start>_<total>.bin              */
+    var OTA_CHUNK = 32768;      /* 32KB - big enough to be quick, small enough to retry cheaply */
+    var OTA_RETRIES = 4;
+
+    function otaPostChunk(file, start, end) {
+        var fd = new FormData();
+        fd.append('update', file.slice(start, end),
+                  'ota_' + start + '_' + file.size + '.bin');
+        return fetch('/update', { method: 'POST', body: fd })
+            .then(function(r){
+                return r.text().then(function(t){
+                    if (!r.ok) throw new Error(t || ('HTTP ' + r.status));
+                    return t;
+                });
+            });
+    }
+
     function uploadFirmware(){
         var f=document.getElementById('otaFile'), st=document.getElementById('otaStatus');
         var bar=document.getElementById('otaBar'), fill=document.getElementById('otaFill');
@@ -815,35 +838,51 @@
         if(!f.files || !f.files[0]){ st.style.color='#e5484d'; st.textContent='Choose a .bin file first.'; return; }
         var file=f.files[0];
         if(!/\.bin$/i.test(file.name)){ st.style.color='#e5484d'; st.textContent='That is not a .bin file.'; return; }
-        if(!confirm('Flash "'+file.name+'" ('+Math.round(file.size/1024)+' KB)?\n\nThe clock will reboot into the new firmware.')) return;
-        blockPolling(600000);
+        var totalKb = Math.round(file.size/1024);
+        if(!confirm('Flash "'+file.name+'" ('+totalKb+' KB)?\n\nThe clock will reboot into the new firmware.')) return;
+
+        blockPolling(900000);   /* keep the settings poll off the air while flashing */
         btn.disabled=true; bar.style.display='block'; fill.style.width='0%';
-        var fd=new FormData(); fd.append('update', file, file.name);
-        var xhr=new XMLHttpRequest();
-        xhr.open('POST','/update',true);
-        xhr.upload.onprogress=function(e){
-            if(e.lengthComputable){
-                var pc=Math.round(e.loaded/e.total*100);
-                fill.style.width=pc+'%'; st.textContent='Uploading... '+pc+'%';
+
+        var sent = 0;
+        function step(){
+            if (sent >= file.size) return;
+            var end = Math.min(sent + OTA_CHUNK, file.size);
+            var attempt = 0;
+
+            function tryChunk(){
+                attempt++;
+                otaPostChunk(file, sent, end).then(function(resp){
+                    sent = end;
+                    var pc = Math.round(sent / file.size * 100);
+                    fill.style.width = pc + '%';
+                    st.textContent = 'Uploading ' + Math.round(sent/1024) + ' / ' + totalKb +
+                                     ' KB  (' + pc + '%)';
+                    if (resp.indexOf('DONE') === 0 || sent >= file.size) {
+                        fill.style.width = '100%';
+                        st.style.color = '#2ea043';
+                        st.textContent = 'Done - ' + totalKb + ' KB flashed. The clock is rebooting; ' +
+                                         'reload this page in ~20 seconds.';
+                        return;
+                    }
+                    step();
+                }).catch(function(err){
+                    if (attempt <= OTA_RETRIES) {
+                        st.style.color = '#d98a00';
+                        st.textContent = 'Retrying chunk at ' + Math.round(sent/1024) +
+                                         ' KB (attempt ' + attempt + '/' + OTA_RETRIES + ')...';
+                        setTimeout(tryChunk, 1200);   /* let a WiFi dip pass */
+                    } else {
+                        st.style.color = '#e5484d';
+                        st.textContent = 'Upload failed at ' + Math.round(sent/1024) + ' / ' +
+                                         totalKb + ' KB: ' + err.message;
+                        btn.disabled = false;
+                    }
+                });
             }
-        };
-        xhr.onload=function(){
-            if(xhr.status===200){
-                fill.style.width='100%';
-                st.style.color='#2ea043';
-                st.textContent='Done - clock is rebooting. Reload this page in ~20 seconds.';
-            } else {
-                st.style.color='#e5484d';
-                st.textContent='Failed ('+xhr.status+'). '+(xhr.responseText||'');
-                btn.disabled=false;
-            }
-        };
-        xhr.onerror=function(){
-            st.style.color='#e5484d';
-            st.textContent='Upload failed - connection lost.';
-            btn.disabled=false;
-        };
-        xhr.send(fd);
+            tryChunk();
+        }
+        step();
     }
 
     window.onload=()=>{

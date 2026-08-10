@@ -1,4 +1,4 @@
-# SmartClock — firmware (v3.30)
+# SmartClock — firmware (v3.38)
 
 ESP32 + HUB75 64×32 LED matrix clock: NTP time, PirateWeather / OpenWeatherMap,
 day-night terminator world map, analogue faces, moon phase, and a web settings UI.
@@ -40,11 +40,21 @@ pio run -e ota -t upload
 ```
 
 Or upload from a browser: open the clock's web UI → **System Settings → Upload
-Firmware**, and pick `.pio/build/esp32dev/firmware.bin`. ⚠️ That is the
-**app-only** image — do *not* upload the merged `../BIN/SmartClock_*.bin` here;
-that one also contains the bootloader and partition table and is only valid
-written to offset `0x0` over USB. An invalid image is rejected and the clock
-keeps running the old firmware.
+Firmware**. It accepts **either** kind of `.bin`:
+
+- any `../BIN/SmartClock_vX.XX.bin` (the merged image — normally the one you want)
+- `.pio/build/esp32dev/firmware.bin` (the app-only image)
+
+The merged file also contains the bootloader and partition table, which are
+only valid at flash offset `0x0` over USB. OTA writes into an app partition
+instead, so the firmware detects a merged image and flashes just its app
+payload — the part that is byte-identical to `firmware.bin`. The bootloader
+and partition table cannot be changed over OTA at all; those still need USB.
+
+The page posts the file in 32 KB chunks with a live KB counter, retrying any
+chunk that a WiFi dip kills. Budget roughly 5–10 minutes for ~1.5 MB. Saved
+settings live in a separate SPIFFS partition and are **not** touched. An
+invalid image is rejected and the clock keeps running the old firmware.
 
 ---
 

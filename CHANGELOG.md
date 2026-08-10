@@ -10,6 +10,28 @@ recorded — only version numbers and short notes.
 > some numbers below are just iteration builds with no shipped change of their
 > own. Entries are written against the version that first carried the change.
 
+## 3.37 - 2026-08-11
+- **Browser OTA now accepts the merged `BIN/SmartClock_vX.XX.bin` files.**
+  Previously only the app-only `firmware.bin` worked; picking a merged image
+  silently failed. The merged file is bootloader + partitions + boot_app0 + app
+  and is only valid at flash offset `0x0` over USB, whereas OTA writes into an
+  app partition. The handler now detects which kind it got (an ESP-IDF app
+  image carries `esp_app_desc_t`'s magic `0xABCD5432` at offset `0x20`) and for
+  a merged file discards the first 64KB, flashing only the app payload — the
+  part that is byte-identical to `firmware.bin`.
+- **Upload is now chunked (32KB) with a real KB counter.** A single POST was
+  useless for progress: the browser buffers the whole file, so the bar jumped
+  straight to 100% and then sat there. Chunking also lets a chunk lost to a
+  WiFi dip be retried on its own instead of restarting ~1.5MB.
+- `Update.begin()` is deferred until the image type is known so it can be given
+  the exact app size. With an unknown size ESP-IDF erases the whole 1.9MB
+  partition up front, which stalled the first request long enough to time the
+  client out.
+- Failures now return the real `Update.errorString()` instead of bare "FAIL".
+- Verified on hardware: OTA'd a merged `SmartClock_v3.33.bin` onto a clock
+  running 3.35 and confirmed it came back reporting 3.33. ~1.5MB took ~8.5 min
+  on this WiFi. Settings survived (SPIFFS is a separate partition).
+
 ## 3.29 - 2026-08-11
 - **WiFi power save disabled** (`WiFi.setSleep(false)`). This had never been
   turned off, so the radio was parking between DTIM beacons and the AP could

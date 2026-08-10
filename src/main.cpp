@@ -10,7 +10,7 @@
 
 // Single source of truth for the version. Auto-incremented by +0.01 on every
 // successful build by scripts/merge_firmware.py; see CHANGELOG.md for history.
-float ver = 3.30;
+float ver = 3.38;
 
 
 /* #################### To add a new screen (example screen6) ####################
@@ -3625,39 +3625,128 @@ void setup() {
   // bootloader + partition table and is only valid written to offset 0x0 over
   // USB). Uploading the merged image here would brick the app partition, so
   // the size is sanity-checked against the free OTA partition below.
+  // --- Browser OTA: sequential chunked upload to /update -------------------
+  // Accepts EITHER .bin:
+  //   * app-only   .pio/build/esp32dev/firmware.bin
+  //   * merged     ../BIN/SmartClock_vX.XX.bin
+  // The merged file is bootloader + partitions + boot_app0 + app and is only
+  // valid written to flash offset 0x0 over USB. OTA writes into an app
+  // partition instead, so for a merged file everything before the app payload
+  // (OTA_MERGED_APP_OFFSET) is discarded and only the app part is flashed -
+  // which is byte-identical to firmware.bin. The bootloader and partition
+  // table cannot be updated over OTA at all; those still need USB. SPIFFS is a
+  // separate partition and is never touched, so settings survive either way.
+  //
+  // The page posts the file in sequential chunks so it can show real progress
+  // (a single POST just fills the browser's send buffer and reports 100%
+  // instantly) and so a chunk lost to a WiFi dip can be retried on its own
+  // instead of restarting the whole ~1.6MB transfer. Each chunk carries its
+  // file offset and the total size in the upload filename:
+  //     ota_<startOffset>_<totalBytes>.bin
   server.on("/update", HTTP_POST,
-    []() { // called once the whole upload has been received
-      bool ok = !Update.hasError();
+    []() { // one chunk fully received
+      if (Update.hasError()) {
+        server.sendHeader("Connection", "close");
+        server.send(500, "text/plain", String("FAIL: ") + Update.errorString());
+        Serial.printf("[OTA] REJECTED: %s\n", Update.errorString());
+        return;
+      }
+      bool done = Update.isFinished();
       server.sendHeader("Connection", "close");
-      server.send(ok ? 200 : 500, "text/plain", ok ? "OK" : "FAIL");
-      if (ok) {
+      server.send(200, "text/plain", done ? "DONE" : "OK");
+      if (done) {
         Serial.println("[OTA] Update accepted - rebooting into new firmware.");
-        delay(500);
+        delay(400);
         ESP.restart();
       }
     },
-    []() { // streamed while the upload is arriving
+    []() { // streamed while a chunk is arriving
       HTTPUpload& upload = server.upload();
+
+      static const size_t   OTA_MERGED_APP_OFFSET = 0x10000;
+      static const uint32_t ESP_APP_DESC_MAGIC    = 0xABCD5432UL;
+      // These persist across the separate chunk POSTs.
+      static size_t otaOffset  = 0;   // file offset of the next byte to arrive
+      static size_t otaTotal   = 0;   // total file size, from the filename
+      static bool   otaMerged  = false;
+      static bool   otaSniffed = false;
+
       if (upload.status == UPLOAD_FILE_START) {
-        Serial.printf("[OTA] Receiving %s\n", upload.filename.c_str());
-        if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
-          Update.printError(Serial);
+        // filename: ota_<start>_<total>.bin
+        size_t start = 0, total = 0;
+        int u1 = upload.filename.indexOf('_');
+        int u2 = upload.filename.indexOf('_', u1 + 1);
+        int dot = upload.filename.lastIndexOf('.');
+        if (u1 > 0 && u2 > u1 && dot > u2) {
+          start = (size_t)upload.filename.substring(u1 + 1, u2).toInt();
+          total = (size_t)upload.filename.substring(u2 + 1, dot).toInt();
+        }
+        otaOffset = start;
+        otaTotal  = total;
+
+        if (start == 0) { // first chunk of a new image
+          otaMerged = false; otaSniffed = false;
+          Serial.printf("[OTA] Starting upload, %u bytes total\n", (unsigned)total);
+          // Update.begin() is deliberately NOT called here. With an unknown
+          // size esp_ota_begin() erases the whole 1.9MB app partition up front,
+          // which stalls this first request long enough to time the client out.
+          // We wait until the first bytes let us tell merged from app-only, then
+          // begin with the exact app size so only those sectors are erased.
+          if (Update.isRunning()) Update.abort(); // tidy up an abandoned attempt
         }
       } else if (upload.status == UPLOAD_FILE_WRITE) {
-        if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
-          Update.printError(Serial);
+        uint8_t *data = upload.buf;
+        size_t   len  = upload.currentSize;
+
+        // Distinguish the two image types from the very first bytes: an
+        // ESP-IDF app image carries esp_app_desc_t's magic word at offset 0x20.
+        // Present => app-only. Absent => merged (that offset is bootloader).
+        if (!otaSniffed && otaOffset == 0 && len >= 0x24) {
+          otaSniffed = true;
+          uint32_t magic;
+          memcpy(&magic, data + 0x20, sizeof(magic));
+          otaMerged = (magic != ESP_APP_DESC_MAGIC);
+          size_t appSize = otaMerged ? (otaTotal - OTA_MERGED_APP_OFFSET) : otaTotal;
+          Serial.printf("[OTA] Detected %s image%s; app payload %u bytes\n",
+                        otaMerged ? "MERGED" : "app-only",
+                        otaMerged ? " - skipping the first 64KB (bootloader/partitions)" : "",
+                        (unsigned)appSize);
+          // Exact size => only the needed sectors are erased, so this returns
+          // fast enough that the client doesn't time out on the first chunk.
+          if (!Update.begin(appSize)) Update.printError(Serial);
         }
+
+        size_t consumed = len;
+        if (otaMerged) {
+          if (otaOffset + len <= OTA_MERGED_APP_OFFSET) {
+            otaOffset += len;      // entirely inside the discarded region
+            return;
+          }
+          if (otaOffset < OTA_MERGED_APP_OFFSET) {
+            size_t skip = OTA_MERGED_APP_OFFSET - otaOffset; // straddles the boundary
+            data += skip;
+            len  -= skip;
+          }
+        }
+
+        if (Update.write(data, len) != len) Update.printError(Serial);
+        otaOffset += consumed;
       } else if (upload.status == UPLOAD_FILE_END) {
-        if (Update.end(true)) {
-          Serial.printf("[OTA] Success: %u bytes written.\n", upload.totalSize);
-        } else {
-          Update.printError(Serial);
+        // Only finalise once the last chunk of the file has landed.
+        if (otaTotal > 0 && otaOffset >= otaTotal) {
+          if (Update.end(true)) {
+            Serial.printf("[OTA] Success: %u bytes received (%s image).\n",
+                          (unsigned)otaTotal, otaMerged ? "merged" : "app-only");
+          } else {
+            Update.printError(Serial);
+          }
         }
       } else if (upload.status == UPLOAD_FILE_ABORTED) {
         Update.abort();
         Serial.println("[OTA] Upload aborted.");
       }
     });
+
   server.on("/clockdisplaymode", HTTP_GET, []() { if (server.hasArg("screen") && server.hasArg("value")) { int screenIndex = server.arg("screen").toInt() - 1; String value = server.arg("value"); if (screenIndex >= 0 && screenIndex < allScreenSettings.size()) { if (value == "4 numbers" || value == "All numbers" || value == "4 ticks" || value == "All ticks") { allScreenSettings[screenIndex].clockDisplayMode = value; saveSettings(); server.send(200, "text/plain", "OK"); } else { server.send(400, "text/plain", "Invalid display mode value"); } } else { server.send(400, "text/plain", "Invalid screen number"); } } else { server.send(400, "text/plain", "Missing parameters"); } });
 
   // Configure WiFiManager
