@@ -10,6 +10,10 @@ recorded — only version numbers and short notes.
 > some numbers below are just iteration builds with no shipped change of their
 > own. Entries are written against the version that first carried the change.
 
+## 3.66 - 2026-08-11
+- Weather API-key fields are visible text again so pasted keys can be checked
+  directly in the settings page, as requested.
+
 ## 3.65 - 2026-08-11
 - Removed the destructive boot path that automatically formatted SPIFFS after
   any mount failure. The clock now retries a clean mount four times and leaves
