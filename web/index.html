@@ -191,6 +191,11 @@
             border-bottom: 0; align-items: flex-end;
         }
         .header-bar h2 { color: var(--text); font-size: clamp(28px,4vw,44px); line-height: 1; letter-spacing: -.05em; }
+        .header-title { display: grid; gap: 8px; }
+        #clockVersion {
+            color: var(--accent) !important; font-size: 11px !important; font-weight: 800;
+            letter-spacing: .12em; text-transform: uppercase;
+        }
         .language-selector { gap: 9px; }
         .language-selector label { color: var(--muted); font-size: 12px; margin: 0; }
 
@@ -205,9 +210,6 @@
             display: block; margin: 0 0 22px; color: var(--text); font-size: 18px;
             text-align: left; letter-spacing: -.02em; text-shadow: none;
         }
-        #clockVersion { color: var(--muted) !important; }
-        #displayCard > div:nth-of-type(1) { text-align: left !important; margin: -17px 0 16px !important; }
-
         .control-row, .expandable-container .control-row, .expandable .control-row {
             display: grid; grid-template-columns: minmax(165px, .8fr) minmax(180px, 1.2fr) 80px;
             align-items: center; gap: 16px; min-height: 62px; margin: 0; padding: 10px 0;
@@ -344,7 +346,10 @@
         <div class="device-state"><b><span class="status-dot"></span>Smart Clock</b>Live device controls</div>
     </aside>
     <div class="header-bar">
-        <h2 data-translate-key="mainTitle">Carlson's Smart Clock</h2>
+        <div class="header-title">
+            <h2 data-translate-key="mainTitle">Carlson's Smart Clock</h2>
+            <span id="clockVersion" aria-live="polite">Connecting...</span>
+        </div>
         <div class="language-selector">
             <label for="languageSelect" data-translate-key="language">Language</label>
             <select id="languageSelect" onchange="setLanguage(this.value)">
@@ -357,9 +362,6 @@
 
 <div class="control-group" id="displayCard">
     <label class="card-label" data-translate-key="clockSettings">Clock Settings</label>
-    <div style="text-align: center; margin-bottom: 10px;">
-        <span id="clockVersion" style="font-size: 12px; color: #777;"></span>
-    </div>
 
     <div class="control-row">
         <label data-translate-key="screenSelection">Screen Selection</label>
@@ -785,7 +787,63 @@
         alert('Panel type has been saved. Please reboot the clock for the pin changes to take effect.');
     }
 
-    function rgb565ToRgb(e){let t=(e&63488)>>11,n=(e&2016)>>5,o=e&31;return t=t*255/31,n=n*255/63,o=o*255/31,`rgb(${t},${n},${o})`}let screenshotInFlight=false;async function fetchAndDrawScreenshot(){if(screenshotInFlight)return;screenshotInFlight=true;try{const e=await fetch("/screenshot.bin");if(!e.ok)return;const t=await e.arrayBuffer(),n=new Uint16Array(t),o=document.getElementById("screenshotCanvas");if(!o)return;const c=o.getContext("2d"),i=5,d=i-1;c.clearRect(0,0,o.width,o.height);let s=0;for(let l=0;l<32;l++)for(let a=0;a<64;a++)c.fillStyle=rgb565ToRgb(n[s++]),c.fillRect(a*i,l*i,d,d)}catch(e){}finally{screenshotInFlight=false}}
+    function rgb565ToRgb(value){
+        const red=((value&63488)>>11)*255/31;
+        const green=((value&2016)>>5)*255/63;
+        const blue=(value&31)*255/31;
+        return `rgb(${red},${green},${blue})`;
+    }
+
+    let screenshotInFlight=false, settingsRequestInFlight=false;
+    let brightnessRequestInFlight=false, passiveRequestInFlight=false;
+    let passiveRequestAvailableAt=0;
+
+    function passiveRequestBlocked() {
+        return passiveRequestInFlight || Date.now() < passiveRequestAvailableAt;
+    }
+
+    function finishPassiveRequest() {
+        passiveRequestInFlight = false;
+        // Give the single-client ESP32 server and Wi-Fi stack breathing room
+        // after every background response, even if 1 s preview is selected.
+        passiveRequestAvailableAt = Date.now() + 750;
+    }
+
+    function fetchWithTimeout(url, options, timeoutMs) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs || 6500);
+        const requestOptions = Object.assign({}, options || {}, {signal: controller.signal});
+        return fetch(url, requestOptions).finally(() => clearTimeout(timer));
+    }
+
+    async function fetchAndDrawScreenshot(){
+        // The ESP32 WebServer is single-client. Never start a preview while a
+        // settings/brightness poll or a user interaction is using it.
+        if(screenshotInFlight || settingsRequestInFlight || passiveRequestBlocked() ||
+           pollingPaused || document.hidden) return;
+        screenshotInFlight = true;
+        passiveRequestInFlight = true;
+        try {
+            const response = await fetchWithTimeout("/screenshot.bin", {}, 6000);
+            if(!response.ok) return;
+            const buffer = await response.arrayBuffer();
+            if(buffer.byteLength !== 4096) return;
+            const pixels = new Uint16Array(buffer), canvas = document.getElementById("screenshotCanvas");
+            if(!canvas) return;
+            const context = canvas.getContext("2d"), scale = 5, pixelSize = scale - 1;
+            context.clearRect(0,0,canvas.width,canvas.height);
+            let index = 0;
+            for(let y=0;y<32;y++) for(let x=0;x<64;x++) {
+                context.fillStyle = rgb565ToRgb(pixels[index++]);
+                context.fillRect(x*scale,y*scale,pixelSize,pixelSize);
+            }
+        } catch(error) {
+            if(error.name !== 'AbortError') console.debug('Preview refresh skipped:', error);
+        } finally {
+            screenshotInFlight = false;
+            finishPassiveRequest();
+        }
+    }
 
     let isLoadingSettings=!0,tB,tD,tBr,tPS,tPS2,tPS3,autoBrightnessInterval=null,pendingOptions={};
 
@@ -805,11 +863,13 @@
     // *** MODIFIED fetchSettings() FUNCTION ***
     function fetchSettings(){
         // If user is interacting, skip this poll entirely
-        if (pollingPaused || document.hidden) return;
+        if (pollingPaused || document.hidden || settingsRequestInFlight || passiveRequestBlocked()) return;
 
+        settingsRequestInFlight = true;
+        passiveRequestInFlight = true;
         isLoadingSettings = true;
         // Add cache busting for iOS
-        fetch("/settings?_=" + new Date().getTime())
+        fetchWithTimeout("/settings?_=" + new Date().getTime(), {}, 6500)
             .then(response => {
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 return response.json();
@@ -851,11 +911,11 @@
                 if (autoBrightnessSwitch.checked) {
                     brightnessSlider.disabled = true;
                     fetchCurrentBrightness();
-                    if (autoBrightnessInterval) clearInterval(autoBrightnessInterval);
-                    autoBrightnessInterval = setInterval(fetchCurrentBrightness, 1000);
+                    if (!autoBrightnessInterval) autoBrightnessInterval = setInterval(fetchCurrentBrightness, 5000);
                 } else {
                     brightnessSlider.disabled = false;
                     if (autoBrightnessInterval) clearInterval(autoBrightnessInterval);
+                    autoBrightnessInterval = null;
                 }
 
                 document.getElementById("clockVersion").textContent = e.version ? "Version: " + e.version.toFixed(2) : "";
@@ -908,6 +968,11 @@
                 // which stalls the WiFi stack and causes the next poll to fail
                 // too - a spiral that locked the device up until a reboot.
                 setLanguage(localStorage.getItem('language') || 'en');
+                isLoadingSettings = false;
+            })
+            .finally(() => {
+                settingsRequestInFlight = false;
+                finishPassiveRequest();
                 isLoadingSettings = false;
             });
     }
@@ -962,7 +1027,7 @@
     function updateNamedSetting(e,t,n){blockPolling(2000);if(isLoadingSettings)return;fetch(`/${e}?value=${encodeURIComponent(t)}&screen=${n}`)}
     function updateOption(e,t,n){blockPolling(2000);if(isLoadingSettings)return;const o=document.getElementById(e.split("_")[0]+"ColourRow"),i=document.getElementById(e.split("_")[0]+"ImageRow");"colour"===t?(o.classList.remove("hidden"),i.classList.add("hidden")):(o.classList.add("hidden"),i.classList.remove("hidden")),pendingOptions[e]=t,document.getElementById(e.split("_")[0]+"Option").value=t,fetch(`/${e}?value=${t}&screen=${n}`)}
     function toggleExpandableByIds(e,t,n,o,c,i){const d=document.getElementById(e),s=document.getElementById(t);if(!s||!d)return;s.classList.toggle("active",n),d.classList.toggle("expanded",n);if(null!==o&&c&&i){const l=document.getElementById(c),a=document.getElementById(i);n?"colour"===o?(l&&l.classList.remove("hidden"),a&&a.classList.add("hidden")):(a&&a.classList.remove("hidden"),l&&l.classList.add("hidden")):l&&i&&(l.classList.add("hidden"),i.classList.add("hidden"))}}
-    function toggleAutoBrightness(e){blockPolling(2000);if(isLoadingSettings)return;fetch("/autoBrightness?state="+e).then(()=>{const t=document.getElementById("brightnessSlider");t.disabled=e,e?(fetchCurrentBrightness(),autoBrightnessInterval=setInterval(fetchCurrentBrightness,1e3)):clearInterval(autoBrightnessInterval)})}
+    function toggleAutoBrightness(e){blockPolling(2000);if(isLoadingSettings)return;fetch("/autoBrightness?state="+e).then(()=>{const t=document.getElementById("brightnessSlider");t.disabled=e;if(e){fetchCurrentBrightness();if(!autoBrightnessInterval)autoBrightnessInterval=setInterval(fetchCurrentBrightness,5000)}else{clearInterval(autoBrightnessInterval);autoBrightnessInterval=null}})}
     function toggleAutoBrightnessExpandable(e){const t=document.getElementById("autoBrightnessContainer"),n=document.getElementById("autoBrightnessExpandable");n.classList.toggle("active",e),t.classList.toggle("expanded",e)}
     function toggleClockOptions(e,t){if(3!=t)return;const n=document.getElementById("clockOptionsContainer"),o=document.getElementById("clockOptionsExpandable");o.classList.toggle("active",e),n.classList.toggle("expanded",e)}
     function toggleColorPicker(e,t){const n=document.getElementById(t);n&&n.classList.toggle("hidden","Colour"!==e)}
@@ -982,7 +1047,16 @@
     function updateWeather(){if(isLoadingSettings)return;fetch("/weatherupdate")}
     function confirmAction(e){let t="Are you sure you want to "+e+"?";"formatSSD"==e&&(t="This will DELETE ALL SAVED SETTINGS. Are you sure?"),confirm(t)&&fetch("/"+e).then(e=>e.text())}
     function confirmUpdate(){if(confirm("This will take the clock offline and open the firmware update portal. You will need to reconnect to your normal WiFi after updating. Continue?")){fetch("/startUpdatePortal")}}
-    function fetchCurrentBrightness(){fetch("/currentBrightness").then(e=>e.text()).then(e=>document.getElementById("currentBrightness").textContent=e+"%")}
+    function fetchCurrentBrightness(){
+        if(brightnessRequestInFlight || passiveRequestBlocked() || pollingPaused || document.hidden) return;
+        brightnessRequestInFlight = true;
+        passiveRequestInFlight = true;
+        fetchWithTimeout("/currentBrightness", {}, 4000)
+            .then(e => { if(!e.ok) throw new Error('HTTP '+e.status); return e.text(); })
+            .then(e => document.getElementById("currentBrightness").textContent=e+"%")
+            .catch(e => { if(e.name !== 'AbortError') console.debug('Brightness poll skipped:',e); })
+            .finally(() => { brightnessRequestInFlight=false; finishPassiveRequest(); });
+    }
 
 
     /* ---------- live preview refresh (selectable, safe-mode aware) ---------- */
@@ -1118,8 +1192,9 @@
         // previous request is still in flight.
         initRefresh();
         setInterval(updateWeather,3e5);
-        // Poll for active screen changes every 5 seconds
-        setInterval(() => { if (!document.hidden) fetchSettings(); }, 5000);
+        // Settings are low-priority background state. The shared in-flight
+        // guard prevents this from colliding with preview/brightness traffic.
+        setInterval(() => { if (!document.hidden) fetchSettings(); }, 15000);
     };
 </script>
 </body>
