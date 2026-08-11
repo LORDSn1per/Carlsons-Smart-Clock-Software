@@ -10,6 +10,13 @@ recorded — only version numbers and short notes.
 > some numbers below are just iteration builds with no shipped change of their
 > own. Entries are written against the version that first carried the change.
 
+## 3.54 - 2026-08-11
+- Restored the black 64x32 LED pixel grid in the live preview using a lightweight
+  overlay, retaining the single-operation `ImageData` renderer.
+- The LCD itself now has square corners so edge pixels are never clipped.
+- Presented the preview inside a responsive 3D clock enclosure with a recessed
+  bezel, dimensional case, feet, branding and speaker detail.
+
 ## 3.53 - 2026-08-11
 - Web controls now acknowledge immediately and defer/coalesce SPIFFS settings
   persistence until one second after the final change.
