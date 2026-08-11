@@ -10,7 +10,7 @@
 
 // Single source of truth for the version. Auto-incremented by +0.01 on every
 // successful build by scripts/merge_firmware.py; see CHANGELOG.md for history.
-float ver = 3.69;
+float ver = 3.70;
 
 
 /* #################### To add a new screen (example screen6) ####################
@@ -505,7 +505,19 @@ int cachedSettingsScreen = -1;
 uint8_t targetBrightness = 0; // Target brightness for smooth transition
 uint8_t currentBrightness = 200; // Current brightness 200 is for bootup brightness
 unsigned long lastBrightnessUpdate = 0; // For smooth transition timing
-const unsigned long brightnessUpdateInterval = 50; // 50ms for smooth steps
+const unsigned long brightnessUpdateInterval = 75; // Fast enough to fade smoothly, slow enough to avoid visible hunting
+const uint8_t HYBRID_OE_FLOOR = 40; // ~15%: below this, keep OE stable and dim in the RGB bitplanes
+const uint32_t LDR_SAMPLE_INTERVAL_MS = 25;
+const uint32_t LDR_TARGET_HOLD_MS = 350;
+uint16_t ldrRawValue = 0;
+float ldrFilteredValue = 0.0f;
+bool ldrFilterInitialized = false;
+uint16_t ldrMedianWindow[5] = {0, 0, 0, 0, 0};
+uint8_t ldrMedianCount = 0;
+uint8_t ldrMedianIndex = 0;
+uint8_t appliedOeBrightness = 255;
+uint8_t appliedColorBrightness = 255;
+bool displayFrameRefreshRequired = true;
 const int MenuButtonPin = 18;
 const int LDR_PIN = 32;  // LDR connected to GPIO 2
 int FirstBoot = 1;  
@@ -879,6 +891,9 @@ void handleSetDarkRoomLDR();
 void handleSetBrightRoomLDR();
 void handleAutoBrightness();
 void handleCurrentBrightness();
+void resetAmbientLightFilter();
+void serviceAmbientBrightnessTarget();
+void applyDisplayBrightness(uint8_t desiredBrightness, bool initializeBothBuffers = false);
 void handleTimezone();
 void handleLandColor();
 void handleWaterColor();
@@ -1639,6 +1654,12 @@ void handleStatus() {
   const uint32_t now = millis();
   doc["safe_mode"] = safeModeActive;
   doc["current_brightness"] = map(currentBrightness, 0, 255, 0, 100);
+  doc["brightness_raw"] = currentBrightness;
+  doc["brightness_target"] = targetBrightness;
+  doc["brightness_oe"] = appliedOeBrightness;
+  doc["brightness_rgb_scale"] = appliedColorBrightness;
+  doc["ldr_raw"] = ldrRawValue;
+  doc["ldr_filtered"] = (uint16_t)lroundf(ldrFilteredValue);
   doc["temperature"] = currentTemp;
   doc["apparent_temperature"] = currentApparentTemp;
   doc["humidity"] = currentHumidity;
@@ -2893,11 +2914,8 @@ void handleBrightness() {
     if (brightness < 0) brightness = 0;
     if (brightness > 255) brightness = 255;
     
-    // Immediately apply the new brightness to the display if Auto Brightness is off.
-    // The main loop() handles this logic, but applying it here gives instant feedback.
-    if (!autoBrightnessEnabled) {
-      dma_display->setBrightness8(brightness);
-    }
+    // loop() applies this through the hybrid/double-buffered path. Writing OE
+    // here would modify the buffer currently being scanned and cause a flash.
     
     // Save the new setting to SPIFFS.
     saveSettings();
@@ -2967,6 +2985,7 @@ void handleSetDarkRoomLDR() {
     delay(50); // Small delay between readings
   }
   darkRoomLDRValue = ldrSum / samples; // Average the readings
+  resetAmbientLightFilter();
 
   // Convert raw LDR value to an approximate Lux value for the UI.
   int luxValue = map(darkRoomLDRValue, 0, 4095, 40, 400);
@@ -2986,6 +3005,7 @@ void handleSetBrightRoomLDR() {
     delay(50);
   }
   brightRoomLDRValue = ldrSum / samples;
+  resetAmbientLightFilter();
 
   int luxValue = map(brightRoomLDRValue, 0, 4095, 40, 400);
 
@@ -2999,6 +3019,8 @@ void handleAutoBrightness() {
   if (server.hasArg("state")) {
     String state = server.arg("state");
     autoBrightnessEnabled = (state == "true");
+    resetAmbientLightFilter();
+    targetBrightness = currentBrightness;
     
     saveSettings();
     Serial.println("Auto Brightness: " + state);
@@ -3647,6 +3669,96 @@ uint16_t cc_ppl = dma_display->color565(100, 0, 100);       // purple
 uint16_t cc_bppl = dma_display->color565(255, 0, 255);    // bright purple
 
 // Instance of the button.
+void resetAmbientLightFilter() {
+  ldrFilterInitialized = false;
+  ldrMedianCount = 0;
+  ldrMedianIndex = 0;
+}
+
+static uint16_t medianLdrSample() {
+  uint16_t sorted[5];
+  const uint8_t count = ldrMedianCount;
+  for (uint8_t i = 0; i < count; ++i) sorted[i] = ldrMedianWindow[i];
+  std::sort(sorted, sorted + count);
+  return sorted[count / 2];
+}
+
+void serviceAmbientBrightnessTarget() {
+  static uint32_t lastSampleAt = 0;
+  static uint8_t candidateTarget = 0;
+  static uint32_t candidateSince = 0;
+  const uint32_t nowMs = millis();
+
+  if (!autoBrightnessEnabled || nowMs - lastSampleAt < LDR_SAMPLE_INTERVAL_MS) return;
+  lastSampleAt = nowMs;
+
+  ldrRawValue = analogRead(LDR_PIN);
+  ldrMedianWindow[ldrMedianIndex] = ldrRawValue;
+  ldrMedianIndex = (ldrMedianIndex + 1) % 5;
+  if (ldrMedianCount < 5) ++ldrMedianCount;
+
+  const uint16_t median = medianLdrSample();
+  if (!ldrFilterInitialized) {
+    ldrFilteredValue = median;
+    ldrFilterInitialized = true;
+    candidateTarget = currentBrightness;
+    candidateSince = nowMs;
+  } else {
+    // About a 300 ms time constant after the median stage. This removes ADC
+    // noise and brief shadows without making room-light changes feel delayed.
+    ldrFilteredValue += (median - ldrFilteredValue) * 0.08f;
+  }
+
+  uint8_t requested = darkRoomBrightness;
+  if (brightRoomLDRValue > darkRoomLDRValue) {
+    const float normalized = constrain(
+      (ldrFilteredValue - darkRoomLDRValue) /
+      (float)(brightRoomLDRValue - darkRoomLDRValue), 0.0f, 1.0f);
+    const int mappedBrightness = (int)lroundf(
+      darkRoomBrightness + normalized * ((int)brightRoomBrightness - (int)darkRoomBrightness));
+    requested = (uint8_t)constrain(mappedBrightness, 0, 255);
+  }
+
+  // A two-point deadband plus a short dwell is real hysteresis in the desired
+  // output domain. Unlike the old 11/12% thresholds, it cannot collapse to the
+  // same legacy HUB75 duty step.
+  if (abs((int)requested - (int)targetBrightness) < 2) {
+    candidateTarget = targetBrightness;
+    candidateSince = nowMs;
+    return;
+  }
+
+  if (abs((int)requested - (int)candidateTarget) > 1) {
+    candidateTarget = requested;
+    candidateSince = nowMs;
+    return;
+  }
+
+  if (nowMs - candidateSince >= LDR_TARGET_HOLD_MS) {
+    targetBrightness = candidateTarget;
+    candidateSince = nowMs;
+  }
+}
+
+void applyDisplayBrightness(uint8_t desiredBrightness, bool initializeBothBuffers) {
+  // OE pulse widths become coarse and panel-dependent below about 15%. Keep
+  // OE at a steady floor there and obtain the remaining range by scaling the
+  // already-linearised RGB bitplanes instead.
+  const uint8_t oeBrightness = max(desiredBrightness, HYBRID_OE_FLOOR);
+  const uint8_t colorBrightness = desiredBrightness < HYBRID_OE_FLOOR
+    ? (uint8_t)(((uint16_t)desiredBrightness * 255U + HYBRID_OE_FLOOR / 2) / HYBRID_OE_FLOOR)
+    : 255;
+
+  appliedOeBrightness = oeBrightness;
+  appliedColorBrightness = colorBrightness;
+  if (dma_display) {
+    dma_display->setColorBrightness8(colorBrightness);
+    if (initializeBothBuffers) dma_display->setBrightness8(oeBrightness);
+    else dma_display->setBackBufferBrightness8(oeBrightness);
+  }
+  displayFrameRefreshRequired = true;
+}
+
 EasyButton button(MenuButtonPin);
 
 void setup() {
@@ -3782,6 +3894,8 @@ void setup() {
   HUB75_I2S_CFG mxconfig(PANEL_RES_X, PANEL_RES_Y, PANEL_CHAIN);
   mxconfig.clkphase = false;
   mxconfig.driver = HUB75_I2S_CFG::FM6047;
+  mxconfig.double_buff = true;       // compose complete frames away from the active scan buffer
+  mxconfig.min_refresh_rate = 200;   // resolves to ~287 Hz on this 64x32/10 MHz configuration
 
   if (panelType == "P2.5") {
     Serial.println("Configuring pins for P2.5 panel.");
@@ -3797,9 +3911,16 @@ void setup() {
     while(1);
   }
   
-  dma_display->begin();
-  dma_display->setBrightness8(brightness);
+  if (!dma_display->begin()) {
+    Serial.println("!!! FAILED to allocate HUB75 DMA buffers !!! Halting.");
+    while (1) delay(1000);
+  }
   currentBrightness = brightness;
+  targetBrightness = brightness;
+  applyDisplayBrightness(currentBrightness, true);
+  Serial.printf("[Display] refresh=%dHz OE=%u RGB-scale=%u double-buffer=on\n",
+                dma_display->calculated_refresh_rate,
+                appliedOeBrightness, appliedColorBrightness);
   dma_canvas.setRotation(0);
   dma_canvas.fillScreen(0);
   
@@ -3828,6 +3949,7 @@ void setup() {
   }
 
   dma_display->drawRGBBitmap(0, 0, dma_canvas.getBuffer(), dma_canvas.width(), dma_canvas.height());
+  dma_display->flipDMABuffer();
   unsigned long splashStartTime = millis();
   stateStartTime = millis();
 
@@ -3854,7 +3976,7 @@ void setup() {
   server.on("/settings", handleSettings);
   server.on("/status", handleStatus);
   server.on("/debug", []() { // Health snapshot (heap/uptime/WiFi) - handy when the UI misbehaves
-    DynamicJsonDocument d(256);
+    DynamicJsonDocument d(512);
     d["uptime_s"] = millis() / 1000;
     d["free_heap"] = ESP.getFreeHeap();
     d["min_free_heap"] = ESP.getMinFreeHeap();
@@ -3864,6 +3986,13 @@ void setup() {
     d["rssi"] = (WiFi.status() == WL_CONNECTED) ? (long)WiFi.RSSI() : 0;
     d["hostname"] = AutoChipID;
     d["ip"] = WiFi.localIP().toString();
+    d["brightness_raw"] = currentBrightness;
+    d["brightness_target"] = targetBrightness;
+    d["brightness_oe"] = appliedOeBrightness;
+    d["brightness_rgb_scale"] = appliedColorBrightness;
+    d["ldr_raw"] = ldrRawValue;
+    d["ldr_filtered"] = (uint16_t)lroundf(ldrFilteredValue);
+    d["display_refresh_hz"] = dma_display ? dma_display->calculated_refresh_rate : 0;
     String resp; serializeJson(d, resp);
     server.send(200, "application/json", resp);
   });
@@ -4291,10 +4420,14 @@ void loop() {
   // the fact, quiet enough to leave enabled. Live values are also at GET /debug.
   static uint32_t lastDebugPrintTime = 0;
   if (millis() - lastDebugPrintTime > 60000) {
-    Serial.printf("[Health] t=%lus heap=%u minHeap=%u wifi=%d state=%d rssi=%ld\n",
+    Serial.printf("[Health] t=%lus heap=%u minHeap=%u wifi=%d state=%d rssi=%ld brt=%u target=%u oe=%u rgb=%u ldr=%u/%u refresh=%dHz\n",
                   millis() / 1000, ESP.getFreeHeap(), ESP.getMinFreeHeap(),
                   (int)WiFi.status(), (int)currentState,
-                  WiFi.status() == WL_CONNECTED ? (long)WiFi.RSSI() : 0);
+                  WiFi.status() == WL_CONNECTED ? (long)WiFi.RSSI() : 0,
+                  currentBrightness, targetBrightness, appliedOeBrightness,
+                  appliedColorBrightness, ldrRawValue,
+                  (uint16_t)lroundf(ldrFilteredValue),
+                  dma_display ? dma_display->calculated_refresh_rate : 0);
     lastDebugPrintTime = millis();
   }
 
@@ -4306,72 +4439,21 @@ void loop() {
     lastAHT10Update = millis();
   }
 
-// --- Auto-brightness Logic with Flicker Protection ---
-  static uint32_t lastAutoBrightnessUpdate = 0;
-  static bool isLockedAtMin = false;            // Tracks if we are "locked" at user minimum
-  static unsigned long lightThresholdStartTime = 0; // Timer for the 1-second unlock rule
-  const uint32_t autoBrightnessUpdateInterval = 50; 
-  
-  // Define 11% and 12% thresholds (11% of 255 ≈ 28, 12% ≈ 31)
-  const uint8_t FLICKER_LIMIT = 28; 
-  const uint8_t UNLOCK_THRESHOLD = 31;
-
+// --- Filtered auto-brightness and hybrid low-light output ---
+  serviceAmbientBrightnessTarget();
   if (autoBrightnessEnabled) {
-    uint32_t ldrValue = analogRead(LDR_PIN);
-    ldrValue = min(ldrValue, (uint32_t)brightRoomLDRValue);
-    
-    // Calculate what the sensor "wants" the brightness to be
-    long rawMap = map(ldrValue, darkRoomLDRValue, brightRoomLDRValue, darkRoomBrightness, brightRoomBrightness);
-    uint8_t sensorTarget = constrain(rawMap, darkRoomBrightness, brightRoomBrightness);
-    
-    uint8_t finalTarget;
-
-    if (isLockedAtMin) {
-      // If we are locked at minimum, check if light level is high enough to reach 12%
-      if (sensorTarget >= UNLOCK_THRESHOLD) {
-        if (lightThresholdStartTime == 0) lightThresholdStartTime = millis();
-        
-        // Only unlock if light has been consistently high for 1 second
-        if (millis() - lightThresholdStartTime >= 1000) {
-          isLockedAtMin = false;
-          finalTarget = sensorTarget;
-          lightThresholdStartTime = 0;
-        } else {
-          finalTarget = darkRoomBrightness; // Stay locked until 1s passes
-        }
-      } else {
-        // Light dropped back down or stayed low, reset timer
-        lightThresholdStartTime = 0;
-        finalTarget = darkRoomBrightness;
-      }
-    } else {
-      // Normal Operation Mode
-      if (sensorTarget <= FLICKER_LIMIT && darkRoomBrightness < FLICKER_LIMIT) {
-        // We have entered the "Flicker Zone". Target the user's absolute minimum.
-        finalTarget = darkRoomBrightness;
-        
-        // Once the smooth transition reaches the floor, lock it there.
-        if (currentBrightness == darkRoomBrightness) {
-          isLockedAtMin = true;
-        }
-      } else {
-        // We are above 11%, use the sensor target directly
-        finalTarget = sensorTarget;
-        lightThresholdStartTime = 0;
-      }
-    }
-
-    // Apply the smooth transition (+1 or -1 every 50ms)
-    if (currentBrightness != finalTarget && millis() - lastAutoBrightnessUpdate >= autoBrightnessUpdateInterval) {
-      currentBrightness += (currentBrightness < finalTarget) ? 1 : -1;
-      if (dma_display) dma_display->setBrightness8(currentBrightness);
-      lastAutoBrightnessUpdate = millis();
+    if (currentBrightness != targetBrightness &&
+        millis() - lastBrightnessUpdate >= brightnessUpdateInterval) {
+      currentBrightness += (currentBrightness < targetBrightness) ? 1 : -1;
+      applyDisplayBrightness(currentBrightness);
+      lastBrightnessUpdate = millis();
     }
   } else if (currentBrightness != brightness) {
-    // Manual Mode
+    // Manual changes remain immediate, but are committed through the inactive
+    // DMA buffer instead of rewriting OE while it is being scanned.
     currentBrightness = brightness;
-    if (dma_display) dma_display->setBrightness8(currentBrightness);
-    isLockedAtMin = false; // Reset lock if auto-brightness is disabled
+    targetBrightness = brightness;
+    applyDisplayBrightness(currentBrightness);
   }
 
   bool displayClockFace = false; // Flag to decide if we draw a clock screen
@@ -4595,11 +4677,20 @@ switch (currentState) {
   
   if(dma_display_is_valid() && dma_canvas_is_valid()) {    
     const uint8_t* completedFrame = (const uint8_t*)dma_canvas.getBuffer();
-    if (memcmp(screenshotBuffer, completedFrame, sizeof(screenshotBuffer)) != 0) {
+    const bool frameChanged = memcmp(screenshotBuffer, completedFrame, sizeof(screenshotBuffer)) != 0;
+    if (frameChanged) {
       memcpy(screenshotBuffer, completedFrame, sizeof(screenshotBuffer));
       ++screenshotRevision;
     }
-    dma_display->drawRGBBitmap(0, 0, dma_canvas.getBuffer(), dma_canvas.width(), dma_canvas.height());
+    if (frameChanged || displayFrameRefreshRequired) {
+      // OE and pixels are prepared entirely in the inactive buffer, then made
+      // visible together at the DMA frame boundary.
+      dma_display->setBackBufferBrightness8(appliedOeBrightness);
+      dma_display->setColorBrightness8(appliedColorBrightness);
+      dma_display->drawRGBBitmap(0, 0, dma_canvas.getBuffer(), dma_canvas.width(), dma_canvas.height());
+      dma_display->flipDMABuffer();
+      displayFrameRefreshRequired = false;
+    }
   }
   vTaskDelay(1); 
 }

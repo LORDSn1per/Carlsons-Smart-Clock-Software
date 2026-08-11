@@ -413,6 +413,11 @@ class MatrixPanel_I2S_DMA {
       // Setup the ESP32 DMA Engine. Sprite_TM built this stuff.
       configureDMA(m_cfg); //DMA and I2S configuration and setup
 
+      // configureDMA() starts DMA on buffer 0. With double buffering enabled,
+      // draw into buffer 1 first so the active scan buffer is never modified.
+      if (m_cfg.double_buff)
+        back_buffer_id = 1;
+
       //showDMABuffer(); // show backbuf_id of 0
 
       #if SERIAL_DEBUG 
@@ -517,7 +522,7 @@ class MatrixPanel_I2S_DMA {
     static void color565to888(const uint16_t color, uint8_t &r, uint8_t &g, uint8_t &b);
 
 
-    inline void IRAM_ATTR flipDMABuffer() 
+    inline void flipDMABuffer()
     {         
       if ( !m_cfg.double_buff) return;
         
@@ -546,14 +551,18 @@ class MatrixPanel_I2S_DMA {
         
     inline void setPanelBrightness(int b)
     {
-      // Change to set the brightness of the display, range of 1 to matrixWidth (i.e. 1 - 64)
-        brightness = b;
+        // The public brightness range is genuinely 0-255. The older version
+        // reduced this to only PIXELS_PER_ROW steps before updating OE.
+        brightness = constrain(b, 0, 255);
         if (!initialized)
           return;
 
-        brtCtrlOE(b);
-        if (m_cfg.double_buff)
-                brtCtrlOE(b, 1);
+        brtCtrlOE(brightness);
+        buffer_brightness[0] = brightness;
+        if (m_cfg.double_buff) {
+          brtCtrlOE(brightness, 1);
+          buffer_brightness[1] = brightness;
+        }
     }
 
     /**
@@ -563,7 +572,33 @@ class MatrixPanel_I2S_DMA {
      */
     void setBrightness8(const uint8_t b)
     {
-      setPanelBrightness(b * PIXELS_PER_ROW / 256);
+      setPanelBrightness(b);
+    }
+
+    /** Update OE only in the inactive DMA buffer. The caller can repaint the
+     * frame and flip it atomically without rewriting the buffer being scanned.
+     */
+    void setBackBufferBrightness8(const uint8_t b)
+    {
+      brightness = b;
+      if (!initialized)
+        return;
+
+      const uint8_t target_buffer = m_cfg.double_buff ? back_buffer_id : 0;
+      if (buffer_brightness[target_buffer] == b)
+        return;
+
+      brtCtrlOE(b, target_buffer);
+      buffer_brightness[target_buffer] = b;
+    }
+
+    /** Scale linear RGB PWM values after CIE conversion. This supplies fine
+     * low-end dimming while OE remains at a stable, flicker-safe duty cycle.
+     * A full repaint is required after changing it.
+     */
+    void setColorBrightness8(const uint8_t b)
+    {
+      color_brightness = b;
     }
 
     /**
@@ -624,9 +659,11 @@ class MatrixPanel_I2S_DMA {
     inline void resetbuffers(){
       clearFrameBuffer();
       brtCtrlOE(brightness);
+      buffer_brightness[0] = brightness;
       if (m_cfg.double_buff){
         clearFrameBuffer(1); 
         brtCtrlOE(brightness, 1);
+        buffer_brightness[1] = brightness;
       }
     }
 
@@ -678,6 +715,8 @@ class MatrixPanel_I2S_DMA {
     bool initialized          = false;
     int  back_buffer_id       = 0;                       // If using double buffer, which one is NOT active (ie. being displayed) to write too?
     int  brightness           = 32;                      // If you get ghosting... reduce brightness level. 60 seems to be the limit before ghosting on a 64 pixel wide physical panel for some panels.
+    int  buffer_brightness[2] = {-1, -1};               // OE value currently encoded in each DMA buffer
+    uint8_t color_brightness  = 255;                     // post-CIE RGB scale for hybrid low-light dimming
     int  lsbMsbTransitionBit  = 0;                       // For colour depth calculations
     
 
@@ -722,7 +761,7 @@ class MatrixPanel_I2S_DMA {
 
     /**
      * @brief - reset OE bits in DMA buffer in a way to control brightness
-     * @param brt - brightness level from 0 to row_width
+     * @param brt - brightness level from 0 to 255
      * @param _buff_id - buffer id to control
      */
     void brtCtrlOE(int brt, const bool _buff_id=0);

@@ -1,4 +1,4 @@
-# SmartClock — firmware (v3.69)
+# SmartClock — firmware (v3.70)
 
 ESP32 + HUB75 64×32 LED matrix clock: NTP time, PirateWeather / OpenWeatherMap,
 day-night terminator world map, analogue faces, moon phase, and a web settings UI.

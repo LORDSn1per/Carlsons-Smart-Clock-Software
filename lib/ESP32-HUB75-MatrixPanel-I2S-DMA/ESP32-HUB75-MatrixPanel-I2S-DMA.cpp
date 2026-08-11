@@ -76,6 +76,15 @@
  */
 #define getRowDataPtr(row, _dpth, buff_id) &(dma_buff.rowBits[row]->data[_dpth * dma_buff.rowBits[row]->width + buff_id*(dma_buff.rowBits[row]->width * dma_buff.rowBits[row]->color_depth)])
 
+// Apply the clock's global low-light scale after the CIE lookup, where RGB
+// values represent linear PWM energy. Scaling before CIE causes large and
+// colour-dependent jumps near black.
+#define APPLY_GLOBAL_COLOR_BRIGHTNESS() do { \
+  red   = ((uint16_t)red   * color_brightness + 127U) / 255U; \
+  green = ((uint16_t)green * color_brightness + 127U) / 255U; \
+  blue  = ((uint16_t)blue  * color_brightness + 127U) / 255U; \
+} while (0)
+
 bool MatrixPanel_I2S_DMA::allocateDMAmemory()
 {
 
@@ -486,6 +495,7 @@ void IRAM_ATTR MatrixPanel_I2S_DMA::updateMatrixDMABuffer(int16_t x_coord, int16
     green = lumConvTab[green];
     blue  = lumConvTab[blue];   
 #endif
+    APPLY_GLOBAL_COLOR_BRIGHTNESS();
 
     /* When using the drawPixel, we are obviously only changing the value of one x,y position, 
      * however, the two-scan panels paint TWO lines at the same time
@@ -561,6 +571,7 @@ void MatrixPanel_I2S_DMA::updateMatrixDMABuffer(uint8_t red, uint8_t green, uint
     green   = lumConvTab[green];
     blue    = lumConvTab[blue];     
 #endif
+    APPLY_GLOBAL_COLOR_BRIGHTNESS();
 
   for(uint8_t color_depth_idx=0; color_depth_idx<PIXEL_COLOR_DEPTH_BITS; color_depth_idx++)  // color depth - 8 iterations
   {
@@ -729,18 +740,14 @@ void MatrixPanel_I2S_DMA::clearFrameBuffer(bool _buff_id){
 
 /**
  * @brief - reset OE bits in DMA buffer in a way to control brightness
- * @param brt - brightness level from 0 to row_width
+ * @param brt - brightness level from 0 to 255
  * @param _buff_id - buffer id to control
  */
 void MatrixPanel_I2S_DMA::brtCtrlOE(int brt, const bool _buff_id){
   if (!initialized)
     return;
 
-  if (brt > PIXELS_PER_ROW - (MAX_LAT_BLANKING + 2))   // can't control values larger than (row_width - latch_blanking) to avoid ongoing issues being raised about brightness and ghosting.
-    brt = PIXELS_PER_ROW   - (MAX_LAT_BLANKING + 2);   // +2 for a bit of buffer...
-
-  if (brt < 0)
-    brt = 0;
+  brt = constrain(brt, 0, 255);
 
   // start with iterating all rows in dma_buff structure
   int row_idx = dma_buff.rowBits.size();
@@ -755,29 +762,27 @@ void MatrixPanel_I2S_DMA::brtCtrlOE(int brt, const bool _buff_id){
       // switch pointer to a row for a specific color index
       ESP32_I2S_DMA_STORAGE_TYPE* row = dma_buff.rowBits[row_idx]->getDataPtr(coloridx, _buff_id);
 
+      // Scale every BCM bitplane proportionally from the full 0-255 input.
+      // Centre the OE window so latch blanking is balanced on both ends. This
+      // is adapted from the current upstream HUB75 DMA brightness algorithm.
+      const int depth = dma_buff.rowBits[row_idx]->color_depth;
+      const int bitplane = (2 * depth - coloridx) % depth;
+      const int bitshift = (depth - lsbMsbTransitionBit - 1) >> 1;
+      const int rightshift = max(bitplane - bitshift - 2, 0);
+      const int maxPixels = (dma_buff.rowBits[row_idx]->width - m_cfg.latch_blanking) >> rightshift;
+      int enabledPixels = (maxPixels * brt) >> 8;
+      if (brt > 0 && enabledPixels == 0) enabledPixels = 1;
+      if (enabledPixels > maxPixels - 1) enabledPixels = maxPixels - 1;
+
+      const int xMax = (dma_buff.rowBits[row_idx]->width + enabledPixels + 1) >> 1;
+      const int xMin = (dma_buff.rowBits[row_idx]->width - enabledPixels) >> 1;
       int x_coord = dma_buff.rowBits[row_idx]->width;
       do {
         --x_coord;
-        
-       // clear OE bit for all other pixels
-        row[x_coord] &= BITMASK_OE_CLEAR;       
-
-        // Brightness control via OE toggle - disable matrix output at specified x_coord
-        if((coloridx > lsbMsbTransitionBit || !coloridx) && ((x_coord) >= brt)){
-          row[x_coord] |= BIT_OE; // Disable output after this point.
-          continue;  
-        }
-        // special case for the bits *after* LSB through (lsbMsbTransitionBit) - OE is output after data is shifted, so need to set OE to fractional brightness
-        if(coloridx && coloridx <= lsbMsbTransitionBit) {
-            // divide brightness in half for each bit below lsbMsbTransitionBit
-            int lsbBrightness = brt >> (lsbMsbTransitionBit - coloridx + 1);
-            if((x_coord) >= lsbBrightness) {
-                row[x_coord] |= BIT_OE;  // Disable output after this point.
-                continue;
-            }
-        }
-
- 
+        if (x_coord >= xMin && x_coord < xMax)
+          row[x_coord] &= BITMASK_OE_CLEAR;
+        else
+          row[x_coord] |= BIT_OE;
       } while(x_coord);
 
       // need to disable OE before/after latch to hide row transition
@@ -873,6 +878,7 @@ void MatrixPanel_I2S_DMA::hlineDMA(int16_t x_coord, int16_t y_coord, int16_t l, 
     green = lumConvTab[green];
     blue  = lumConvTab[blue];   
 #endif
+  APPLY_GLOBAL_COLOR_BRIGHTNESS();
 
   uint16_t _colorbitclear = BITMASK_RGB1_CLEAR, _colorbitoffset = 0;
 
@@ -955,6 +961,7 @@ void MatrixPanel_I2S_DMA::vlineDMA(int16_t x_coord, int16_t y_coord, int16_t l, 
     green = lumConvTab[green];
     blue  = lumConvTab[blue];   
 #endif
+  APPLY_GLOBAL_COLOR_BRIGHTNESS();
 
 #ifndef ESP32_SXXX
   // Save the calculated value to the bitplane memory in reverse order to account for I2S Tx FIFO mode1 ordering 

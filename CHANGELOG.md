@@ -10,6 +10,19 @@ recorded — only version numbers and short notes.
 > some numbers below are just iteration builds with no shipped change of their
 > own. Entries are written against the version that first carried the change.
 
+## 3.69 - 2026-08-11
+- Replaced the hard 11% low-brightness lock with median plus exponential LDR
+  filtering, a real output deadband and a short dwell, eliminating brightness
+  hunting from noisy ESP32 ADC readings and brief shadows.
+- Backported the current HUB75 driver's proportional 0-255 OE algorithm instead
+  of collapsing the web setting into only 64 row-width values.
+- Added hybrid low-light dimming: below about 15%, OE remains at a steady duty
+  while post-CIE RGB bitplanes provide the finer brightness range down to zero.
+- Enabled atomic DMA double buffering and an approximately 287 Hz panel refresh;
+  unchanged canvases are no longer recopied continuously into the scan buffer.
+- Added raw/filtered LDR, target/OE/RGB brightness and actual refresh diagnostics
+  to `/debug`, `/status` and the once-per-minute serial health line.
+
 ## 3.66 - 2026-08-11
 - Weather API-key fields are visible text again so pasted keys can be checked
   directly in the settings page, as requested.
