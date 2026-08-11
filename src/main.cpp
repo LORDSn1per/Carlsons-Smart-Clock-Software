@@ -10,7 +10,7 @@
 
 // Single source of truth for the version. Auto-incremented by +0.01 on every
 // successful build by scripts/merge_firmware.py; see CHANGELOG.md for history.
-float ver = 3.51;
+float ver = 3.54;
 
 
 /* #################### To add a new screen (example screen6) ####################
@@ -115,6 +115,7 @@ MatrixPanel_I2S_DMA *dma_display = nullptr;  // Declare globally
 // A dedicated buffer to hold the last completed frame for web screenshots.
 // This prevents sending partially-drawn frames (race condition).
 uint8_t screenshotBuffer[PANEL_RES_X * PANEL_RES_Y * 2]; 
+volatile uint32_t screenshotRevision = 1;
 
 // Global variables to store web-selected settings for each screen
 // To add a new screen, you just increment this number and add the new screen function.
@@ -135,7 +136,7 @@ const int DAYS_PER_YEAR = 365;     // Number of days in a non-leap year
 const unsigned long DISPLAY_TIME_PER_DAY = 15000 / 365; // ~41 ms per day
 int currentAnimationDay = 1;       // Current day in the animation
 String animationDateStr = ""; // Store the formatted date (e.g., "15-MAY")
-unsigned long lastSaveTime = 0;
+volatile unsigned long lastSettingsChangeTime = 0;
 const unsigned long saveDelay = 1000; // 1 second delay
 const unsigned long SETUP_PORTAL_TIMEOUT = 5000; // 10 minutes in milliseconds
 // Star related
@@ -492,7 +493,11 @@ uint16_t brightRoomLDRValue = 4095; // Renamed from maxLDRValue
 uint8_t darkRoomBrightness = 20;   // Renamed from minBrightness
 uint8_t brightRoomBrightness = 255; // Renamed from maxBrightness
 bool autoBrightnessEnabled = false; // variable to toggle auto-brightness
-bool settingsChanged = false; // Flag to track user-initiated changes
+volatile bool settingsChanged = false; // Persist once the user stops changing controls
+volatile uint32_t settingsRevision = 1; // Invalidates the cached /settings response
+String cachedSettingsResponse;
+uint32_t cachedSettingsRevision = 0;
+int cachedSettingsScreen = -1;
 uint8_t targetBrightness = 0; // Target brightness for smooth transition
 uint8_t currentBrightness = 200; // Current brightness 200 is for bootup brightness
 unsigned long lastBrightnessUpdate = 0; // For smooth transition timing
@@ -736,6 +741,7 @@ bool safeModeActive = false;
 //  Add a line here whenever you add a new function.
 // ===========================================================================
 void saveSettings();
+void persistSettingsNow();
 void printSpiffsFile();
 void ClearWifi();
 float lerp(float a, float b, float t);
@@ -952,11 +958,12 @@ TimeDateComponents getTimeDateString() {
 void debounceSaveSettings() {
   if (!settingsChanged) return;
   unsigned long currentTime = millis();
-  if (currentTime - lastSaveTime >= saveDelay) {
-    saveSettings();
-    lastSaveTime = currentTime;
-    settingsChanged = false;
-    //Serial.println("Settings saved to SPIFFS (debounced)");
+  if (currentTime - lastSettingsChangeTime >= saveDelay) {
+    const uint32_t revisionBeingSaved = settingsRevision;
+    persistSettingsNow();
+    // A handler on the other core may have changed a setting while SPIFFS was
+    // being written. Only clear the flag if the saved snapshot is still current.
+    if (settingsRevision == revisionBeingSaved) settingsChanged = false;
   }
 }
 
@@ -972,10 +979,19 @@ float clampValue(float value, float minVal, float maxVal) {
 
 void markSettingsChanged() {
   settingsChanged = true;
+  lastSettingsChangeTime = millis();
+  ++settingsRevision;
+}
+
+// Keep the existing call sites lightweight: handlers update RAM, return their
+// HTTP response, and the main loop persists the final state after one quiet
+// second. This also coalesces rapid slider and colour changes into one write.
+void saveSettings() {
+  markSettingsChanged();
 }
 
 // FNV-1a over the serialized settings, so a save that would write byte-identical
-// content can skip the flash write entirely. See saveSettings() for why.
+// content can skip the flash write entirely. See persistSettingsNow().
 static uint32_t settingsFingerprint(const String& s) {
   uint32_t h = 2166136261u;
   for (size_t i = 0; i < s.length(); ++i) { h ^= (uint8_t)s[i]; h *= 16777619u; }
@@ -983,7 +999,7 @@ static uint32_t settingsFingerprint(const String& s) {
 }
 static uint32_t lastSavedSettingsHash = 0;
 
-void saveSettings() {
+void persistSettingsNow() {
   if (settingsMutex && xSemaphoreTakeRecursive(settingsMutex, pdMS_TO_TICKS(5000)) != pdTRUE) {
     Serial.println("[Settings] Could not acquire settingsMutex — skipping save this cycle.");
     return;
@@ -1127,11 +1143,8 @@ void saveSettings() {
   }
 
   // Skip the flash write when the content is byte-identical to what is already
-  // stored. ~65 call sites call saveSettings() unconditionally, so a client
-  // re-sending an unchanged value (e.g. /language on every failed poll) used to
-  // trigger a full erase/program cycle. Those writes stall the flash cache and
-  // therefore the WiFi stack, which caused more failed polls, which caused more
-  // writes - a spiral that ended with the whole device unreachable until reboot.
+  // stored. saveSettings() now defers and coalesces calls, while this fingerprint
+  // also avoids a write when a client re-sends the value already on disk.
   uint32_t hash = settingsFingerprint(payload);
   if (hash == lastSavedSettingsHash) {
     if (settingsMutex) xSemaphoreGiveRecursive(settingsMutex);
@@ -1336,9 +1349,25 @@ void loadSettings() {
 
 void handleSettings() {
   noteNetworkSuccess(); // a request reached us, so inbound works
+  const uint32_t revision = settingsRevision;
+  const int responseScreen = currentScreen;
+  const String etag = "\"settings-" + String(revision) + "-" + String(responseScreen) + "\"";
+  if (server.hasHeader("If-None-Match") && server.header("If-None-Match") == etag) {
+    server.sendHeader("ETag", etag);
+    server.send(304);
+    return;
+  }
+
+  if (cachedSettingsRevision == revision && cachedSettingsScreen == responseScreen && cachedSettingsResponse.length()) {
+    server.sendHeader("ETag", etag);
+    server.sendHeader("Cache-Control", "no-cache");
+    server.send(200, "application/json", cachedSettingsResponse);
+    return;
+  }
+
   DynamicJsonDocument doc(4096);
   
-  int screenIndex = currentScreen - 1;
+  int screenIndex = responseScreen - 1;
 
   if (screenIndex < 0 || screenIndex >= allScreenSettings.size()) {
     screenIndex = 0;
@@ -1427,17 +1456,10 @@ void handleSettings() {
   doc["bright_room_brightness"] = brightRoomBrightness;
   doc["dark_room_ldr_value"] = darkRoomLDRValue;
   doc["bright_room_ldr_value"] = brightRoomLDRValue;
-  doc["current_screen"] = currentScreen;
-  doc["temperature"] = currentTemp;
-  doc["apparent_temperature"] = currentApparentTemp;
+  doc["current_screen"] = responseScreen;
   doc["units"] = tempUnits;
   doc["temp_type"] = tempType;
   doc["indoor_temp_offset"] = indoorTempOffset; // NEW: Send offset to webpage
-  doc["humidity"] = currentHumidity;
-  doc["conditions"] = currentConditions;
-  doc["min_temp"] = todayMinTemp;
-  doc["max_temp"] = todayMaxTemp;
-  doc["weather_icon"] = weatherIcon;
   doc["language"] = currentLanguage; 
   doc["schedulesEnabled"] = schedulesEnabled;
   doc["defaultScreen"] = defaultScreen;
@@ -1455,9 +1477,32 @@ void handleSettings() {
   doc["panel_type"] = panelType;
   //Serial.println("[Load Settings] Loaded panel_type from file: " + panelType);
 
-  String response;
-  serializeJson(doc, response);
-  server.send(200, "application/json", response);
+  cachedSettingsResponse = "";
+  cachedSettingsResponse.reserve(3072);
+  serializeJson(doc, cachedSettingsResponse);
+  cachedSettingsRevision = revision;
+  cachedSettingsScreen = responseScreen;
+  server.sendHeader("ETag", etag);
+  server.sendHeader("Cache-Control", "no-cache");
+  server.send(200, "application/json", cachedSettingsResponse);
+}
+
+void handleStatus() {
+  StaticJsonDocument<512> doc;
+  doc["safe_mode"] = safeModeActive;
+  doc["current_brightness"] = map(currentBrightness, 0, 255, 0, 100);
+  doc["temperature"] = currentTemp;
+  doc["apparent_temperature"] = currentApparentTemp;
+  doc["humidity"] = currentHumidity;
+  doc["conditions"] = currentConditions;
+  doc["min_temp"] = todayMinTemp;
+  doc["max_temp"] = todayMaxTemp;
+  doc["weather_icon"] = weatherIcon;
+  doc["rssi"] = (WiFi.status() == WL_CONNECTED) ? WiFi.RSSI() : 0;
+  char response[512];
+  const size_t length = serializeJson(doc, response, sizeof(response));
+  server.sendHeader("Cache-Control", "no-store");
+  server.send(200, "application/json", String(response, length));
 }
  
 void handleWeatherService() {
@@ -1898,7 +1943,7 @@ void handleGPS() {
     Serial.print(", Longitude: ");
     Serial.println(gpsLon);
     apiCallCount = 0; // RESET API CALL COUNT
-    fetchWeather();
+    needWeatherUpdate = true; // Let the weather task perform HTTPS after this response
     saveSettings();
     server.send(200, "text/plain", "GPS OK - Lat: " + latStr + ", Lon: " + lonStr);
   } else {
@@ -2201,15 +2246,24 @@ void handleRoot() {
   // from web/index.html by scripts/build_web.py at build time). We hand the
   // compressed bytes straight to the browser and let it inflate them.
   //
-  // This replaced a chunked, uncompressed send of ~93 KB. That was the cause
+  // This replaced a chunked, uncompressed send of roughly 119 KB. That was the cause
   // of the settings page loading slowly or arriving half-rendered over a weak
   // WiFi link: chunked encoding has no up-front length, so a stall partway
-  // through just left the browser drawing a partial page. Now it's ~16 KB
-  // with a known Content-Length - roughly 5.8x fewer bytes over the air, in
+  // through just left the browser drawing a partial page. Now it's ~22 KB
+  // with a known Content-Length - over 5x fewer bytes over the air, in
   // one response.
+  const String etag = "\"web-" + String(ver, 2) + "\"";
+  if (server.hasHeader("If-None-Match") && server.header("If-None-Match") == etag) {
+    server.sendHeader("ETag", etag);
+    server.send(304);
+    return;
+  }
+
   Serial.printf("Serving gzipped webpage (%u bytes)...\n", WEBPAGE_GZ_LEN);
 
   server.sendHeader("Content-Encoding", "gzip");
+  server.sendHeader("Cache-Control", "no-cache");
+  server.sendHeader("ETag", etag);
   // charset=utf-8 matters: the page carries German (ä ö ü ß) and Swedish
   // (ä ö å) translations. Without it browsers fall back to Latin-1 and every
   // accented character renders as mojibake.
@@ -3271,10 +3325,18 @@ void handleScreenshot() {
     return;
   }
   
-  server.sendHeader("Content-Type", "application/octet-stream");
-  server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-  server.sendHeader("Pragma", "no-cache");
-  server.sendHeader("Expires", "-1");
+  const uint32_t revision = screenshotRevision;
+  const String etag = "\"frame-" + String(revision) + "\"";
+  if (server.hasHeader("If-None-Match") && server.header("If-None-Match") == etag) {
+    server.sendHeader("ETag", etag);
+    server.sendHeader("X-Frame-Revision", String(revision));
+    server.send(304);
+    return;
+  }
+
+  server.sendHeader("Cache-Control", "no-cache");
+  server.sendHeader("ETag", etag);
+  server.sendHeader("X-Frame-Revision", String(revision));
 
   server.send_P(200, "application/octet-stream", (const char*)screenshotBuffer, sizeof(screenshotBuffer)); // Send the SAFE screenshot buffer, not the live dma_canvas buffer.
 }
@@ -3306,7 +3368,7 @@ void handleTempType() {
 
 
 
-char AutoChipID[11];  // CHAR Array MUST be 11 or LESS!!!!!!!!!!!
+char AutoChipID[10];  // "Clock-" + three hexadecimal ID digits + terminator
 WiFiManager myWM;
  
 int Wifi_Status = -1;
@@ -3532,8 +3594,11 @@ void setup() {
   button.onPressedFor(2000, MenuButtonHeld);
 
   // --- Setup Web Server endpoints ---
+  const char* requestHeaders[] = {"If-None-Match"};
+  server.collectHeaders(requestHeaders, 1);
   server.on("/", handleRoot);
   server.on("/settings", handleSettings);
+  server.on("/status", handleStatus);
   server.on("/debug", []() { // Health snapshot (heap/uptime/WiFi) - handy when the UI misbehaves
     DynamicJsonDocument d(256);
     d["uptime_s"] = millis() / 1000;
@@ -3623,7 +3688,12 @@ void setup() {
   server.on("/updateschedules", HTTP_POST, handleUpdateSchedules);
   server.on("/weather", []() { server.send(200, "text/plain", "Weather Updated: Temp=" + currentTemp + ", Humidity=" + currentHumidity + ", Conditions=" + currentConditions + ", Daily Min/Max=" + dailyMinMaxTemps + ", Icon=" + weatherIcon); });
   server.on("/weatherupdate", [](){ if (currentState == STATE_RUNNING) { needWeatherUpdate = true; server.send(200, "text/plain", "Weather update requested."); } else { server.send(503, "text/plain", "Cannot update weather: Not connected or not in running state."); } });
-  server.on("/reboot", []() { server.send(200, "text/plain", "Rebooting..."); delay(1000); ESP.restart(); });
+  server.on("/reboot", []() {
+    server.send(200, "text/plain", "Rebooting...");
+    if (settingsChanged) persistSettingsNow();
+    delay(1000);
+    ESP.restart();
+  });
   server.on("/clearWifi", []() { server.send(200, "text/plain", "Clearing WiFi settings & Rebooting..."); myWM.resetSettings(); delay(1000); ESP.restart(); });
 
   // --- Browser-based OTA: POST a firmware image to /update -----------------
@@ -3911,9 +3981,11 @@ void WIFI_SETUP() {
   for(int i=0; i<17; i=i+8) {
     id |= ((ESP.getEfuseMac() >> (50 - i)) & 0xff) << i;
   }
-  // %04X, not %4X: the width flag pads with SPACES, which would produce
-  // "Clock- 2B" whenever the id is under 0x1000 - not a legal hostname.
-  snprintf(AutoChipID, sizeof(AutoChipID), "Clock-%04X", id);
+  // Keep the leading three hexadecimal digits of the former four-digit ID.
+  // For example, Clock-3000 becomes Clock-300. %03X zero-pads short values so
+  // the AP and hostname always remain legal and consistently sized.
+  const uint16_t shortId = (id >> 4) & 0x0FFF;
+  snprintf(AutoChipID, sizeof(AutoChipID), "Clock-%03X", shortId);
 
   // Announce that name over DHCP (option 12). This is what a router puts in
   // its client list and what an IP scanner shows instead of a bare address.
@@ -4231,7 +4303,11 @@ switch (currentState) {
   handleSerialInput();
   
   if(dma_display_is_valid() && dma_canvas_is_valid()) {    
-    memcpy(screenshotBuffer, dma_canvas.getBuffer(), sizeof(screenshotBuffer)); // Before pushing the buffer to the display, copy the completed frame to our safe buffer for the web server to use.
+    const uint8_t* completedFrame = (const uint8_t*)dma_canvas.getBuffer();
+    if (memcmp(screenshotBuffer, completedFrame, sizeof(screenshotBuffer)) != 0) {
+      memcpy(screenshotBuffer, completedFrame, sizeof(screenshotBuffer));
+      ++screenshotRevision;
+    }
     dma_display->drawRGBBitmap(0, 0, dma_canvas.getBuffer(), dma_canvas.width(), dma_canvas.height());
   }
   vTaskDelay(1); 
@@ -7416,5 +7492,3 @@ void ClearWifi(){
   delay(500);  
   ESP.restart();
 }
-
-

@@ -10,6 +10,26 @@ recorded — only version numbers and short notes.
 > some numbers below are just iteration builds with no shipped change of their
 > own. Entries are written against the version that first carried the change.
 
+## 3.53 - 2026-08-11
+- Web controls now acknowledge immediately and defer/coalesce SPIFFS settings
+  persistence until one second after the final change.
+- Browser mutations are serialized, time-bounded, and superseded by the newest
+  queued value for the same control, preventing request pile-ups.
+- `/settings` is cached by configuration revision and screen, with ETag/304
+  support; frequently changing values moved to the lightweight `/status` route.
+- The main page and live preview now support conditional HTTP caching.
+- Live-preview drawing uses one 64x32 `ImageData` update instead of 2,048 canvas
+  draw calls, and unchanged frame revisions skip repainting.
+- The editable page CSS was consolidated, and build-time HTML/CSS minification
+  reduces the delivered gzip payload to about 22 KB.
+- GPS changes now queue weather fetching on the background task rather than
+  blocking the web request with HTTPS.
+- The chip-derived AP/hostname suffix is three digits: for example,
+  `Clock-3000` is now `Clock-300` across WiFiManager, DHCP, mDNS, NBNS and OTA.
+- Evaluated ESPAsyncWebServer 3.12.0 but retained the existing server: converting
+  the captive portal and custom chunked OTA path would add a second networking
+  architecture after the blocking work had already been removed.
+
 ## 3.43 - 2026-08-11
 - **The clock now announces a name on the network** instead of appearing as a
   bare IP. It had never called `WiFi.setHostname()`, so its DHCP lease was

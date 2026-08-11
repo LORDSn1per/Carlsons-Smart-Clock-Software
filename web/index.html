@@ -5,35 +5,16 @@
     <meta charset="utf-8"><title>Carlson's Smart Clock - v2</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-        body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f0f0f0; font-size: 18px; }
-        .header-bar { display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid #ccc; margin-bottom: 20px; }
-        .header-bar h2 { color: #333; text-align: left; margin: 0; flex-grow: 1; }
+        /* Structural rules shared by the dark theme below. */
+        .header-bar { display: flex; justify-content: space-between; }
+        .header-bar h2 { text-align: left; margin: 0; flex-grow: 1; }
         .language-selector { display: flex; align-items: center; }
-        .language-selector label { font-size: 16px; margin-right: 8px; color: #555; }
-        .language-selector select { font-size: 16px; padding: 5px; border-radius: 4px; }
-        .control-group { background: #fff; padding: 20px; margin: 15px 0; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,.1); }
-        .control-row { display: flex; align-items: center; margin-bottom: 15px; }
-        .control-row label { width: 180px; margin-bottom: 0; text-align: left; color: #555; font-weight: 700; font-size: 18px; }
-        .card-label { display: block; margin-bottom: 15px; color: #222; font-weight: 700; font-size: 24px; text-align: center; text-shadow: 2px 2px 4px rgba(0,0,0,.2); }
-        .switch { position: relative; display: inline-block; width: 60px !important; height: 34px !important; }
+        .switch { position: relative; display: inline-block; }
         .switch input { opacity: 0; width: 0; height: 0; }
-        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: #ccc; transition: .4s; border-radius: 34px !important; }
-        .slider:before { position: absolute; content: ""; height: 26px !important; width: 26px !important; left: 4px !important; bottom: 4px !important; background: #fff; transition: .4s; border-radius: 50%; }
-        input:checked+.slider { background: #2196f3 !important; }
-        input:checked+.slider:before { transform: translateX(26px) !important; }
-        input[type=color] { width: 60px; height: 30px; border: 1px solid #ccc; border-radius: 4px; padding: 0; cursor: pointer; margin-right: 20px; }
-        input[type=range] { width: 170px; }
+        .slider { position: absolute; cursor: pointer; inset: 0; border-radius: 34px !important; }
+        .slider:before { position: absolute; content: ""; border-radius: 50%; }
         input[type=range]:disabled, input[type=checkbox]:disabled+.slider { opacity: 0.5; cursor: not-allowed; }
-        input[type=text] { width: 250px; height: 30px; border: 1px solid #ccc; border-radius: 4px; padding: 5px; cursor: pointer; }
-        button { font-size: 18px; padding: 5px 10px; border-radius: 4px; cursor: pointer; background: #4caf50; color: #fff; border: none; }
-        button:hover { background: #45a049; }
-        .color-picker { width: 80px; text-align: center; }
-        .switch-col { width: 80px; text-align: right; }
-        .control-row.system-buttons { justify-content: center; }
-        button.system-button { width: 120px; margin: 0 5px; }
-        button.red-button { background: #f44336; }
-        button.red-button:hover { background: #d32f2f; }
-        select { font-size: 18px; padding: 5px; border-radius: 4px; cursor: pointer; width: 250px; }
+        button, select, input[type=color] { cursor: pointer; }
         span.brightness-value { margin-right: 5px; }
         span.lux-value { font-size: 12px; color: #777; }
         .value-container { display: flex; align-items: center; margin-top: 5px; }
@@ -41,12 +22,8 @@
         .current-brightness-label { font-size: 16px; font-weight: 700; margin-right: 10px; }
         .current-brightness-value { font-size: 16px; }
         .hidden { display: none !important; }
-        .expandable-container.expanded { border: 2px solid rgba(0,0,0,.1); padding: 10px; border-radius: 8px; }
-        .expandable-container .control-row { display: flex; align-items: center; }
         .expandable { display: none; margin-left: 0; text-align: center; }
         .expandable.active { display: block; }
-        .expandable .control-row { display: flex; justify-content: center; }
-        .expandable label { width: 120px; }
         a.provider-link { font-size: 14px; margin-left: 10px; }
 
         /* Schedule Card Styles */
@@ -117,8 +94,6 @@
             }
             .remove-btn { margin-left: 0; }
         }
-    </style>
-    <style>
         :root {
             color-scheme: dark;
             --bg: #090b10;
@@ -384,7 +359,7 @@
     </div>
 
     <div style="text-align: center; margin-top: 15px; margin-bottom: 5px;">
-        <canvas id="screenshotCanvas" width="320" height="160" style="border: 1px solid #ccc; width: 332px; height: 166px; image-rendering: pixelated; background-color: #000;"></canvas>
+        <canvas id="screenshotCanvas" width="64" height="32" style="border: 1px solid #ccc; width: 332px; height: 166px; image-rendering: pixelated; background-color: #000;"></canvas>
     </div>
 
     <div class="control-row">
@@ -608,9 +583,7 @@
             }
         });
         document.getElementById('languageSelect').value = lang;
-        if (!isLoadingSettings) {
-            fetch(`/language?lang=${lang}`);
-        }
+        if (!isLoadingSettings) deviceFetch(`/language?lang=${lang}`, {}, '/language');
     }
 
     let timeoutOffset;
@@ -625,7 +598,7 @@
             if (isFahrenheit) {
                 offsetToSend = (offsetToSend / 1.8);
             }
-            fetch(`/indoortempoffset?value=${offsetToSend.toFixed(2)}`);
+            deviceFetch(`/indoortempoffset?value=${offsetToSend.toFixed(2)}`, {}, '/indoortempoffset');
         }, 250);
     }
 
@@ -643,7 +616,7 @@
 
         const isSchedules = (value === "99");
 
-        fetch('/schedulesenabled?state=' + isSchedules).then(() => {
+        deviceFetch('/schedulesenabled?state=' + isSchedules, {}, '/schedulesenabled').then(() => {
             document.getElementById('schedulesContainer').classList.toggle('hidden', !isSchedules);
 
             if (!isSchedules) {
@@ -651,7 +624,7 @@
                 const t = parseInt(value, 10);
                 if (t >= 1 && t <= 9) {
                     updateScreenVisibility(t);
-                    fetch("/screen?value=" + t).finally(() => { setTimeout(fetchSettings, 200); });
+                    deviceFetch("/screen?value=" + t, {}, '/screen').finally(() => { setTimeout(fetchSettings, 200); });
                 }
             } else {
                 // Switching to schedules: Hide individual screen controls
@@ -744,11 +717,11 @@
             defaultScreen: document.getElementById('defaultScreenSelect').value,
             schedules: currentSchedules
         };
-        fetch('/updateschedules', {
+        deviceFetch('/updateschedules', {
             method: 'POST',
             headers: {'Content-Type': 'application/x-www-form-urlencoded'},
             body: 'defaultScreen=' + payload.defaultScreen + '&schedules=' + JSON.stringify(payload.schedules)
-        })
+        }, '/updateschedules')
         .then(() => fetchSettings());
     }
 
@@ -783,7 +756,7 @@
 
     function updatePanelType(value) {
         if (isLoadingSettings) return;
-        fetch('/paneltype?value=' + value);
+        deviceFetch('/paneltype?value=' + value, {}, '/paneltype');
         alert('Panel type has been saved. Please reboot the clock for the pin changes to take effect.');
     }
 
@@ -794,12 +767,12 @@
         return `rgb(${red},${green},${blue})`;
     }
 
-    let screenshotInFlight=false, settingsRequestInFlight=false;
+    let screenshotInFlight=false, settingsRequestInFlight=false, lastFrameRevision='';
     let brightnessRequestInFlight=false, passiveRequestInFlight=false;
     let passiveRequestAvailableAt=0;
 
     function passiveRequestBlocked() {
-        return passiveRequestInFlight || Date.now() < passiveRequestAvailableAt;
+        return mutationInFlight || passiveRequestInFlight || Date.now() < passiveRequestAvailableAt;
     }
 
     function finishPassiveRequest() {
@@ -816,6 +789,35 @@
         return fetch(url, requestOptions).finally(() => clearTimeout(timer));
     }
 
+    // All device mutations share one queue. If several not-yet-started changes
+    // target the same setting, only the newest value is sent to the clock.
+    // This keeps rapid sliders and colour pickers from filling the ESP32's
+    // single-request server backlog.
+    let mutationChain = Promise.resolve(), mutationInFlight = false;
+    let mutationSequence = 0;
+    const latestMutationByKey = new Map();
+    function deviceFetch(url, options, key) {
+        const mutationKey = key || url.split('?')[0];
+        const sequence = ++mutationSequence;
+        latestMutationByKey.set(mutationKey, sequence);
+        const skippedResponse = {ok:true,status:204,text:()=>Promise.resolve(''),json:()=>Promise.resolve({})};
+        const run = async () => {
+            if(latestMutationByKey.get(mutationKey) !== sequence) return skippedResponse;
+            mutationInFlight = true;
+            try {
+                const response = await fetchWithTimeout(url, options || {}, 6500);
+                if(!response.ok) throw new Error('HTTP '+response.status+' for '+mutationKey);
+                return response;
+            } finally {
+                mutationInFlight = false;
+                passiveRequestAvailableAt = Date.now() + 350;
+            }
+        };
+        const result = mutationChain.then(run, run);
+        mutationChain = result.then(()=>undefined, error=>{ console.error('Device update failed:', error); });
+        return result;
+    }
+
     async function fetchAndDrawScreenshot(){
         // The ESP32 WebServer is single-client. Never start a preview while a
         // settings/brightness poll or a user interaction is using it.
@@ -826,17 +828,22 @@
         try {
             const response = await fetchWithTimeout("/screenshot.bin", {}, 6000);
             if(!response.ok) return;
+            const frameRevision=response.headers.get('X-Frame-Revision')||'';
+            if(frameRevision && frameRevision===lastFrameRevision) return;
             const buffer = await response.arrayBuffer();
             if(buffer.byteLength !== 4096) return;
+            lastFrameRevision=frameRevision;
             const pixels = new Uint16Array(buffer), canvas = document.getElementById("screenshotCanvas");
             if(!canvas) return;
-            const context = canvas.getContext("2d"), scale = 5, pixelSize = scale - 1;
-            context.clearRect(0,0,canvas.width,canvas.height);
-            let index = 0;
-            for(let y=0;y<32;y++) for(let x=0;x<64;x++) {
-                context.fillStyle = rgb565ToRgb(pixels[index++]);
-                context.fillRect(x*scale,y*scale,pixelSize,pixelSize);
+            const context = canvas.getContext("2d"), image = context.createImageData(64,32);
+            for(let index=0, target=0;index<pixels.length;index++,target+=4) {
+                const value=pixels[index];
+                image.data[target]=((value&63488)>>11)*255/31;
+                image.data[target+1]=((value&2016)>>5)*255/63;
+                image.data[target+2]=(value&31)*255/31;
+                image.data[target+3]=255;
             }
+            context.putImageData(image,0,0);
         } catch(error) {
             if(error.name !== 'AbortError') console.debug('Preview refresh skipped:', error);
         } finally {
@@ -858,7 +865,7 @@
     }
 
     function showApiKeyField(service){document.getElementById("pirateWeatherRow").classList.toggle("hidden","pirateweather"!==service),document.getElementById("openWeatherMapRow").classList.toggle("hidden","openweathermap"!==service),document.getElementById("weatherApiRow").classList.toggle("hidden","weatherapi"!==service),document.getElementById("pirateWeatherLink").classList.toggle("hidden","pirateweather"!==service),document.getElementById("openWeatherMapLink").classList.toggle("hidden","openweathermap"!==service),document.getElementById("weatherApiLink").classList.toggle("hidden","weatherapi"!==service);const e="none"===service;["1","2","5"].forEach(t=>{const n=document.getElementById(`minmaxTempsSwitch${t}`);n&&(n.disabled=e)})}
-    function updateWeatherService(e){blockPolling(2000);if(isLoadingSettings)return;showApiKeyField(e),fetch(`/weather_service?service=${e}`)}
+    function updateWeatherService(e){blockPolling(2000);if(isLoadingSettings)return;showApiKeyField(e),deviceFetch(`/weather_service?service=${e}`,{},'/weather_service')}
 
     // *** MODIFIED fetchSettings() FUNCTION ***
     function fetchSettings(){
@@ -869,7 +876,7 @@
         passiveRequestInFlight = true;
         isLoadingSettings = true;
         // Add cache busting for iOS
-        fetchWithTimeout("/settings?_=" + new Date().getTime(), {}, 6500)
+        fetchWithTimeout("/settings", {}, 6500)
             .then(response => {
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 return response.json();
@@ -910,13 +917,11 @@
                 const brightnessSlider = document.getElementById("brightnessSlider");
                 if (autoBrightnessSwitch.checked) {
                     brightnessSlider.disabled = true;
-                    fetchCurrentBrightness();
-                    if (!autoBrightnessInterval) autoBrightnessInterval = setInterval(fetchCurrentBrightness, 5000);
                 } else {
                     brightnessSlider.disabled = false;
-                    if (autoBrightnessInterval) clearInterval(autoBrightnessInterval);
-                    autoBrightnessInterval = null;
                 }
+                fetchCurrentBrightness();
+                if (!autoBrightnessInterval) autoBrightnessInterval = setInterval(fetchCurrentBrightness, 5000);
 
                 document.getElementById("clockVersion").textContent = e.version ? "Version: " + e.version.toFixed(2) : "";
                 applySafeMode(e.safe_mode);
@@ -1014,20 +1019,20 @@
         if(!force) blockPolling(2000); // Pause if triggered by manual input
 
         const e=document.getElementById("gpsLat").value,t=document.getElementById("gpsLon").value;
-        if(e&&t) fetch("/gps?lat="+encodeURIComponent(e)+"&lon="+encodeURIComponent(t)).then(() => {
+        if(e&&t) deviceFetch("/gps?lat="+encodeURIComponent(e)+"&lon="+encodeURIComponent(t),{},'/gps').then(() => {
             if(force) fetchSettings(); // Update settings after forced save
         });
     }
 
     function updateScreenVisibility(e){for(let t=0;t<=9;t++){let n=0===t?"globalSettingsControls":"screen"+t+"ClockControls",o=document.getElementById(n);o&&o.classList.toggle("hidden",t!==e)}}
-    function updateSwitch(e,t,n){blockPolling(2000);if(isLoadingSettings)return;fetch(`/${e}?state=${t}&screen=${n}`)}
-    function updateColor(e,t,n){blockPolling(2000);if(isLoadingSettings)return;fetch(`/${e}?value=${t}&screen=${n}`)}
-    function updateBitmap(e,t,n){blockPolling(2000);if(isLoadingSettings)return;fetch(`/${e}?value=${t}&screen=${n}`)}
-    function updateClockDisplayMode(e,t,n){blockPolling(2000);if(isLoadingSettings)return;fetch(`/${e}?value=${t}&screen=${n}`)}
-    function updateNamedSetting(e,t,n){blockPolling(2000);if(isLoadingSettings)return;fetch(`/${e}?value=${encodeURIComponent(t)}&screen=${n}`)}
-    function updateOption(e,t,n){blockPolling(2000);if(isLoadingSettings)return;const o=document.getElementById(e.split("_")[0]+"ColourRow"),i=document.getElementById(e.split("_")[0]+"ImageRow");"colour"===t?(o.classList.remove("hidden"),i.classList.add("hidden")):(o.classList.add("hidden"),i.classList.remove("hidden")),pendingOptions[e]=t,document.getElementById(e.split("_")[0]+"Option").value=t,fetch(`/${e}?value=${t}&screen=${n}`)}
+    function updateSwitch(e,t,n){blockPolling(2000);if(isLoadingSettings)return;deviceFetch(`/${e}?state=${t}&screen=${n}`,{},'/'+e+'?screen='+n)}
+    function updateColor(e,t,n){blockPolling(2000);if(isLoadingSettings)return;deviceFetch(`/${e}?value=${t}&screen=${n}`,{},'/'+e+'?screen='+n)}
+    function updateBitmap(e,t,n){blockPolling(2000);if(isLoadingSettings)return;deviceFetch(`/${e}?value=${t}&screen=${n}`,{},'/'+e+'?screen='+n)}
+    function updateClockDisplayMode(e,t,n){blockPolling(2000);if(isLoadingSettings)return;deviceFetch(`/${e}?value=${t}&screen=${n}`,{},'/'+e+'?screen='+n)}
+    function updateNamedSetting(e,t,n){blockPolling(2000);if(isLoadingSettings)return;deviceFetch(`/${e}?value=${encodeURIComponent(t)}&screen=${n}`,{},'/'+e+'?screen='+n)}
+    function updateOption(e,t,n){blockPolling(2000);if(isLoadingSettings)return;const o=document.getElementById(e.split("_")[0]+"ColourRow"),i=document.getElementById(e.split("_")[0]+"ImageRow");"colour"===t?(o.classList.remove("hidden"),i.classList.add("hidden")):(o.classList.add("hidden"),i.classList.remove("hidden")),pendingOptions[e]=t,document.getElementById(e.split("_")[0]+"Option").value=t,deviceFetch(`/${e}?value=${t}&screen=${n}`,{},'/'+e+'?screen='+n)}
     function toggleExpandableByIds(e,t,n,o,c,i){const d=document.getElementById(e),s=document.getElementById(t);if(!s||!d)return;s.classList.toggle("active",n),d.classList.toggle("expanded",n);if(null!==o&&c&&i){const l=document.getElementById(c),a=document.getElementById(i);n?"colour"===o?(l&&l.classList.remove("hidden"),a&&a.classList.add("hidden")):(a&&a.classList.remove("hidden"),l&&l.classList.add("hidden")):l&&i&&(l.classList.add("hidden"),i.classList.add("hidden"))}}
-    function toggleAutoBrightness(e){blockPolling(2000);if(isLoadingSettings)return;fetch("/autoBrightness?state="+e).then(()=>{const t=document.getElementById("brightnessSlider");t.disabled=e;if(e){fetchCurrentBrightness();if(!autoBrightnessInterval)autoBrightnessInterval=setInterval(fetchCurrentBrightness,5000)}else{clearInterval(autoBrightnessInterval);autoBrightnessInterval=null}})}
+    function toggleAutoBrightness(e){blockPolling(2000);if(isLoadingSettings)return;deviceFetch("/autoBrightness?state="+e,{},'/autoBrightness').then(()=>{document.getElementById("brightnessSlider").disabled=e;fetchCurrentBrightness()})}
     function toggleAutoBrightnessExpandable(e){const t=document.getElementById("autoBrightnessContainer"),n=document.getElementById("autoBrightnessExpandable");n.classList.toggle("active",e),t.classList.toggle("expanded",e)}
     function toggleClockOptions(e,t){if(3!=t)return;const n=document.getElementById("clockOptionsContainer"),o=document.getElementById("clockOptionsExpandable");o.classList.toggle("active",e),n.classList.toggle("expanded",e)}
     function toggleColorPicker(e,t){const n=document.getElementById(t);n&&n.classList.toggle("hidden","Colour"!==e)}
@@ -1035,25 +1040,45 @@
     function updateBrightnessPercentage(){let e=document.getElementById("brightnessSlider");e&&(document.getElementById("brightnessValue").textContent=Math.round(e.value/255*100)+"%")}
     function updateDarkRoomBrightnessPercentage(){let e=document.getElementById("darkRoomBrightnessSlider");e&&(document.getElementById("darkRoomBrightnessValue").textContent=Math.round(e.value/255*100)+"%")}
     function updateBrightRoomBrightnessPercentage(){let e=document.getElementById("brightRoomBrightnessSlider");e&&(document.getElementById("brightRoomBrightnessValue").textContent=Math.round(e.value/255*100)+"%")}
-    function handlePageSliderInput(e,t){const n=document.getElementById("pageSlider"+t),o=document.getElementById("pageSliderValue"+t);n&&(n.value=e),o&&(o.textContent=e+"%"),clearTimeout(tPS),tPS=setTimeout(()=>{if(isLoadingSettings)return;const val=Math.round(parseInt(n.value,10)/100*255);fetch(`/pageslider?value=${val}&screen=${t}`)},200)}
-    function handlePageSlider2Input(e,t){const n=document.getElementById("pageSlider2_s"+t),o=document.getElementById("pageSlider2Value_s"+t);if(n&&(n.value=e),o)if(4==t){let t=parseInt(e)-50;o.textContent=(t>0?"+":"")+t}else o.textContent=e+"%";clearTimeout(tPS2),tPS2=setTimeout(()=>{if(isLoadingSettings)return;const e=Math.round(parseInt(n.value,10)/100*255);fetch(`/pageslider2?value=${e}&screen=${t}`)},200)}
-    function handlePageSlider3Input(e,t){const n=document.getElementById("pageSlider3_s"+t),o=document.getElementById("pageSlider3Value_s"+t);n&&(n.value=e),o&&(o.textContent=e+"%"),clearTimeout(tPS3),tPS3=setTimeout(()=>{if(isLoadingSettings)return;const e=Math.round(parseInt(n.value,10)/100*255);fetch(`/pageslider3?value=${e}&screen=${t}`)},200)}
-    function updateBrightness(e){blockPolling(2000);if(isLoadingSettings)return;document.getElementById("brightnessSlider").value=e,updateBrightnessPercentage(),clearTimeout(tB),tB=setTimeout(()=>fetch("/brightness?value="+e),200)}
-    function updateDarkRoomBrightness(e){blockPolling(2000);if(isLoadingSettings)return;document.getElementById("darkRoomBrightnessSlider").value=e,updateDarkRoomBrightnessPercentage(),clearTimeout(tD),tD=setTimeout(()=>fetch("/darkRoomBrightness?value="+e),200)}
-    function updateBrightRoomBrightness(e){blockPolling(2000);if(isLoadingSettings)return;document.getElementById("brightRoomBrightnessSlider").value=e,updateBrightRoomBrightnessPercentage(),clearTimeout(tBr),tBr=setTimeout(()=>fetch("/brightRoomBrightness?value="+e),200)}
-    function setDarkRoomLDR(){blockPolling(2000);if(isLoadingSettings)return;fetch("/setDarkRoomLDR").then(e=>e.text()).then(e=>{document.getElementById("darkRoomLux").textContent=e+" lux",fetchSettings()})}
-    function setBrightRoomLDR(){blockPolling(2000);if(isLoadingSettings)return;fetch("/setBrightRoomLDR").then(e=>e.text()).then(e=>{document.getElementById("brightRoomLux").textContent=e+" lux",fetchSettings()})}
-    function startFullYearAnimation(){blockPolling(2000);if(isLoadingSettings)return;fetch("/fullYearAnimation").then(e=>e.text())}
-    function updateWeather(){if(isLoadingSettings)return;fetch("/weatherupdate")}
-    function confirmAction(e){let t="Are you sure you want to "+e+"?";"formatSSD"==e&&(t="This will DELETE ALL SAVED SETTINGS. Are you sure?"),confirm(t)&&fetch("/"+e).then(e=>e.text())}
-    function confirmUpdate(){if(confirm("This will take the clock offline and open the firmware update portal. You will need to reconnect to your normal WiFi after updating. Continue?")){fetch("/startUpdatePortal")}}
+    function handlePageSliderInput(e,t){const n=document.getElementById("pageSlider"+t),o=document.getElementById("pageSliderValue"+t);n&&(n.value=e),o&&(o.textContent=e+"%"),clearTimeout(tPS),tPS=setTimeout(()=>{if(isLoadingSettings)return;const val=Math.round(parseInt(n.value,10)/100*255);deviceFetch(`/pageslider?value=${val}&screen=${t}`,{},'/pageslider?screen='+t)},200)}
+    function handlePageSlider2Input(e,t){const n=document.getElementById("pageSlider2_s"+t),o=document.getElementById("pageSlider2Value_s"+t);if(n&&(n.value=e),o)if(4==t){let t=parseInt(e)-50;o.textContent=(t>0?"+":"")+t}else o.textContent=e+"%";clearTimeout(tPS2),tPS2=setTimeout(()=>{if(isLoadingSettings)return;const e=Math.round(parseInt(n.value,10)/100*255);deviceFetch(`/pageslider2?value=${e}&screen=${t}`,{},'/pageslider2')},200)}
+    function handlePageSlider3Input(e,t){const n=document.getElementById("pageSlider3_s"+t),o=document.getElementById("pageSlider3Value_s"+t);n&&(n.value=e),o&&(o.textContent=e+"%"),clearTimeout(tPS3),tPS3=setTimeout(()=>{if(isLoadingSettings)return;const e=Math.round(parseInt(n.value,10)/100*255);deviceFetch(`/pageslider3?value=${e}&screen=${t}`,{},'/pageslider3')},200)}
+    function updateBrightness(e){blockPolling(2000);if(isLoadingSettings)return;document.getElementById("brightnessSlider").value=e,updateBrightnessPercentage(),clearTimeout(tB),tB=setTimeout(()=>deviceFetch("/brightness?value="+e,{},'/brightness'),200)}
+    function updateDarkRoomBrightness(e){blockPolling(2000);if(isLoadingSettings)return;document.getElementById("darkRoomBrightnessSlider").value=e,updateDarkRoomBrightnessPercentage(),clearTimeout(tD),tD=setTimeout(()=>deviceFetch("/darkRoomBrightness?value="+e,{},'/darkRoomBrightness'),200)}
+    function updateBrightRoomBrightness(e){blockPolling(2000);if(isLoadingSettings)return;document.getElementById("brightRoomBrightnessSlider").value=e,updateBrightRoomBrightnessPercentage(),clearTimeout(tBr),tBr=setTimeout(()=>deviceFetch("/brightRoomBrightness?value="+e,{},'/brightRoomBrightness'),200)}
+    function setDarkRoomLDR(){blockPolling(2000);if(isLoadingSettings)return;deviceFetch("/setDarkRoomLDR",{},'/setDarkRoomLDR').then(e=>e.text()).then(e=>{document.getElementById("darkRoomLux").textContent=e+" lux",fetchSettings()})}
+    function setBrightRoomLDR(){blockPolling(2000);if(isLoadingSettings)return;deviceFetch("/setBrightRoomLDR",{},'/setBrightRoomLDR').then(e=>e.text()).then(e=>{document.getElementById("brightRoomLux").textContent=e+" lux",fetchSettings()})}
+    function startFullYearAnimation(){blockPolling(2000);if(isLoadingSettings)return;deviceFetch("/fullYearAnimation",{},'/fullYearAnimation').then(e=>e.text())}
+    function updateWeather(){if(isLoadingSettings)return;deviceFetch("/weatherupdate",{},'/weatherupdate')}
+    function confirmAction(e){let t="Are you sure you want to "+e+"?";"formatSSD"==e&&(t="This will DELETE ALL SAVED SETTINGS. Are you sure?"),confirm(t)&&deviceFetch("/"+e,{},'/'+e).then(e=>e.text())}
+    function confirmUpdate(){if(confirm("This will take the clock offline and open the firmware update portal. You will need to reconnect to your normal WiFi after updating. Continue?")){deviceFetch("/startUpdatePortal",{},'/startUpdatePortal')}}
+
+    function bindQueuedControls(){
+        const controls = [
+            ['timezoneSelect','/timezone?tz=','/timezone'],
+            ['pirateWeatherAPI','/pirateweatherapi?api=','/pirateweatherapi'],
+            ['openWeatherMapAPI','/openweathermapapi?api=','/openweathermapapi'],
+            ['weatherAPI_API','/weatherapi_api?api=','/weatherapi_api']
+        ];
+        controls.forEach(([id,prefix,key])=>{
+            const element=document.getElementById(id);
+            if(!element)return;
+            element.onchange=()=>{
+                blockPolling(2000);
+                deviceFetch(prefix+encodeURIComponent(element.value),{},key).then(fetchSettings);
+            };
+        });
+    }
     function fetchCurrentBrightness(){
         if(brightnessRequestInFlight || passiveRequestBlocked() || pollingPaused || document.hidden) return;
         brightnessRequestInFlight = true;
         passiveRequestInFlight = true;
-        fetchWithTimeout("/currentBrightness", {}, 4000)
-            .then(e => { if(!e.ok) throw new Error('HTTP '+e.status); return e.text(); })
-            .then(e => document.getElementById("currentBrightness").textContent=e+"%")
+        fetchWithTimeout("/status", {}, 4000)
+            .then(e => { if(!e.ok) throw new Error('HTTP '+e.status); return e.json(); })
+            .then(e => {
+                document.getElementById("currentBrightness").textContent=e.current_brightness+"%";
+                applySafeMode(e.safe_mode);
+            })
             .catch(e => { if(e.name !== 'AbortError') console.debug('Brightness poll skipped:',e); })
             .finally(() => { brightnessRequestInFlight=false; finishPassiveRequest(); });
     }
@@ -1181,6 +1206,7 @@
     }
 
     window.onload=()=>{
+        bindQueuedControls();
         const savedLang = localStorage.getItem('language') || 'en';
         setLanguage(savedLang);
         fetchSettings();
