@@ -10,7 +10,7 @@
 
 // Single source of truth for the version. Auto-incremented by +0.01 on every
 // successful build by scripts/merge_firmware.py; see CHANGELOG.md for history.
-float ver = 3.46;
+float ver = 3.48;
 
 
 /* #################### To add a new screen (example screen6) ####################

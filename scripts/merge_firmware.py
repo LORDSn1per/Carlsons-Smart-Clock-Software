@@ -99,7 +99,7 @@ def merge_bin(source, target, env):
         "--chip", board.get("build.mcu", "esp32"),
         "merge_bin", "-o", out_path,
         "--flash_mode", board.get("build.flash_mode", "qio"),
-        "--flash_freq", "80m",
+        "--flash_freq", "40m",
         "--flash_size", board.get("upload.flash_size", "4MB"),
         "0x1000", os.path.join(build_dir, "bootloader.bin"),
         "0x8000", os.path.join(build_dir, "partitions.bin"),
