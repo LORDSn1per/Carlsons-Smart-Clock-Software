@@ -10,7 +10,7 @@
 
 // Single source of truth for the version. Auto-incremented by +0.01 on every
 // successful build by scripts/merge_firmware.py; see CHANGELOG.md for history.
-float ver = 3.64;
+float ver = 3.65;
 
 
 /* #################### To add a new screen (example screen6) ####################
@@ -673,6 +673,7 @@ volatile uint32_t weatherLastAttemptAt = 0;
 volatile uint32_t weatherLastSuccessAt = 0;
 volatile uint32_t weatherLastDurationMs = 0;
 volatile uint32_t weatherLastBytes = 0;
+volatile int weatherLastHttpStatus = 0;
 
 void setWeatherFetchStage(WeatherFetchStage stage, WeatherErrorDetail error = WEATHER_ERROR_NONE) {
   weatherFetchStage = stage;
@@ -1589,7 +1590,7 @@ void handleStatus() {
   doc["rssi"] = (WiFi.status() == WL_CONNECTED) ? WiFi.RSSI() : 0;
   doc["weather_stage"] = (uint8_t)weatherFetchStage;
   doc["weather_error"] = (uint8_t)weatherErrorDetail;
-  doc["weather_http_code"] = lastHttpCode;
+  doc["weather_http_code"] = weatherLastHttpStatus;
   doc["weather_bytes"] = weatherLastBytes;
   doc["weather_attempt"] = apiCallCount;
   doc["weather_attempt_limit"] = MAX_API_CALLS;
@@ -2103,6 +2104,7 @@ void fetchWeather() {
   const uint32_t attemptStartedAt = millis();
   weatherLastAttemptAt = attemptStartedAt;
   weatherLastBytes = 0;
+  weatherLastHttpStatus = 0;
   setWeatherFetchStage(WEATHER_VALIDATING);
 
   // === Handle "None" service option =========================
@@ -2163,7 +2165,11 @@ void fetchWeather() {
   if (requestWeatherService == "pirateweather") {
     if (pirateWeatherAPI.isEmpty()) { Serial.println("Missing PirateWeather API key."); lastHttpCode = -1; weatherLastDurationMs = millis() - attemptStartedAt; setWeatherFetchStage(WEATHER_ERROR, WEATHER_ERROR_MISSING_API_KEY); return; }
     String apiUnits = "si"; // ALWAYS "si" for Celsius
-    url = "https://api.pirateweather.net/forecast/" + pirateWeatherAPI + "/" + String(gpsLat, 6) + "," + String(gpsLon, 6) + "?units=" + apiUnits;
+    // Only request blocks the clock actually uses. Pirate Weather's complete
+    // forecast can be tens of kilobytes; buffering all of it previously
+    // exhausted the largest contiguous heap block and appeared as a 0-byte
+    // response even after HTTP 200.
+    url = "https://api.pirateweather.net/forecast/" + pirateWeatherAPI + "/" + String(gpsLat, 6) + "," + String(gpsLon, 6) + "?units=" + apiUnits + "&exclude=minutely,hourly,alerts,flags,day_night";
   } 
   else if (requestWeatherService == "openweathermap") {
     if (openWeatherMapAPI.isEmpty()) { Serial.println("Missing OpenWeatherMap API key."); lastHttpCode = -1; weatherLastDurationMs = millis() - attemptStartedAt; setWeatherFetchStage(WEATHER_ERROR, WEATHER_ERROR_MISSING_API_KEY); return; }
@@ -2212,18 +2218,18 @@ void fetchWeather() {
   Serial.printf("Starting fetchWeather() for service '%s' (requesting Celsius)... (Attempt %d of %d)\n",
                 requestWeatherService.c_str(), apiCallCount, MAX_API_CALLS);
 
-  // A dead provider must not hold the weather task for 15 seconds while a new
-  // selection waits behind it. Six seconds is ample for these small replies.
-  http.setTimeout(6000);
+  // Keep connection failure bounded, while allowing enough time to stream a
+  // valid forecast over a weak ESP32 Wi-Fi link.
+  http.setConnectTimeout(5000);
+  http.setTimeout(12000);
   http.begin(url);
-  // Force HTTP/1.0 so the server sends a plain Content-Length body instead of a
-  // chunked one. With chunked encoding getString() intermittently came back
-  // empty on a 200 here, which showed up as "JSON parsing failed: EmptyInput"
-  // and then burned API quota retrying a request that had actually succeeded.
+  // Force an identity response rather than HTTP/1.1 chunk framing so
+  // ArduinoJson can consume the response directly from the network stream.
   http.useHTTP10(true);
   setWeatherFetchStage(WEATHER_CONNECTING);
   int httpCode = http.GET();
   lastHttpCode = httpCode;
+  weatherLastHttpStatus = httpCode > 0 ? httpCode : 0;
   Serial.println(requestWeatherService + " API Response Code: " + String(httpCode));
 
   // The user changed provider/key/coordinates while this HTTP request was in
@@ -2246,27 +2252,8 @@ void fetchWeather() {
 
   if (httpCode == HTTP_CODE_OK) {
     setWeatherFetchStage(WEATHER_DOWNLOADING);
-    String payload = http.getString();
-    weatherLastBytes = payload.length();
-    if (payload.length() == 0) {
-      // 200 but nothing arrived - the body was lost in transit. Report it as a
-      // transport failure rather than letting it look like malformed JSON.
-      Serial.println("Weather response body was empty despite HTTP 200.");
-      lastHttpCode = -3;
-      http.end();
-      if (settingsMutex) xSemaphoreGiveRecursive(settingsMutex);
-      weatherLastDurationMs = millis() - attemptStartedAt;
-      setWeatherFetchStage(WEATHER_ERROR, WEATHER_ERROR_EMPTY_RESPONSE);
-      return;
-    }
-    if (requestConfigRevision != weatherConfigRevision) {
-      Serial.println("Discarding downloaded weather data for superseded configuration.");
-      http.end();
-      if (settingsMutex) xSemaphoreGiveRecursive(settingsMutex);
-      lastHttpCode = 0;
-      setWeatherFetchStage(WEATHER_QUEUED);
-      return;
-    }
+    const int responseLength = http.getSize();
+    weatherLastBytes = responseLength > 0 ? (uint32_t)responseLength : 0;
     setWeatherFetchStage(WEATHER_PARSING);
     DynamicJsonDocument doc(2048);
     DeserializationError error;
@@ -2281,8 +2268,8 @@ void fetchWeather() {
       filter["daily"]["data"][0]["temperatureMin"] = true;
       filter["daily"]["data"][0]["temperatureMax"] = true;
       filter["daily"]["data"][0]["moonPhase"] = true;
-      error = deserializeJson(doc, payload, DeserializationOption::Filter(filter));
-      if (!error) {
+      error = deserializeJson(doc, http.getStream(), DeserializationOption::Filter(filter));
+      if (!error && requestConfigRevision == weatherConfigRevision) {
         currentTemperature = clampValue(doc["currently"]["temperature"], -99.0, 99.0);
         currentApparentTemperature = clampValue(doc["currently"]["apparentTemperature"], -99.0, 99.0);
         todayMinTemp = clampValue(doc["daily"]["data"][0]["temperatureMin"], -99.0, 99.0);
@@ -2306,8 +2293,8 @@ void fetchWeather() {
       filter["daily"][0]["temp"]["min"] = true;
       filter["daily"][0]["temp"]["max"] = true;
       filter["daily"][0]["moon_phase"] = true;
-      error = deserializeJson(doc, payload, DeserializationOption::Filter(filter));
-      if (!error) {
+      error = deserializeJson(doc, http.getStream(), DeserializationOption::Filter(filter));
+      if (!error && requestConfigRevision == weatherConfigRevision) {
         currentTemperature = clampValue(doc["current"]["temp"], -99.0, 99.0);
         currentApparentTemperature = clampValue(doc["current"]["feels_like"], -99.0, 99.0);
         todayMinTemp = clampValue(doc["daily"][0]["temp"]["min"], -99.0, 99.0);
@@ -2331,8 +2318,8 @@ void fetchWeather() {
       filter["forecast"]["forecastday"][0]["day"]["mintemp_c"] = true;
       filter["forecast"]["forecastday"][0]["day"]["maxtemp_c"] = true;
       filter["forecast"]["forecastday"][0]["astro"]["moon_phase"] = true;
-      error = deserializeJson(doc, payload, DeserializationOption::Filter(filter));
-      if (!error) {
+      error = deserializeJson(doc, http.getStream(), DeserializationOption::Filter(filter));
+      if (!error && requestConfigRevision == weatherConfigRevision) {
         // Always parse the Celsius fields. The conversion to Fahrenheit will happen in the display functions.
         currentTemperature = clampValue(doc["current"]["temp_c"], -99.0, 99.0);
         currentApparentTemperature = clampValue(doc["current"]["feelslike_c"], -99.0, 99.0);
@@ -2347,10 +2334,22 @@ void fetchWeather() {
       }
     }
 
+    if (requestConfigRevision != weatherConfigRevision) {
+      Serial.println("Discarding streamed weather data for superseded configuration.");
+      http.end();
+      if (settingsMutex) xSemaphoreGiveRecursive(settingsMutex);
+      lastHttpCode = 0;
+      setWeatherFetchStage(WEATHER_QUEUED);
+      return;
+    }
+
     if (error) {
       Serial.println("JSON parsing failed: " + String(error.c_str()));
       lastHttpCode = -3;
-      setWeatherFetchStage(WEATHER_ERROR, WEATHER_ERROR_INVALID_DATA);
+      setWeatherFetchStage(WEATHER_ERROR,
+                           error == DeserializationError::EmptyInput
+                             ? WEATHER_ERROR_EMPTY_RESPONSE
+                             : WEATHER_ERROR_INVALID_DATA);
     } else {
       Serial.printf("JSON parsed successfully for %s. Free heap: %u\n", requestWeatherService.c_str(), ESP.getFreeHeap());
       noteNetworkSuccess(); // proves outbound + inbound are working
@@ -3504,7 +3503,7 @@ void handleScreenshot() {
   const long successAge = weatherLastSuccessAt ? (long)((now - weatherLastSuccessAt) / 1000) : -1;
   server.sendHeader("X-Weather-Stage", String((uint8_t)weatherFetchStage));
   server.sendHeader("X-Weather-Error", String((uint8_t)weatherErrorDetail));
-  server.sendHeader("X-Weather-Code", String(lastHttpCode));
+  server.sendHeader("X-Weather-Code", String(weatherLastHttpStatus));
   server.sendHeader("X-Weather-Bytes", String(weatherLastBytes));
   server.sendHeader("X-Weather-Attempt", String(apiCallCount));
   server.sendHeader("X-Weather-Duration", String(weatherLastDurationMs));

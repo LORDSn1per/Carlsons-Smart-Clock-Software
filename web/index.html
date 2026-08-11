@@ -250,11 +250,11 @@
         .control-row > label:first-child, .expandable label:first-child {
             width: auto; margin: 0; color: #cdd1da; font-size: 13px; font-weight: 650;
         }
-        .control-row > select, .control-row > input[type="text"] { grid-column: 2 / 4; }
+        .control-row > select, .control-row > input[type="text"], .control-row > input[type="password"] { grid-column: 2 / 4; }
         .color-picker { width: auto; text-align: right; }
         .switch-col { width: 60px; justify-self: end; text-align: right; }
 
-        select, input[type="text"], input[type="time"] {
+        select, input[type="text"], input[type="password"], input[type="time"] {
             width: 100%; min-height: 43px; padding: 0 38px 0 13px;
             border: 1px solid var(--line); border-radius: 11px;
             background: #0d1016; color: var(--text); font-size: 13px;
@@ -447,7 +447,7 @@
         }
         @media (max-width: 430px) {
             .control-row, .expandable-container .control-row, .expandable .control-row { grid-template-columns: 1fr auto; }
-            .control-row > select, .control-row > input[type="text"] { grid-column: 1 / -1; }
+            .control-row > select, .control-row > input[type="text"], .control-row > input[type="password"] { grid-column: 1 / -1; }
             .control-row > .color-picker { grid-column: 1; text-align: left; }
             .control-row > .switch-col { grid-column: 2; grid-row: 1; }
             .control-row > .color-picker + .switch-col { grid-row: 1 / 3; align-self: center; }
@@ -650,9 +650,9 @@
     <label class="card-label" data-translate-key="weatherSettings">Weather Settings</label>
     <div class="control-row"><label data-translate-key="timezone">Timezone Selection</label><select id="timezoneSelect" onchange="blockPolling(1000); deviceFetch('/timezone?tz='+encodeURIComponent(this.value),{},'/timezone').then(() => fetchSettings())"><option value="UTC0">London: 0 GMT</option><option value="HST10HDT,M3.2.0,M11.1.0">Honolulu: -10 GMT</option><option value="AKST9AKDT,M3.2.0,M11.1.0">Anchorage: -9 GMT</option><option value="PST8PDT,M3.2.0,M11.1.0">Los Angeles: -8 GMT</option><option value="MST7MDT,M3.2.0,M11.1.0">Denver: -7 GMT</option><option value="CST6CDT,M3.2.0,M11.1.0">Chicago: -6 GMT</option><option value="EST5EDT,M3.2.0,M11.1.0">New York: -5 GMT</option><option value="<-04>4">Santiago: -4 GMT</option><option value="<-03>3">Buenos Aires: -3 GMT</option><option value="WAT-1">Lagos: +1 GMT</option><option value="CET-1CEST,M3.5.0,M10.5.0/3">Paris: +1 GMT</option><option value="EET-2EEST,M3.5.0/0,M10.5.0/0">Athens: +2 GMT</option><option value="EAT-3">Nairobi: +3 GMT</option><option value="<-05>5">New Delhi: +5 GMT</option><option value="<-06>6">Dhaka: +6 GMT</option><option value="<-07>7">Bangkok: +7 GMT</option><option value="<-08>8">Shanghai: +8 GMT</option><option value="AWST-8">Perth: +8 GMT</option><option value="<-09>9">Tokyo: +9 GMT</option><option value="ACST-9:30ACDT,M10.1.0,M4.1.0/3">Adelaide: +9:30 GMT</option><option value="AEST-10">Brisbane: +10 GMT</option><option value="ACST-9:30">Darwin: +9:30 GMT</option><option value="AEST-10AEDT,M10.1.0,M4.1.0/3">Sydney: +10 GMT</option><option value="NZST-12NZDT,M9.5.0,M4.1.0/3">Auckland: +12 GMT</option><option value="NZST-12NZDT,M9.5.0,M4.1.0/3">Wellington: +12 GMT</option><option value="NZST-12NZDT,M9.5.0,M4.1.0/3">Christchurch: +12 GMT</option></select></div>
     <div class="control-row"><label data-translate-key="weatherService">Weather Service</label><select id="weatherServiceSelect" onchange="updateWeatherService(this.value)"><option value="none">None</option><option value="pirateweather">Pirateweather</option><option value="openweathermap">OpenWeatherMap</option><option value="weatherapi">WeatherAPI.com</option></select></div>
-    <div id="pirateWeatherRow" class="control-row api-key-row"><label data-translate-key="pirateApi">Pirate Weather API</label><input type="text" id="pirateWeatherAPI" onchange="blockPolling(2000); deviceFetch('/pirateweatherapi?api='+encodeURIComponent(this.value),{},'/pirateweatherapi').then(() => fetchSettings())"><a id="pirateWeatherLink" href="https://pirateweather.net/" target="_blank" class="provider-link hidden" data-translate-key="getKey">Get Key</a></div>
-    <div id="openWeatherMapRow" class="control-row api-key-row hidden"><label data-translate-key="owmApi">OpenWeatherMap API</label><input type="text" id="openWeatherMapAPI" onchange="blockPolling(2000); deviceFetch('/openweathermapapi?api='+encodeURIComponent(this.value),{},'/openweathermapapi').then(() => fetchSettings())"><a id="openWeatherMapLink" href="https://openweathermap.org/api" target="_blank" class="provider-link hidden" data-translate-key="getKey">Get Key</a></div>
-    <div id="weatherApiRow" class="control-row api-key-row hidden"><label data-translate-key="weatherapiApi">WeatherAPI.com API</label><input type="text" id="weatherAPI_API" onchange="blockPolling(2000); deviceFetch('/weatherapi_api?api='+encodeURIComponent(this.value),{},'/weatherapi_api').then(() => fetchSettings())"><a id="weatherApiLink" href="https://www.weatherapi.com/" target="_blank" class="provider-link hidden" data-translate-key="getKey">Get Key</a></div>
+    <div id="pirateWeatherRow" class="control-row api-key-row"><label data-translate-key="pirateApi">Pirate Weather API</label><input type="password" id="pirateWeatherAPI" autocomplete="off" spellcheck="false" onchange="blockPolling(2000); deviceFetch('/pirateweatherapi?api='+encodeURIComponent(this.value),{},'/pirateweatherapi').then(() => fetchSettings())"><a id="pirateWeatherLink" href="https://pirateweather.net/" target="_blank" class="provider-link hidden" data-translate-key="getKey">Get Key</a></div>
+    <div id="openWeatherMapRow" class="control-row api-key-row hidden"><label data-translate-key="owmApi">OpenWeatherMap API</label><input type="password" id="openWeatherMapAPI" autocomplete="off" spellcheck="false" onchange="blockPolling(2000); deviceFetch('/openweathermapapi?api='+encodeURIComponent(this.value),{},'/openweathermapapi').then(() => fetchSettings())"><a id="openWeatherMapLink" href="https://openweathermap.org/api" target="_blank" class="provider-link hidden" data-translate-key="getKey">Get Key</a></div>
+    <div id="weatherApiRow" class="control-row api-key-row hidden"><label data-translate-key="weatherapiApi">WeatherAPI.com API</label><input type="password" id="weatherAPI_API" autocomplete="off" spellcheck="false" onchange="blockPolling(2000); deviceFetch('/weatherapi_api?api='+encodeURIComponent(this.value),{},'/weatherapi_api').then(() => fetchSettings())"><a id="weatherApiLink" href="https://www.weatherapi.com/" target="_blank" class="provider-link hidden" data-translate-key="getKey">Get Key</a></div>
     <section class="weather-monitor" id="weatherMonitor" data-state="idle" aria-live="polite">
         <div class="weather-monitor-head">
             <span class="weather-status-dot" aria-hidden="true"></span>

@@ -10,6 +10,15 @@ recorded — only version numbers and short notes.
 > some numbers below are just iteration builds with no shipped change of their
 > own. Entries are written against the version that first carried the change.
 
+## 3.64 - 2026-08-11
+- Fixed Pirate Weather returning HTTP 200 but appearing as an empty response on
+  the ESP32. The clock no longer allocates one large String for the complete
+  forecast; it requests only the blocks it uses and filters JSON directly from
+  the network stream, avoiding contiguous-heap allocation failure.
+- Separated the real HTTP status from the internal retry result so diagnostics
+  can accurately report cases such as HTTP 200 with invalid/empty content.
+- Masked stored weather API keys in the settings page by default.
+
 ## 3.63 - 2026-08-11
 - Added a live diagnostics panel to Weather Settings showing the provider and
   each real fetch stage: queued, validation, connection, download, parsing,
