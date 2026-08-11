@@ -10,7 +10,7 @@
 
 // Single source of truth for the version. Auto-incremented by +0.01 on every
 // successful build by scripts/merge_firmware.py; see CHANGELOG.md for history.
-float ver = 3.40;
+float ver = 3.46;
 
 
 /* #################### To add a new screen (example screen6) ####################
@@ -53,6 +53,8 @@ float ver = 3.40;
 #include <Wire.h>
 #include <Adafruit_AHTX0.h>
 #include <ArduinoOTA.h>
+#include <ESPmDNS.h> // MDNS.addService - resolve the clock as <AutoChipID>.local
+#include <NetBIOS.h> // NBNS name so Windows-style scanners resolve it too
 #include <RTClib.h>
 #include <WiFiManager.h> // https://github.com/tzapu/WiFiManager           v2.0.17
 #include <EasyButton.h>
@@ -3541,6 +3543,8 @@ void setup() {
     d["wifi_status"] = (int)WiFi.status();
     d["state"] = (int)currentState;
     d["rssi"] = (WiFi.status() == WL_CONNECTED) ? (long)WiFi.RSSI() : 0;
+    d["hostname"] = AutoChipID;
+    d["ip"] = WiFi.localIP().toString();
     String resp; serializeJson(d, resp);
     server.send(200, "application/json", resp);
   });
@@ -3907,7 +3911,18 @@ void WIFI_SETUP() {
   for(int i=0; i<17; i=i+8) {
     id |= ((ESP.getEfuseMac() >> (50 - i)) & 0xff) << i;
   }
-  snprintf(AutoChipID, 10, "Clock-%4X", id);
+  // %04X, not %4X: the width flag pads with SPACES, which would produce
+  // "Clock- 2B" whenever the id is under 0x1000 - not a legal hostname.
+  snprintf(AutoChipID, sizeof(AutoChipID), "Clock-%04X", id);
+
+  // Announce that name over DHCP (option 12). This is what a router puts in
+  // its client list and what an IP scanner shows instead of a bare address.
+  // It has to be set while in STA mode and BEFORE associating, otherwise the
+  // lease is requested under the default espressif name and the router caches
+  // that until the lease expires.
+  WiFi.setHostname(AutoChipID);
+  myWM.setHostname(AutoChipID); // WiFiManager re-applies it around its own connect
+  Serial.printf("Device hostname: %s (also %s.local)\n", AutoChipID, AutoChipID);
   Serial.println("Starting WiFiManager autoConnect in non-blocking mode...");
   myWM.autoConnect(AutoChipID); // This will try saved creds or start AP if none/failed
   WiFi.setAutoReconnect(true); // Let the WiFi driver retry immediately on drop, not just our own polling
@@ -4091,8 +4106,22 @@ switch (currentState) {
           Serial.println("STATE_WIFI_CONNECTING: Starting network services...");
           server.begin();
           Serial.println("Web server started.");
+          // Name the OTA/mDNS service after the device too, so it resolves as
+          // <AutoChipID>.local. ArduinoOTA.begin() starts mDNS itself, so this
+          // must be set first - otherwise it registers as "esp32-xxxxxx".
+          ArduinoOTA.setHostname(AutoChipID);
           ArduinoOTA.begin();
           Serial.println("Arduino OTA initialized.");
+          // Advertise the web UI so network scanners and Bonjour browsers list
+          // it by name rather than as an anonymous open port.
+          MDNS.addService("http", "tcp", 80);
+          // NetBIOS as well: IP scanners resolve names by several different
+          // means (reverse DNS, mDNS, NBNS) and this router does not publish
+          // DHCP client names over DNS, so covering NBNS too widens the odds
+          // of the clock showing up by name rather than as a bare address.
+          bool nbnsOk = NBNS.begin(AutoChipID);
+          Serial.printf("mDNS/NBNS: http://%s.local/  (name: %s, NBNS %s)\n",
+                        AutoChipID, AutoChipID, nbnsOk ? "listening" : "FAILED");
 
           // Task creation should be idempotent or handles should be checked if tasks can persist
           // For simplicity, assume they are created once when networkServicesStarted is false

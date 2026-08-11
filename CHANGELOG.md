@@ -10,6 +10,28 @@ recorded — only version numbers and short notes.
 > some numbers below are just iteration builds with no shipped change of their
 > own. Entries are written against the version that first carried the change.
 
+## 3.43 - 2026-08-11
+- **The clock now announces a name on the network** instead of appearing as a
+  bare IP. It had never called `WiFi.setHostname()`, so its DHCP lease was
+  requested under the default espressif name.
+  - DHCP hostname (option 12) + `myWM.setHostname()` — set while in STA mode
+    and *before* associating, which is required for the lease to carry it.
+  - mDNS: resolves as `Clock-XXXX.local` and advertises `_http._tcp`, so
+    Bonjour-aware scanners and browsers list it by name.
+  - NetBIOS (NBNS) registered as well, for scanners that resolve that way.
+  - `ArduinoOTA.setHostname()` so it shows as the device name rather than
+    `esp32-xxxxxx` in PlatformIO's OTA target list.
+- **Fixed a latent hostname bug:** the name was built with `"Clock-%4X"`. The
+  width flag pads with *spaces*, so any chip id below `0x1000` produced
+  `"Clock- 2B"` — not a legal hostname. Now `%04X`.
+- `GET /debug` also reports `hostname` and `ip`.
+- Verified on hardware: name is `Clock-3000`, `clock-3000.local` resolves to
+  192.168.1.122 from macOS, and `_http._tcp Clock-3000` is advertised. NBNS
+  reports as listening but could not be confirmed from this Mac, since macOS's
+  own netbiosd owns UDP 137 and absorbs the reply. Note this router does not
+  publish DHCP client names over DNS (`nslookup Clock-3000` returns NXDOMAIN),
+  so the DHCP name will show in the Orbi's client list rather than via DNS.
+
 ## 3.39 - 2026-08-11
 - Removed the red "Safe Mode active" label under Live Refresh, and Safe Mode no
   longer disables the dropdown. It now simply selects 4s and leaves the control
