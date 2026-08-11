@@ -10,6 +10,13 @@ recorded — only version numbers and short notes.
 > some numbers below are just iteration builds with no shipped change of their
 > own. Entries are written against the version that first carried the change.
 
+## 3.56 - 2026-08-11
+- Fixed screen 3's Clock Face and Hour Hand colour controls sharing the same
+  `time_col` value. The face now has its own persisted `clock_face_col`, API
+  field and endpoint, while `time_col` controls only the hour hand.
+- Existing settings migrate safely by copying the old shared colour into the
+  new face colour the first time this firmware loads them.
+
 ## 3.55 - 2026-08-11
 - Fixed live-preview grid drift caused by separately scaling the 64x32 canvas
   and a percentage-based CSS overlay. The renderer now produces one 320x160

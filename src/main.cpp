@@ -10,7 +10,7 @@
 
 // Single source of truth for the version. Auto-incremented by +0.01 on every
 // successful build by scripts/merge_firmware.py; see CHANGELOG.md for history.
-float ver = 3.56;
+float ver = 3.57;
 
 
 /* #################### To add a new screen (example screen6) ####################
@@ -172,6 +172,7 @@ const int SUN_FUZZ_LAYERS_S4 = 3;     // Example: Number of additional fuzzy lay
 struct ScreenSettings {
   // Colors
   RGBColor time_col       = {118, 251, 78};
+  RGBColor clock_face_col = {118, 251, 78}; // Screen 3 face; time_col is its hour hand
   RGBColor date_col       = {214, 214, 214};
   RGBColor dateBG_col     = {71, 36, 171};
   RGBColor temp_col       = {255, 98, 80};
@@ -786,6 +787,7 @@ void handleDate();
 void handleMonth();
 void handleHumidity();
 void handleTimeColor();
+void handleClockFaceColor();
 void handleDateColor();
 void handleDateBGColor();
 void handleTempColor();
@@ -1014,6 +1016,9 @@ void persistSettingsNow() {
     screenObj["time_col_r"] = settings.time_col.r;
     screenObj["time_col_g"] = settings.time_col.g;
     screenObj["time_col_b"] = settings.time_col.b;
+    screenObj["clock_face_col_r"] = settings.clock_face_col.r;
+    screenObj["clock_face_col_g"] = settings.clock_face_col.g;
+    screenObj["clock_face_col_b"] = settings.clock_face_col.b;
     screenObj["date_col_r"] = settings.date_col.r;
     screenObj["date_col_g"] = settings.date_col.g;
     screenObj["date_col_b"] = settings.date_col.b;
@@ -1213,6 +1218,11 @@ void loadSettings() {
         allScreenSettings[i].time_col.r = screenObj["time_col_r"] | 118;
         allScreenSettings[i].time_col.g = screenObj["time_col_g"] | 251;
         allScreenSettings[i].time_col.b = screenObj["time_col_b"] | 78;
+        // Older settings used time_col for both the screen-3 face and hour hand.
+        // Seed the new independent face colour from it on the first upgraded boot.
+        allScreenSettings[i].clock_face_col.r = screenObj["clock_face_col_r"] | allScreenSettings[i].time_col.r;
+        allScreenSettings[i].clock_face_col.g = screenObj["clock_face_col_g"] | allScreenSettings[i].time_col.g;
+        allScreenSettings[i].clock_face_col.b = screenObj["clock_face_col_b"] | allScreenSettings[i].time_col.b;
         allScreenSettings[i].date_col.r = screenObj["date_col_r"] | 214;
         allScreenSettings[i].date_col.g = screenObj["date_col_g"] | 214;
         allScreenSettings[i].date_col.b = screenObj["date_col_b"] | 214;
@@ -1416,6 +1426,8 @@ void handleSettings() {
   
   JsonObject timeCol = doc.createNestedObject("time_color");
   timeCol["r"] = settings.time_col.r; timeCol["g"] = settings.time_col.g; timeCol["b"] = settings.time_col.b;
+  JsonObject clockFaceCol = doc.createNestedObject("clock_face_color");
+  clockFaceCol["r"] = settings.clock_face_col.r; clockFaceCol["g"] = settings.clock_face_col.g; clockFaceCol["b"] = settings.clock_face_col.b;
   JsonObject ampmCol = doc.createNestedObject("ampm_color");
   ampmCol["r"] = settings.ampm_col.r; ampmCol["g"] = settings.ampm_col.g; ampmCol["b"] = settings.ampm_col.b;
   JsonObject secondsCol = doc.createNestedObject("seconds_color");
@@ -2463,6 +2475,24 @@ void handleTimeColor() {
       allScreenSettings[screenIndex].time_col.r = (color >> 16) & 0xFF;
       allScreenSettings[screenIndex].time_col.g = (color >> 8) & 0xFF;
       allScreenSettings[screenIndex].time_col.b = color & 0xFF;
+      saveSettings();
+      server.send(200, "text/plain", "OK");
+    } else {
+      server.send(400, "text/plain", "Invalid screen");
+    }
+  } else {
+    server.send(400, "text/plain", "Missing parameters");
+  }
+}
+
+void handleClockFaceColor() {
+  if (server.hasArg("value") && server.hasArg("screen")) {
+    int screenIndex = server.arg("screen").toInt() - 1;
+    if (screenIndex >= 0 && screenIndex < allScreenSettings.size()) {
+      unsigned long color = strtoul(server.arg("value").c_str(), NULL, 16);
+      allScreenSettings[screenIndex].clock_face_col.r = (color >> 16) & 0xFF;
+      allScreenSettings[screenIndex].clock_face_col.g = (color >> 8) & 0xFF;
+      allScreenSettings[screenIndex].clock_face_col.b = color & 0xFF;
       saveSettings();
       server.send(200, "text/plain", "OK");
     } else {
@@ -3627,6 +3657,7 @@ void setup() {
   server.on("/month", handleMonth);
   server.on("/humidity", handleHumidity);
   server.on("/timecolor", handleTimeColor);
+  server.on("/clockfacecolor", handleClockFaceColor);
   server.on("/datecolor", handleDateColor);
   server.on("/ampmcolor", handleAMPMColor);
   server.on("/secondscolor", handleSecondsColor);
@@ -5025,6 +5056,7 @@ void Screen3() {  // Analogue & calendar Clock
 
   // Use the settings object to define colors for this screen.
   uint16_t time_color = dma_display->color565(settings.time_col.r, settings.time_col.g, settings.time_col.b);
+  uint16_t clock_face_color = dma_display->color565(settings.clock_face_col.r, settings.clock_face_col.g, settings.clock_face_col.b);
   uint16_t ampm_color = dma_display->color565(settings.ampm_col.r, settings.ampm_col.g, settings.ampm_col.b);
   uint16_t seconds_color = dma_display->color565(settings.seconds_col.r, settings.seconds_col.g, settings.seconds_col.b);
   uint16_t day_color = dma_display->color565(settings.day_col.r, settings.day_col.g, settings.day_col.b);
@@ -5046,7 +5078,7 @@ void Screen3() {  // Analogue & calendar Clock
         if (pgm_read_word(&MASK_Clock[i]) == 0x0000) {
             int x = i % 64; 
             int y = i / 64;
-            dma_canvas.drawPixel(x, y, time_color); // 'time_color' is used for the solid clock face.
+            dma_canvas.drawPixel(x, y, clock_face_color);
         }
       }
     }
@@ -5090,7 +5122,7 @@ void Screen3() {  // Analogue & calendar Clock
   // Draw Minute Hand (using 'ampm_color')
   draw_aa_line_simple(dma_canvas, clockCenterX_f, clockCenterY_f, minuteX1_f, minuteY1_f, ampm_color, fuzziness_factor);
   
-  // Draw Hour Hand (using 'time_color' as per the original color picker association)
+  // Draw Hour Hand using its independent colour.
   draw_aa_line_simple(dma_canvas, clockCenterX_f, clockCenterY_f, hourX1_f, hourY1_f, time_color, fuzziness_factor);
 
   // Draw Seconds Hand
