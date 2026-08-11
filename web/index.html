@@ -161,8 +161,64 @@
         .device-state b { display: block; color: var(--text); font-size: 12px; margin-bottom: 2px; }
         .status-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 7px; background: var(--accent); box-shadow: 0 0 12px var(--accent); }
 
+        .page-layout {
+            width: 100%; max-width: 1180px; margin: 0 auto;
+            display: grid; grid-template-columns: minmax(0,1fr) minmax(320px,360px);
+            grid-template-areas: "header header" "preview preview" "main .";
+            align-items: start; gap: 0 24px;
+        }
+        .settings-content { grid-area: main; min-width: 0; }
+        .preview-rail { grid-area: preview; min-width: 0; min-height:var(--preview-rail-height,auto); }
+        .preview-panel {
+            position: relative; padding: 16px;
+            border: 1px solid var(--line); border-radius: var(--radius);
+            background: rgba(17,20,27,.94); box-shadow: 0 24px 70px rgba(0,0,0,.3);
+            backdrop-filter: blur(18px); transition: padding .22s, border-radius .22s, box-shadow .22s, width .22s;
+        }
+        .preview-toolbar { display:flex; align-items:center; justify-content:space-between; gap:14px; margin:0 2px 12px; }
+        .preview-title { min-width:0; display:grid; gap:2px; }
+        .preview-title span { color:var(--muted); font-size:9px; font-weight:800; letter-spacing:.14em; text-transform:uppercase; }
+        .preview-title strong { font-size:13px; letter-spacing:-.02em; white-space:nowrap; }
+        .wifi-quality {
+            --wifi-color:#7c8497; display:flex; align-items:center; gap:8px; min-width:0;
+            padding:7px 9px; border:1px solid rgba(255,255,255,.09);
+            border-radius:11px; background:rgba(255,255,255,.025);
+        }
+        .wifi-quality[data-quality="excellent"] { --wifi-color:#d9ff62; }
+        .wifi-quality[data-quality="good"] { --wifi-color:#8ee7a8; }
+        .wifi-quality[data-quality="fair"] { --wifi-color:#ffc05c; }
+        .wifi-quality[data-quality="weak"] { --wifi-color:#ff7373; }
+        .wifi-bars { width:22px; height:19px; display:flex; align-items:flex-end; gap:2px; flex:0 0 auto; }
+        .wifi-bars i { width:4px; border-radius:2px 2px 0 0; background:#343945; transition:background .2s,box-shadow .2s; }
+        .wifi-bars i:nth-child(1) { height:5px; }
+        .wifi-bars i:nth-child(2) { height:9px; }
+        .wifi-bars i:nth-child(3) { height:14px; }
+        .wifi-bars i:nth-child(4) { height:19px; }
+        .wifi-quality[data-level="1"] .wifi-bars i:nth-child(-n+1),
+        .wifi-quality[data-level="2"] .wifi-bars i:nth-child(-n+2),
+        .wifi-quality[data-level="3"] .wifi-bars i:nth-child(-n+3),
+        .wifi-quality[data-level="4"] .wifi-bars i { background:var(--wifi-color); box-shadow:0 0 8px rgba(217,255,98,.2); }
+        .wifi-copy { min-width:0; display:grid; line-height:1.12; }
+        .wifi-copy strong { color:var(--wifi-color); font-size:11px; white-space:nowrap; }
+        .wifi-copy small { color:var(--muted); font-size:9px; white-space:nowrap; }
+        .preview-controls { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:12px 2px 0; }
+        .preview-controls label { color:#cdd1da; font-size:11px; font-weight:700; }
+        .preview-controls select { width:110px; min-height:38px; }
+        body.preview-docked .preview-panel {
+            position:fixed; z-index:18; top:24px;
+            right:max(24px,calc((100vw - 1460px)/2 + 24px)); width:360px;
+            padding:9px 10px 10px; border-radius:14px; box-shadow:0 16px 44px rgba(0,0,0,.58);
+        }
+        body.preview-docked .preview-toolbar { margin:0 0 7px; }
+        body.preview-docked .preview-title strong { display:none; }
+        body.preview-docked .clock-preview-stage { padding:5px; border-radius:10px; background-size:16px 16px; }
+        body.preview-docked .clock-case { width:min(300px,74vw); padding:6px 6px 9px; border-radius:9px; transform:none; box-shadow:inset 0 1px rgba(255,255,255,.12),0 5px 14px rgba(0,0,0,.48); }
+        body.preview-docked .clock-case-details, body.preview-docked .clock-feet { display:none; }
+        body.preview-docked .clock-bezel { padding:4px; border-radius:3px; }
+        body.preview-docked .preview-controls { display:none; }
+
         .header-bar {
-            max-width: 1040px; margin: 0 auto 28px; padding: 4px 0 24px;
+            grid-area: header; width:100%; max-width:none; margin: 0 auto 28px; padding: 4px 0 24px;
             border-bottom: 0; align-items: flex-end;
         }
         .header-bar h2 { color: var(--text); font-size: clamp(28px,4vw,44px); line-height: 1; letter-spacing: -.05em; }
@@ -175,7 +231,7 @@
         .language-selector label { color: var(--muted); font-size: 12px; margin: 0; }
 
         .control-group {
-            max-width: 1040px; margin: 20px auto; padding: 26px;
+            max-width: none; margin: 20px auto; padding: 26px;
             border: 1px solid var(--line); border-radius: var(--radius);
             background: rgba(17,20,27,.9); color: var(--text);
             box-shadow: 0 24px 70px rgba(0,0,0,.28);
@@ -247,7 +303,7 @@
 
         .clock-preview-stage {
             position: relative; display: grid; place-items: center;
-            margin: 18px 0 28px; padding: clamp(24px,4vw,46px) clamp(12px,3vw,34px) 52px;
+            margin: 0; padding: 18px 8px 32px;
             perspective: 1100px; overflow: hidden;
             border: 1px solid var(--line); border-radius: 16px;
             background:
@@ -322,6 +378,15 @@
         @media (min-width: 1120px) {
             body { padding-right: max(42px, calc((100vw - 1332px)/2 + 42px)); }
         }
+        @media (max-width: 1200px) {
+            .page-layout {
+                max-width:1040px; grid-template-columns:minmax(0,1fr);
+                grid-template-areas:"header" "preview" "main"; gap:0;
+            }
+            .preview-rail { width:100%; }
+            .control-group { scroll-margin-top:190px; }
+            body.preview-docked .preview-panel { top:12px; right:12px; width:300px; }
+        }
         @media (max-width: 760px) {
             body { padding: 22px 15px 94px; }
             .side-nav { inset: auto 0 0; width: 100%; height: 70px; padding: 8px 10px; border: 0; border-top: 1px solid var(--line); }
@@ -336,10 +401,17 @@
             .control-group { padding: 20px 17px; border-radius: 16px; }
             .control-row, .expandable-container .control-row, .expandable .control-row { grid-template-columns: minmax(110px,.8fr) minmax(120px,1.2fr) 55px; gap: 10px; }
             .control-row > label:first-child { font-size: 12px; }
-            .clock-preview-stage { padding:24px 8px 42px; }
+            .preview-panel { padding:12px; }
+            .preview-toolbar { gap:8px; }
+            .clock-preview-stage { padding:14px 6px 30px; }
             .clock-case { padding:14px 14px 34px; border-radius:16px; }
             .clock-bezel { padding:8px; border-radius:5px; }
             .clock-case-details { left:18px; right:18px; bottom:11px; }
+            body.preview-docked .preview-panel { top:10px; right:10px; width:min(250px,calc(100vw - 20px)); }
+            body.preview-docked .clock-case { width:min(220px,68vw); padding:5px 5px 8px; border-radius:8px; }
+            body.preview-docked .clock-bezel { padding:3px; }
+            body.preview-docked .wifi-quality { padding:6px 8px; }
+            body.preview-docked .preview-title { display:none; }
         }
         @media (max-width: 430px) {
             .control-row, .expandable-container .control-row, .expandable .control-row { grid-template-columns: 1fr auto; }
@@ -362,8 +434,9 @@
             <button type="button" class="side-link" onclick="document.getElementById('weatherCard').scrollIntoView()"><i>◌</i><span>Weather</span></button>
             <button type="button" class="side-link" onclick="document.getElementById('systemCard').scrollIntoView()"><i>⚙</i><span>System</span></button>
         </nav>
-        <div class="device-state"><b><span class="status-dot"></span>Smart Clock</b>Live device controls</div>
+        <div class="device-state"><b><span class="status-dot" id="sideStatusDot"></span>Smart Clock</b><span id="sideWifiText">Checking Wi-Fi…</span></div>
     </aside>
+    <div class="page-layout">
     <div class="header-bar">
         <div class="header-title">
             <h2 data-translate-key="mainTitle">Carlson's Smart Clock</h2>
@@ -378,6 +451,8 @@
             </select>
         </div>
     </div>
+
+<main class="settings-content">
 
 <div class="control-group" id="displayCard">
     <label class="card-label" data-translate-key="clockSettings">Clock Settings</label>
@@ -400,31 +475,6 @@
 
     <div class="control-row system-buttons">
         <button class="system-button" onclick="startFullYearAnimation()" data-translate-key="fullYearAnimation">Full Year Animation</button>
-    </div>
-
-    <div class="clock-preview-stage" aria-label="Live clock display preview">
-        <div class="clock-case">
-            <div class="clock-bezel">
-                <div class="led-screen">
-                    <canvas id="screenshotCanvas" width="320" height="160"></canvas>
-                </div>
-            </div>
-            <div class="clock-case-details">
-                <span>CARLSON SMART CLOCK</span>
-                <span class="clock-speaker" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
-            </div>
-            <div class="clock-feet" aria-hidden="true"><i></i><i></i></div>
-        </div>
-    </div>
-
-    <div class="control-row">
-        <label data-translate-key="liveRefresh">Live Refresh</label>
-        <select id="refreshSelect" onchange="setRefreshInterval(this.value)">
-            <option value="1000">1 s</option>
-            <option value="2000">2 s</option>
-            <option value="3000">3 s</option>
-            <option value="4000">4 s</option>
-        </select>
     </div>
 
     <!-- Schedules Control Area (Hidden unless Schedules selected) -->
@@ -610,21 +660,96 @@
     </div>
 </div>
 
+</main>
+
+<aside class="preview-rail" aria-label="Live clock preview and connection quality">
+    <section class="preview-panel">
+        <div class="preview-toolbar">
+            <div class="preview-title"><span data-translate-key="liveDisplay">Live display</span><strong>64 × 32 LED matrix</strong></div>
+            <div class="wifi-quality" id="wifiQuality" data-quality="unknown" data-level="0" aria-live="polite">
+                <span class="wifi-bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+                <span class="wifi-copy"><strong id="wifiQualityLabel">Checking…</strong><small id="wifiRssiLabel" data-translate-key="wifiSignal">Wi-Fi signal</small></span>
+            </div>
+        </div>
+        <div class="clock-preview-stage" aria-label="Live clock display preview">
+            <div class="clock-case">
+                <div class="clock-bezel">
+                    <div class="led-screen">
+                        <canvas id="screenshotCanvas" width="320" height="160"></canvas>
+                    </div>
+                </div>
+                <div class="clock-case-details">
+                    <span>CARLSON SMART CLOCK</span>
+                    <span class="clock-speaker" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+                </div>
+                <div class="clock-feet" aria-hidden="true"><i></i><i></i></div>
+            </div>
+        </div>
+        <div class="preview-controls">
+            <label for="refreshSelect" data-translate-key="liveRefresh">Live Refresh</label>
+            <select id="refreshSelect" onchange="setRefreshInterval(this.value)">
+                <option value="1000">1 s</option>
+                <option value="2000">2 s</option>
+                <option value="3000">3 s</option>
+                <option value="4000">4 s</option>
+            </select>
+        </div>
+    </section>
+</aside>
+</div>
+
 <script>
     const translations = {
         en: {
-            liveRefresh:"Live Refresh", uploadFirmware:"Upload Firmware", otaHint:"Pick any SmartClock_vX.XX.bin from the BIN folder (or firmware.bin). Uploads in 32KB chunks over WiFi - about 5-10 minutes. Settings are kept; the clock reboots when done.", otaUpload:"Upload",
+            liveRefresh:"Live Refresh", liveDisplay:"Live display", wifiSignal:"Wi-Fi signal", wifiExcellent:"Excellent", wifiGood:"Good", wifiFair:"Fair", wifiWeak:"Weak", wifiOffline:"Offline", uploadFirmware:"Upload Firmware", otaHint:"Pick any SmartClock_vX.XX.bin from the BIN folder (or firmware.bin). Uploads in 32KB chunks over WiFi - about 5-10 minutes. Settings are kept; the clock reboots when done.", otaUpload:"Upload",
             schedules: "Schedules", scheduleSettings: "Schedule Settings", defaultScreen: "Default Screen", addSchedule: "Add", indoorOffset: "Indoor Temp Offset", language: "Language", mainTitle: "Carlson's Smart Clock", clockSettings: "Clock Settings", screenSelection: "Screen Selection", panelType: "Panel Type (Reboot Req.)", screen1: "Screen 1 - Classic Digital", screen2: "Screen 2 - Alt. Digital", screen3: "Screen 3 - Analog", screen4: "Screen 4 - World Map", screen5: "Screen 5 - Moon Phase", screen6: "Screen 6 - Gradient Clock", screen7: "Screen 7 - Digital Watch", screen8: "Screen 8 - Color Analog", screen9: "Screen 9 - Nixie Tube", fullYearAnimation: "Full Year Animation", "24hour": "24 Hour", icons: "Icons", minMaxTemps: "Min/Max Temps", ampm: "AM/PM", seconds: "Seconds", time: "Time", day: "Day", date: "Date", month: "Month", dateBg: "Date Background", divider: "Divider", temperature: "Temperature", humidity: "Humidity", clockFace: "Clock Face", option: "Option", colour: "Colour", image: "Image", clockOptions: "Clock Options", displayMode: "Display Mode", "4numbers": "4 Numbers", allNumbers: "All Numbers", "4ticks": "4 Ticks", allTicks: "All Ticks", handFuzz: "Hand Fuzziness", handLength: "Hand Length", hourHand: "Hour Hand", minuteHand: "Minute Hand", secondHand: "Second Hand", topCalendar: "Top Calendar", bottomCalendar: "Bottom Calendar", timeShadow: "Time Shadow", nightLights: "Night Lights", nightShadow: "Night Shadow", "3dEffects": "3D Effects", speedDir: "Speed & Direction", numStars: "Number of Stars", sun: "Sun", land: "Land", water: "Water", ice: "Ice", moonShadow: "Moon Shadow", moonPercent: "Moon Percentage", gradSpeed: "Gradient Speed", boxSize: "Box Size", boxFeather: "Box Feather", glowIntensity: "Glow Intensity", glow: "Glow", bgColor: "Background Colour", showMarkers: "Show Markers", cycleSpeed: "Cycle Speed", showDate: "Show Date", brightnessSettings: "Brightness Settings", brightness: "Brightness", autoBrightness: "Auto Brightness", darkRoomBrightness: "Dark Room Brightness", brightRoomBrightness: "Bright Room Brightness", currentBrightness: "Current Brightness:", setDarkRoom: "Set Dark Room", setBrightRoom: "Set Bright Room", weatherSettings: "Weather Settings", timezone: "Timezone Selection", weatherService: "Weather Service", pirateApi: "Pirate Weather API", owmApi: "OpenWeatherMap API", weatherapiApi: "WeatherAPI.com API", getKey: "Get Key", units: "Units", celsius: "Celsius", fahrenheit: "Fahrenheit", tempType: "Temperature", actualTemp: "Actual Temperature", feelsLike: "Feels Like", city: "City", search: "Search", latitude: "Latitude", longitude: "Longitude", systemSettings: "System Settings", reboot: "Reboot", clearWifi: "Clear Wifi", firmwareUpdate: "Firmware Update", formatSsd: "Format SSD"
         },
         de: {
-            liveRefresh:"Aktualisierung", uploadFirmware:"Firmware hochladen", otaHint:"Beliebige SmartClock_vX.XX.bin aus dem BIN-Ordner wählen (oder firmware.bin). Upload in 32KB-Blöcken über WLAN - ca. 5-10 Minuten. Einstellungen bleiben erhalten; die Uhr startet danach neu.", otaUpload:"Hochladen",
+            liveRefresh:"Aktualisierung", liveDisplay:"Live-Anzeige", wifiSignal:"WLAN-Signal", wifiExcellent:"Ausgezeichnet", wifiGood:"Gut", wifiFair:"Mittel", wifiWeak:"Schwach", wifiOffline:"Offline", uploadFirmware:"Firmware hochladen", otaHint:"Beliebige SmartClock_vX.XX.bin aus dem BIN-Ordner wählen (oder firmware.bin). Upload in 32KB-Blöcken über WLAN - ca. 5-10 Minuten. Einstellungen bleiben erhalten; die Uhr startet danach neu.", otaUpload:"Hochladen",
             schedules: "Zeitpläne", scheduleSettings: "Zeitplan-Einstellungen", defaultScreen: "Standardbildschirm", addSchedule: "Hinzufügen", indoorOffset: "Innen-Temp Offset", language: "Sprache", mainTitle: "Carlson's Smart Clock", clockSettings: "Uhreinstellungen", screenSelection: "Bildschirmauswahl", panelType: "Panel-Typ (Neustart Erf.)", screen1: "Bildschirm 1 - Klassisch Digital", screen2: "Bildschirm 2 - Alt. Digital", screen3: "Bildschirm 3 - Analog", screen4: "Bildschirm 4 - Weltkarte", screen5: "Bildschirm 5 - Mondphase", screen6: "Bildschirm 6 - Farbverlauf", screen7: "Bildschirm 7 - Digitaluhr", screen8: "Bildschirm 8 - Farb-Analog", screen9: "Bildschirm 9 - Nixie-Röhre", fullYearAnimation: "Ganzjahresanimation", "24hour": "24-Stunden", icons: "Symbole", minMaxTemps: "Min/Max Temp.", ampm: "AM/PM", seconds: "Sekunden", time: "Zeit", day: "Tag", date: "Datum", month: "Monat", dateBg: "Datum-Hintergrund", divider: "Trennlinie", temperature: "Temperatur", humidity: "Luftfeuchtigkeit", clockFace: "Zifferblatt", option: "Option", colour: "Farbe", image: "Bild", clockOptions: "Uhrenoptionen", displayMode: "Anzeigemodus", "4numbers": "4 Zahlen", allNumbers: "Alle Zahlen", "4ticks": "4 Striche", allTicks: "Alle Striche", handFuzz: "Zeigerunschärfe", handLength: "Zeigerlänge", hourHand: "Stundenzeiger", minuteHand: "Minutenzeiger", secondHand: "Sekundenzeiger", topCalendar: "Oberer Kalender", bottomCalendar: "Unterer Kalender", timeShadow: "Zeitschatten", nightLights: "Nachtlichter", nightShadow: "Nachtschatten", "3dEffects": "3D-Effekte", speedDir: "Geschw. & Richtung", numStars: "Anzahl Sterne", sun: "Sonne", land: "Land", water: "Wasser", ice: "Eis", moonShadow: "Mondschatten", moonPercent: "Mond in Prozent", gradSpeed: "Farbverlaufgeschw.", boxSize: "Boxgröße", boxFeather: "Box-Weichzeichnung", glowIntensity: "Leuchtintensität", glow: "Leuchten", bgColor: "Hintergrundfarbe", showMarkers: "Markierungen", cycleSpeed: "Zyklusgeschw.", showDate: "Datum anzeigen", brightnessSettings: "Helligkeitseinstellungen", brightness: "Helligkeit", autoBrightness: "Auto-Helligkeit", darkRoomBrightness: "Dunkler Raum", brightRoomBrightness: "Heller Raum", currentBrightness: "Aktuelle Helligkeit:", setDarkRoom: "Dunkel einst.", setBrightRoom: "Hell einst.", weatherSettings: "Wettereinstellungen", timezone: "Zeitzonenauswahl", weatherService: "Wetterdienst", pirateApi: "Pirate Weather API", owmApi: "OpenWeatherMap API", weatherapiApi: "WeatherAPI.com API", getKey: "Schlüssel holen", units: "Einheiten", celsius: "Celsius", fahrenheit: "Fahrenheit", tempType: "Temperatur", actualTemp: "Tatsächliche Temp.", feelsLike: "Gefühlte Temp.", city: "Stadt", search: "Suchen", latitude: "Breitengrad", longitude: "Längengrad", systemSettings: "Systemeinstellungen", reboot: "Neustart", clearWifi: "WLAN löschen", firmwareUpdate: "Firmware-Update", formatSsd: "SSD formatieren"
         },
         sv: {
-            liveRefresh:"Uppdatering", uploadFirmware:"Ladda upp firmware", otaHint:"Välj valfri SmartClock_vX.XX.bin från BIN-mappen (eller firmware.bin). Laddas upp i 32KB-block över WiFi - cirka 5-10 minuter. Inställningarna behålls; klockan startar om när den är klar.", otaUpload:"Ladda upp",
+            liveRefresh:"Uppdatering", liveDisplay:"Livevisning", wifiSignal:"Wi-Fi-signal", wifiExcellent:"Utmärkt", wifiGood:"Bra", wifiFair:"Måttlig", wifiWeak:"Svag", wifiOffline:"Offline", uploadFirmware:"Ladda upp firmware", otaHint:"Välj valfri SmartClock_vX.XX.bin från BIN-mappen (eller firmware.bin). Laddas upp i 32KB-block över WiFi - cirka 5-10 minuter. Inställningarna behålls; klockan startar om när den är klar.", otaUpload:"Ladda upp",
             schedules: "Tidsscheman", scheduleSettings: "Schemainställningar", defaultScreen: "Standardskärm", addSchedule: "Lägg till", indoorOffset: "Inomhus Temp Offset", language: "Språk", mainTitle: "Carlsons Smartklocka", clockSettings: "Klockinställningar", screenSelection: "Skärmval", panelType: "Paneltyp (Kräver omstart)", screen1: "Skärm 1 - Klassisk Digital", screen2: "Skärm 2 - Alt. Digital", screen3: "Skärm 3 - Analog", screen4: "Skärm 4 - Världskarta", screen5: "Skärm 5 - Månfas", screen6: "Skärm 6 - Gradientklocka", screen7: "Skärm 7 - Digitalt Armbandsur", screen8: "Skärm 8 - Färg-Analog", screen9: "Skärm 9 - Nixie-rör", fullYearAnimation: "Helårsanimation", "24hour": "24-timmars", icons: "Ikoner", minMaxTemps: "Min/Max Temp.", ampm: "AM/PM", seconds: "Sekunder", time: "Tid", day: "Dag", date: "Datum", month: "Månad", dateBg: "Datum-bakgrund", divider: "Avdelare", temperature: "Temperatur", humidity: "Luftfuktighet", clockFace: "Urtavla", option: "Alternativ", colour: "Färg", image: "Bild", clockOptions: "Klockalternativ", displayMode: "Visningsläge", "4numbers": "4 Siffror", allNumbers: "Alla Siffror", "4ticks": "4 Markeringar", allTicks: "Alla Markeringar", handFuzz: "Visaroskärpa", handLength: "Visarlängd", hourHand: "Timvisare", minuteHand: "Minutvisare", secondHand: "Sekundvisare", topCalendar: "Övre Kalender", bottomCalendar: "Nedre Kalender", timeShadow: "Tidsskugga", nightLights: "Nattljus", nightShadow: "Nattskugga", "3dEffects": "3D-effekter", speedDir: "Fart & Riktning", numStars: "Antal Stjärnor", sun: "Sol", land: "Land", water: "Vatten", ice: "Is", moonShadow: "Månskugga", moonPercent: "Månprocent", gradSpeed: "Gradienthastighet", boxSize: "Boxstorlek", boxFeather: "Box-ludd", glowIntensity: "Ljusintensitet", glow: "Ljus", bgColor: "Bakgrundsfärg", showMarkers: "Markörer", cycleSpeed: "Cykelfart", showDate: "Visa Datum", brightnessSettings: "Ljusstyrkeinställningar", brightness: "Ljusstyrka", autoBrightness: "Auto-ljusstyrka", darkRoomBrightness: "Mörkt Rum", brightRoomBrightness: "Ljust Rum", currentBrightness: "Nuvarande Ljusstyrka:", setDarkRoom: "Ställ in Mörkt", setBrightRoom: "Ställ in Ljust", weatherSettings: "Väderinställningar", timezone: "Tidszonsval", weatherService: "Vädertjänst", pirateApi: "Pirate Weather API", owmApi: "OpenWeatherMap API", weatherapiApi: "WeatherAPI.com API", getKey: "Hämta Nyckel", units: "Enheter", celsius: "Celsius", fahrenheit: "Fahrenheit", tempType: "Temperatur", actualTemp: "Faktisk Temp.", feelsLike: "Känns Som", city: "Stad", search: "Sök", latitude: "Latitud", longitude: "Longitud", systemSettings: "Systeminställningar", reboot: "Starta om", clearWifi: "Rensa WiFi", firmwareUpdate: "Firmware-uppdat.", formatSsd: "Formatera SSD"
         }
     };
+
+    let lastWifiRssi = null;
+    function updateWifiQuality(value) {
+        const rssi = Number(value);
+        const connected = Number.isFinite(rssi) && rssi !== 0;
+        let quality='offline', level=0, key='wifiOffline';
+        lastWifiRssi=connected?rssi:0;
+        if(connected) {
+            if(rssi >= -55) { quality='excellent'; level=4; key='wifiExcellent'; }
+            else if(rssi >= -67) { quality='good'; level=3; key='wifiGood'; }
+            else if(rssi >= -75) { quality='fair'; level=2; key='wifiFair'; }
+            else { quality='weak'; level=1; key='wifiWeak'; }
+        }
+        const lang=localStorage.getItem('language')||'en';
+        const dictionary=translations[lang]||translations.en;
+        const qualityText=dictionary[key]||translations.en[key];
+        const percent=connected?Math.max(0,Math.min(100,Math.round(2*(rssi+100)))):0;
+        const detail=connected?`${Math.round(rssi)} dBm · ${percent}%`:(dictionary.wifiSignal||translations.en.wifiSignal);
+        const badge=document.getElementById('wifiQuality');
+        const label=document.getElementById('wifiQualityLabel');
+        const rssiLabel=document.getElementById('wifiRssiLabel');
+        const sideText=document.getElementById('sideWifiText');
+        const sideDot=document.getElementById('sideStatusDot');
+        if(badge) {
+            badge.dataset.quality=quality;
+            badge.dataset.level=String(level);
+            badge.setAttribute('aria-label',`${dictionary.wifiSignal||translations.en.wifiSignal}: ${qualityText}, ${detail}`);
+        }
+        if(label) label.textContent=qualityText;
+        if(rssiLabel) rssiLabel.textContent=detail;
+        if(sideText) sideText.textContent=connected?`${qualityText} · ${Math.round(rssi)} dBm`:qualityText;
+        if(sideDot) {
+            const colours={excellent:'#d9ff62',good:'#8ee7a8',fair:'#ffc05c',weak:'#ff7373',offline:'#7c8497'};
+            sideDot.style.background=colours[quality];
+            sideDot.style.boxShadow=`0 0 12px ${colours[quality]}`;
+        }
+    }
 
     function setLanguage(lang) {
         if (!lang || !translations[lang]) lang = 'en';
@@ -638,6 +763,7 @@
             }
         });
         document.getElementById('languageSelect').value = lang;
+        if(lastWifiRssi!==null) updateWifiQuality(lastWifiRssi);
         if (!isLoadingSettings) deviceFetch(`/language?lang=${lang}`, {}, '/language');
     }
 
@@ -1190,11 +1316,12 @@
         if(brightnessRequestInFlight || passiveRequestBlocked() || pollingPaused || document.hidden) return;
         brightnessRequestInFlight = true;
         passiveRequestInFlight = true;
-        fetchWithTimeout("/status", {}, 4000)
+        fetchWithTimeout("/status", {}, 6500)
             .then(e => { if(!e.ok) throw new Error('HTTP '+e.status); return e.json(); })
             .then(e => {
                 document.getElementById("currentBrightness").textContent=e.current_brightness+"%";
                 applySafeMode(e.safe_mode);
+                updateWifiQuality(e.rssi);
             })
             .catch(e => { if(e.name !== 'AbortError') console.debug('Brightness poll skipped:',e); })
             .finally(() => { brightnessRequestInFlight=false; finishPassiveRequest(); });
@@ -1241,6 +1368,41 @@
             if (sel) sel.value = '4000';
             applyRefreshTimer();
         }
+    }
+
+    /* ---------- responsive sticky preview ---------- */
+    var previewDocked=false, previewRailTop=0, previewDockPoint=0, previewScrollQueued=false;
+    function measurePreviewRail(){
+        const rail=document.querySelector('.preview-rail');
+        const panel=document.querySelector('.preview-panel');
+        if(!rail||!panel||previewDocked)return;
+        const panelHeight=panel.offsetHeight;
+        previewRailTop=rail.getBoundingClientRect().top+(window.scrollY||0);
+        previewDockPoint=previewRailTop+panelHeight-90;
+        rail.style.setProperty('--preview-rail-height',panelHeight+'px');
+    }
+    function updatePreviewDock(){
+        previewScrollQueued=false;
+        const y=window.scrollY||0;
+        if(!previewDocked && y>previewDockPoint) previewDocked=true;
+        else if(previewDocked && y<previewDockPoint-140) previewDocked=false;
+        document.body.classList.toggle('preview-docked',previewDocked);
+        if(!previewDocked) requestAnimationFrame(measurePreviewRail);
+    }
+    function queuePreviewDockUpdate(){
+        if(previewScrollQueued)return;
+        previewScrollQueued=true;
+        requestAnimationFrame(updatePreviewDock);
+    }
+    function initStickyPreview(){
+        measurePreviewRail();
+        updatePreviewDock();
+        window.addEventListener('scroll',queuePreviewDockUpdate,{passive:true});
+        window.addEventListener('resize',()=>{
+            previewDocked=false;
+            document.body.classList.remove('preview-docked');
+            requestAnimationFrame(()=>{measurePreviewRail();updatePreviewDock();});
+        });
     }
 
     /* ---------- browser OTA upload ---------- */
@@ -1324,6 +1486,7 @@
 
     window.onload=()=>{
         bindQueuedControls();
+        initStickyPreview();
         const savedLang = localStorage.getItem('language') || 'en';
         setLanguage(savedLang);
         fetchSettings();

@@ -10,6 +10,18 @@ recorded — only version numbers and short notes.
 > some numbers below are just iteration builds with no shipped change of their
 > own. Entries are written against the version that first carried the change.
 
+## 3.60 - 2026-08-11
+- Added live Wi-Fi quality to the settings page using the RSSI already supplied
+  by `/status`: four signal bars, Excellent/Good/Fair/Weak classification, dBm
+  and an estimated percentage. The same status appears in the desktop sidebar.
+- Restored the live LCD preview as a large, full-width 3D clock above the
+  settings. Once it scrolls out of view it smoothly becomes a compact floating
+  preview at the upper-right, leaving the screen visible while editing controls.
+- Added separate dock sizing for wide Mac, narrow desktop/tablet and phone
+  layouts, with the mobile dock kept clear of the bottom navigation.
+- Reused the existing status poll rather than adding network traffic, and gave
+  that lightweight request extra time to complete on clocks with weak Wi-Fi.
+
 ## 3.59 - 2026-08-11
 - Added an active-page heartbeat watchdog for the ESP32/Orbi failure mode where
   `WL_CONNECTED` remains true and outbound traffic works but inbound LAN packets
