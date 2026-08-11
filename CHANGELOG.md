@@ -10,6 +10,12 @@ recorded — only version numbers and short notes.
 > some numbers below are just iteration builds with no shipped change of their
 > own. Entries are written against the version that first carried the change.
 
+## 3.55 - 2026-08-11
+- Fixed live-preview grid drift caused by separately scaling the 64x32 canvas
+  and a percentage-based CSS overlay. The renderer now produces one 320x160
+  bitmap containing exact 4x4 colour blocks separated by 1-pixel black gaps,
+  so the grid and LED pixels remain locked together at every display size.
+
 ## 3.54 - 2026-08-11
 - Restored the black 64x32 LED pixel grid in the live preview using a lightweight
   overlay, retaining the single-operation `ImageData` renderer.

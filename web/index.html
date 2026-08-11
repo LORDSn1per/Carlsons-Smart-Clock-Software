@@ -283,13 +283,6 @@
             background: #000;
             box-shadow: inset 0 0 22px rgba(0,0,0,.95), 0 0 20px rgba(217,255,98,.06);
         }
-        .led-screen::after {
-            content:""; position:absolute; inset:0; pointer-events:none;
-            background-image:
-                linear-gradient(to right,rgba(0,0,0,.72) 1px,transparent 1px),
-                linear-gradient(to bottom,rgba(0,0,0,.72) 1px,transparent 1px);
-            background-size:1.5625% 100%,100% 3.125%;
-        }
         #screenshotCanvas {
             display:block; width:100% !important; height:100% !important; margin:0;
             border:0 !important; border-radius:0 !important; background:#000 !important;
@@ -413,7 +406,7 @@
         <div class="clock-case">
             <div class="clock-bezel">
                 <div class="led-screen">
-                    <canvas id="screenshotCanvas" width="64" height="32"></canvas>
+                    <canvas id="screenshotCanvas" width="320" height="160"></canvas>
                 </div>
             </div>
             <div class="clock-case-details">
@@ -829,7 +822,7 @@
         return `rgb(${red},${green},${blue})`;
     }
 
-    let screenshotInFlight=false, settingsRequestInFlight=false, lastFrameRevision='';
+    let screenshotInFlight=false, settingsRequestInFlight=false, lastFrameRevision='', previewImageData=null;
     let brightnessRequestInFlight=false, passiveRequestInFlight=false;
     let passiveRequestAvailableAt=0;
 
@@ -897,13 +890,27 @@
             lastFrameRevision=frameRevision;
             const pixels = new Uint16Array(buffer), canvas = document.getElementById("screenshotCanvas");
             if(!canvas) return;
-            const context = canvas.getContext("2d"), image = context.createImageData(64,32);
-            for(let index=0, target=0;index<pixels.length;index++,target+=4) {
+            const context = canvas.getContext("2d");
+            if(!previewImageData) {
+                previewImageData=context.createImageData(320,160);
+                // Transparent gaps could reveal stale canvas pixels, so make
+                // the complete backing image opaque black once.
+                for(let alpha=3;alpha<previewImageData.data.length;alpha+=4) previewImageData.data[alpha]=255;
+            }
+            const image=previewImageData;
+            for(let index=0;index<pixels.length;index++) {
                 const value=pixels[index];
-                image.data[target]=((value&63488)>>11)*255/31;
-                image.data[target+1]=((value&2016)>>5)*255/63;
-                image.data[target+2]=(value&31)*255/31;
-                image.data[target+3]=255;
+                const red=((value&63488)>>11)*255/31;
+                const green=((value&2016)>>5)*255/63;
+                const blue=(value&31)*255/31;
+                const cellX=(index%64)*5, cellY=Math.floor(index/64)*5;
+                for(let y=0;y<4;y++) for(let x=0;x<4;x++) {
+                    const target=((cellY+y)*320+cellX+x)*4;
+                    image.data[target]=red;
+                    image.data[target+1]=green;
+                    image.data[target+2]=blue;
+                    image.data[target+3]=255;
+                }
             }
             context.putImageData(image,0,0);
         } catch(error) {
