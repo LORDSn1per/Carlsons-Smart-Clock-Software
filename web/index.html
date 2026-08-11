@@ -375,6 +375,37 @@
         #otaFill { background: var(--accent) !important; }
         #otaStatus { color: var(--muted); }
 
+        .weather-monitor {
+            margin: 14px 0 8px; padding: 16px; border: 1px solid var(--line); border-radius: 14px;
+            background: linear-gradient(145deg,rgba(217,255,98,.035),rgba(11,14,19,.8));
+        }
+        .weather-monitor-head { display:flex; align-items:center; gap:11px; }
+        .weather-status-dot {
+            width:12px; height:12px; flex:0 0 12px; border-radius:50%; background:#7c8497;
+            box-shadow:0 0 0 5px rgba(124,132,151,.1);
+        }
+        .weather-monitor[data-state="queued"] .weather-status-dot,
+        .weather-monitor[data-state="validating"] .weather-status-dot,
+        .weather-monitor[data-state="connecting"] .weather-status-dot,
+        .weather-monitor[data-state="downloading"] .weather-status-dot,
+        .weather-monitor[data-state="parsing"] .weather-status-dot {
+            background:#ffd166; box-shadow:0 0 0 5px rgba(255,209,102,.12); animation:weatherPulse 1s ease-in-out infinite;
+        }
+        .weather-monitor[data-state="success"] .weather-status-dot { background:#8ee7a8; box-shadow:0 0 0 5px rgba(142,231,168,.12); }
+        .weather-monitor[data-state="error"] .weather-status-dot { background:#ff7373; box-shadow:0 0 0 5px rgba(255,115,115,.12); }
+        @keyframes weatherPulse { 50% { transform:scale(.72); opacity:.55; } }
+        .weather-monitor-title { min-width:0; flex:1; }
+        .weather-monitor-title strong { display:block; color:var(--text); font-size:14px; }
+        .weather-monitor-title small { display:block; margin-top:3px; color:var(--muted); font-size:11px; }
+        .weather-provider-badge { padding:5px 8px; border-radius:999px; background:#222733; color:var(--accent); font-size:10px; font-weight:800; }
+        .weather-monitor-detail { min-height:18px; margin:13px 0; color:#cdd1da; font-size:12px; line-height:1.5; }
+        .weather-stats { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:7px; }
+        .weather-stat { padding:9px; border:1px solid rgba(255,255,255,.055); border-radius:9px; background:#0c0f14; }
+        .weather-stat span { display:block; color:var(--muted); font-size:9px; text-transform:uppercase; letter-spacing:.08em; }
+        .weather-stat strong { display:block; margin-top:5px; overflow:hidden; color:var(--text); font-size:11px; text-overflow:ellipsis; white-space:nowrap; }
+        .weather-refresh-row { display:flex; justify-content:flex-end; margin-top:12px; }
+        .weather-refresh-row button { min-height:34px; color:var(--accent); }
+
         @media (min-width: 1120px) {
             body { padding-right: max(42px, calc((100vw - 1332px)/2 + 42px)); }
         }
@@ -412,6 +443,7 @@
             body.preview-docked .clock-bezel { padding:3px; }
             body.preview-docked .wifi-quality { padding:6px 8px; }
             body.preview-docked .preview-title { display:none; }
+            .weather-stats { grid-template-columns:repeat(2,minmax(0,1fr)); }
         }
         @media (max-width: 430px) {
             .control-row, .expandable-container .control-row, .expandable .control-row { grid-template-columns: 1fr auto; }
@@ -621,6 +653,21 @@
     <div id="pirateWeatherRow" class="control-row api-key-row"><label data-translate-key="pirateApi">Pirate Weather API</label><input type="text" id="pirateWeatherAPI" onchange="blockPolling(2000); deviceFetch('/pirateweatherapi?api='+encodeURIComponent(this.value),{},'/pirateweatherapi').then(() => fetchSettings())"><a id="pirateWeatherLink" href="https://pirateweather.net/" target="_blank" class="provider-link hidden" data-translate-key="getKey">Get Key</a></div>
     <div id="openWeatherMapRow" class="control-row api-key-row hidden"><label data-translate-key="owmApi">OpenWeatherMap API</label><input type="text" id="openWeatherMapAPI" onchange="blockPolling(2000); deviceFetch('/openweathermapapi?api='+encodeURIComponent(this.value),{},'/openweathermapapi').then(() => fetchSettings())"><a id="openWeatherMapLink" href="https://openweathermap.org/api" target="_blank" class="provider-link hidden" data-translate-key="getKey">Get Key</a></div>
     <div id="weatherApiRow" class="control-row api-key-row hidden"><label data-translate-key="weatherapiApi">WeatherAPI.com API</label><input type="text" id="weatherAPI_API" onchange="blockPolling(2000); deviceFetch('/weatherapi_api?api='+encodeURIComponent(this.value),{},'/weatherapi_api').then(() => fetchSettings())"><a id="weatherApiLink" href="https://www.weatherapi.com/" target="_blank" class="provider-link hidden" data-translate-key="getKey">Get Key</a></div>
+    <section class="weather-monitor" id="weatherMonitor" data-state="idle" aria-live="polite">
+        <div class="weather-monitor-head">
+            <span class="weather-status-dot" aria-hidden="true"></span>
+            <div class="weather-monitor-title"><strong id="weatherStateTitle" data-translate-key="weatherWaiting">Waiting for weather</strong><small data-translate-key="weatherLive">Live weather activity</small></div>
+            <span class="weather-provider-badge" id="weatherProviderBadge">None</span>
+        </div>
+        <p class="weather-monitor-detail" id="weatherStateDetail">No weather request has run yet.</p>
+        <div class="weather-stats">
+            <div class="weather-stat"><span data-translate-key="weatherConnection">Connection</span><strong id="weatherConnectionValue">—</strong></div>
+            <div class="weather-stat"><span data-translate-key="weatherDownloaded">Downloaded</span><strong id="weatherBytesValue">0 B</strong></div>
+            <div class="weather-stat"><span data-translate-key="weatherAttempt">API attempts</span><strong id="weatherAttemptValue">0 / 10</strong></div>
+            <div class="weather-stat"><span data-translate-key="weatherLastUpdate">Last update</span><strong id="weatherLastUpdateValue">Never</strong></div>
+        </div>
+        <div class="weather-refresh-row"><button type="button" onclick="refreshWeatherNow()" data-translate-key="refreshWeather">Refresh weather now</button></div>
+    </section>
     <div class="control-row"><label data-translate-key="units">Units</label><select id="unitsSelect" onchange="updateNamedSetting('units', this.value)"><option value="celsius" data-translate-key="celsius">Celsius</option><option value="fahrenheit" data-translate-key="fahrenheit">Fahrenheit</option></select></div>
     <div class="control-row"><label data-translate-key="tempType">Temperature</label><select id="tempTypeSelect" onchange="updateNamedSetting('temp_type', this.value)"><option value="actual" data-translate-key="actualTemp">Actual Temperature</option><option value="feels_like" data-translate-key="feelsLike">Feels Like</option></select></div>
     <div class="control-row">
@@ -701,15 +748,15 @@
 <script>
     const translations = {
         en: {
-            liveRefresh:"Live Refresh", liveDisplay:"Live display", wifiSignal:"Wi-Fi signal", wifiExcellent:"Excellent", wifiGood:"Good", wifiFair:"Fair", wifiWeak:"Weak", wifiOffline:"Offline", uploadFirmware:"Upload Firmware", otaHint:"Pick any SmartClock_vX.XX.bin from the BIN folder (or firmware.bin). Uploads in 32KB chunks over WiFi - about 5-10 minutes. Settings are kept; the clock reboots when done.", otaUpload:"Upload",
+            liveRefresh:"Live Refresh", liveDisplay:"Live display", wifiSignal:"Wi-Fi signal", wifiExcellent:"Excellent", wifiGood:"Good", wifiFair:"Fair", wifiWeak:"Weak", wifiOffline:"Offline", uploadFirmware:"Upload Firmware", otaHint:"Pick any SmartClock_vX.XX.bin from the BIN folder (or firmware.bin). Uploads in 32KB chunks over WiFi - about 5-10 minutes. Settings are kept; the clock reboots when done.", otaUpload:"Upload", weatherLive:"Live weather activity", weatherWaiting:"Waiting for weather", weatherConnection:"Connection", weatherDownloaded:"Downloaded", weatherAttempt:"API attempts", weatherLastUpdate:"Last update", refreshWeather:"Refresh weather now", weatherNever:"Never", weatherJustNow:"Just now", weatherIdle:"No weather request has run yet.", weatherQueued:"Weather update queued", weatherValidating:"Checking provider, API key and location", weatherConnecting:"Connecting to weather provider", weatherDownloading:"Connected — downloading weather data", weatherParsing:"Checking downloaded weather data", weatherUpdated:"Weather updated successfully", weatherError:"Weather update failed", weatherDisabled:"Weather is disabled",
             schedules: "Schedules", scheduleSettings: "Schedule Settings", defaultScreen: "Default Screen", addSchedule: "Add", indoorOffset: "Indoor Temp Offset", language: "Language", mainTitle: "Carlson's Smart Clock", clockSettings: "Clock Settings", screenSelection: "Screen Selection", panelType: "Panel Type (Reboot Req.)", screen1: "Screen 1 - Classic Digital", screen2: "Screen 2 - Alt. Digital", screen3: "Screen 3 - Analog", screen4: "Screen 4 - World Map", screen5: "Screen 5 - Moon Phase", screen6: "Screen 6 - Gradient Clock", screen7: "Screen 7 - Digital Watch", screen8: "Screen 8 - Color Analog", screen9: "Screen 9 - Nixie Tube", fullYearAnimation: "Full Year Animation", "24hour": "24 Hour", icons: "Icons", minMaxTemps: "Min/Max Temps", ampm: "AM/PM", seconds: "Seconds", time: "Time", day: "Day", date: "Date", month: "Month", dateBg: "Date Background", divider: "Divider", temperature: "Temperature", humidity: "Humidity", clockFace: "Clock Face", option: "Option", colour: "Colour", image: "Image", clockOptions: "Clock Options", displayMode: "Display Mode", "4numbers": "4 Numbers", allNumbers: "All Numbers", "4ticks": "4 Ticks", allTicks: "All Ticks", handFuzz: "Hand Fuzziness", handLength: "Hand Length", hourHand: "Hour Hand", minuteHand: "Minute Hand", secondHand: "Second Hand", topCalendar: "Top Calendar", bottomCalendar: "Bottom Calendar", timeShadow: "Time Shadow", nightLights: "Night Lights", nightShadow: "Night Shadow", "3dEffects": "3D Effects", speedDir: "Speed & Direction", numStars: "Number of Stars", sun: "Sun", land: "Land", water: "Water", ice: "Ice", moonShadow: "Moon Shadow", moonPercent: "Moon Percentage", gradSpeed: "Gradient Speed", boxSize: "Box Size", boxFeather: "Box Feather", glowIntensity: "Glow Intensity", glow: "Glow", bgColor: "Background Colour", showMarkers: "Show Markers", cycleSpeed: "Cycle Speed", showDate: "Show Date", brightnessSettings: "Brightness Settings", brightness: "Brightness", autoBrightness: "Auto Brightness", darkRoomBrightness: "Dark Room Brightness", brightRoomBrightness: "Bright Room Brightness", currentBrightness: "Current Brightness:", setDarkRoom: "Set Dark Room", setBrightRoom: "Set Bright Room", weatherSettings: "Weather Settings", timezone: "Timezone Selection", weatherService: "Weather Service", pirateApi: "Pirate Weather API", owmApi: "OpenWeatherMap API", weatherapiApi: "WeatherAPI.com API", getKey: "Get Key", units: "Units", celsius: "Celsius", fahrenheit: "Fahrenheit", tempType: "Temperature", actualTemp: "Actual Temperature", feelsLike: "Feels Like", city: "City", search: "Search", latitude: "Latitude", longitude: "Longitude", systemSettings: "System Settings", reboot: "Reboot", clearWifi: "Clear Wifi", firmwareUpdate: "Firmware Update", formatSsd: "Format SSD"
         },
         de: {
-            liveRefresh:"Aktualisierung", liveDisplay:"Live-Anzeige", wifiSignal:"WLAN-Signal", wifiExcellent:"Ausgezeichnet", wifiGood:"Gut", wifiFair:"Mittel", wifiWeak:"Schwach", wifiOffline:"Offline", uploadFirmware:"Firmware hochladen", otaHint:"Beliebige SmartClock_vX.XX.bin aus dem BIN-Ordner wählen (oder firmware.bin). Upload in 32KB-Blöcken über WLAN - ca. 5-10 Minuten. Einstellungen bleiben erhalten; die Uhr startet danach neu.", otaUpload:"Hochladen",
+            liveRefresh:"Aktualisierung", liveDisplay:"Live-Anzeige", wifiSignal:"WLAN-Signal", wifiExcellent:"Ausgezeichnet", wifiGood:"Gut", wifiFair:"Mittel", wifiWeak:"Schwach", wifiOffline:"Offline", uploadFirmware:"Firmware hochladen", otaHint:"Beliebige SmartClock_vX.XX.bin aus dem BIN-Ordner wählen (oder firmware.bin). Upload in 32KB-Blöcken über WLAN - ca. 5-10 Minuten. Einstellungen bleiben erhalten; die Uhr startet danach neu.", otaUpload:"Hochladen", weatherLive:"Live-Wetteraktivität", weatherWaiting:"Warten auf Wetter", weatherConnection:"Verbindung", weatherDownloaded:"Heruntergeladen", weatherAttempt:"API-Versuche", weatherLastUpdate:"Letzte Aktualisierung", refreshWeather:"Wetter jetzt aktualisieren", weatherNever:"Nie", weatherJustNow:"Gerade eben", weatherIdle:"Noch keine Wetterabfrage.", weatherQueued:"Wetteraktualisierung eingeplant", weatherValidating:"Anbieter, API-Schlüssel und Ort werden geprüft", weatherConnecting:"Verbindung zum Wetteranbieter", weatherDownloading:"Verbunden — Wetterdaten werden geladen", weatherParsing:"Wetterdaten werden geprüft", weatherUpdated:"Wetter erfolgreich aktualisiert", weatherError:"Wetteraktualisierung fehlgeschlagen", weatherDisabled:"Wetter ist deaktiviert",
             schedules: "Zeitpläne", scheduleSettings: "Zeitplan-Einstellungen", defaultScreen: "Standardbildschirm", addSchedule: "Hinzufügen", indoorOffset: "Innen-Temp Offset", language: "Sprache", mainTitle: "Carlson's Smart Clock", clockSettings: "Uhreinstellungen", screenSelection: "Bildschirmauswahl", panelType: "Panel-Typ (Neustart Erf.)", screen1: "Bildschirm 1 - Klassisch Digital", screen2: "Bildschirm 2 - Alt. Digital", screen3: "Bildschirm 3 - Analog", screen4: "Bildschirm 4 - Weltkarte", screen5: "Bildschirm 5 - Mondphase", screen6: "Bildschirm 6 - Farbverlauf", screen7: "Bildschirm 7 - Digitaluhr", screen8: "Bildschirm 8 - Farb-Analog", screen9: "Bildschirm 9 - Nixie-Röhre", fullYearAnimation: "Ganzjahresanimation", "24hour": "24-Stunden", icons: "Symbole", minMaxTemps: "Min/Max Temp.", ampm: "AM/PM", seconds: "Sekunden", time: "Zeit", day: "Tag", date: "Datum", month: "Monat", dateBg: "Datum-Hintergrund", divider: "Trennlinie", temperature: "Temperatur", humidity: "Luftfeuchtigkeit", clockFace: "Zifferblatt", option: "Option", colour: "Farbe", image: "Bild", clockOptions: "Uhrenoptionen", displayMode: "Anzeigemodus", "4numbers": "4 Zahlen", allNumbers: "Alle Zahlen", "4ticks": "4 Striche", allTicks: "Alle Striche", handFuzz: "Zeigerunschärfe", handLength: "Zeigerlänge", hourHand: "Stundenzeiger", minuteHand: "Minutenzeiger", secondHand: "Sekundenzeiger", topCalendar: "Oberer Kalender", bottomCalendar: "Unterer Kalender", timeShadow: "Zeitschatten", nightLights: "Nachtlichter", nightShadow: "Nachtschatten", "3dEffects": "3D-Effekte", speedDir: "Geschw. & Richtung", numStars: "Anzahl Sterne", sun: "Sonne", land: "Land", water: "Wasser", ice: "Eis", moonShadow: "Mondschatten", moonPercent: "Mond in Prozent", gradSpeed: "Farbverlaufgeschw.", boxSize: "Boxgröße", boxFeather: "Box-Weichzeichnung", glowIntensity: "Leuchtintensität", glow: "Leuchten", bgColor: "Hintergrundfarbe", showMarkers: "Markierungen", cycleSpeed: "Zyklusgeschw.", showDate: "Datum anzeigen", brightnessSettings: "Helligkeitseinstellungen", brightness: "Helligkeit", autoBrightness: "Auto-Helligkeit", darkRoomBrightness: "Dunkler Raum", brightRoomBrightness: "Heller Raum", currentBrightness: "Aktuelle Helligkeit:", setDarkRoom: "Dunkel einst.", setBrightRoom: "Hell einst.", weatherSettings: "Wettereinstellungen", timezone: "Zeitzonenauswahl", weatherService: "Wetterdienst", pirateApi: "Pirate Weather API", owmApi: "OpenWeatherMap API", weatherapiApi: "WeatherAPI.com API", getKey: "Schlüssel holen", units: "Einheiten", celsius: "Celsius", fahrenheit: "Fahrenheit", tempType: "Temperatur", actualTemp: "Tatsächliche Temp.", feelsLike: "Gefühlte Temp.", city: "Stadt", search: "Suchen", latitude: "Breitengrad", longitude: "Längengrad", systemSettings: "Systemeinstellungen", reboot: "Neustart", clearWifi: "WLAN löschen", firmwareUpdate: "Firmware-Update", formatSsd: "SSD formatieren"
         },
         sv: {
-            liveRefresh:"Uppdatering", liveDisplay:"Livevisning", wifiSignal:"Wi-Fi-signal", wifiExcellent:"Utmärkt", wifiGood:"Bra", wifiFair:"Måttlig", wifiWeak:"Svag", wifiOffline:"Offline", uploadFirmware:"Ladda upp firmware", otaHint:"Välj valfri SmartClock_vX.XX.bin från BIN-mappen (eller firmware.bin). Laddas upp i 32KB-block över WiFi - cirka 5-10 minuter. Inställningarna behålls; klockan startar om när den är klar.", otaUpload:"Ladda upp",
+            liveRefresh:"Uppdatering", liveDisplay:"Livevisning", wifiSignal:"Wi-Fi-signal", wifiExcellent:"Utmärkt", wifiGood:"Bra", wifiFair:"Måttlig", wifiWeak:"Svag", wifiOffline:"Offline", uploadFirmware:"Ladda upp firmware", otaHint:"Välj valfri SmartClock_vX.XX.bin från BIN-mappen (eller firmware.bin). Laddas upp i 32KB-block över WiFi - cirka 5-10 minuter. Inställningarna behålls; klockan startar om när den är klar.", otaUpload:"Ladda upp", weatherLive:"Live väderaktivitet", weatherWaiting:"Väntar på väder", weatherConnection:"Anslutning", weatherDownloaded:"Nedladdat", weatherAttempt:"API-försök", weatherLastUpdate:"Senaste uppdatering", refreshWeather:"Uppdatera väder nu", weatherNever:"Aldrig", weatherJustNow:"Just nu", weatherIdle:"Ingen väderhämtning har körts ännu.", weatherQueued:"Väderuppdatering köad", weatherValidating:"Kontrollerar leverantör, API-nyckel och plats", weatherConnecting:"Ansluter till väderleverantören", weatherDownloading:"Ansluten — hämtar väderdata", weatherParsing:"Kontrollerar hämtad väderdata", weatherUpdated:"Vädret uppdaterades", weatherError:"Väderuppdateringen misslyckades", weatherDisabled:"Väder är avstängt",
             schedules: "Tidsscheman", scheduleSettings: "Schemainställningar", defaultScreen: "Standardskärm", addSchedule: "Lägg till", indoorOffset: "Inomhus Temp Offset", language: "Språk", mainTitle: "Carlsons Smartklocka", clockSettings: "Klockinställningar", screenSelection: "Skärmval", panelType: "Paneltyp (Kräver omstart)", screen1: "Skärm 1 - Klassisk Digital", screen2: "Skärm 2 - Alt. Digital", screen3: "Skärm 3 - Analog", screen4: "Skärm 4 - Världskarta", screen5: "Skärm 5 - Månfas", screen6: "Skärm 6 - Gradientklocka", screen7: "Skärm 7 - Digitalt Armbandsur", screen8: "Skärm 8 - Färg-Analog", screen9: "Skärm 9 - Nixie-rör", fullYearAnimation: "Helårsanimation", "24hour": "24-timmars", icons: "Ikoner", minMaxTemps: "Min/Max Temp.", ampm: "AM/PM", seconds: "Sekunder", time: "Tid", day: "Dag", date: "Datum", month: "Månad", dateBg: "Datum-bakgrund", divider: "Avdelare", temperature: "Temperatur", humidity: "Luftfuktighet", clockFace: "Urtavla", option: "Alternativ", colour: "Färg", image: "Bild", clockOptions: "Klockalternativ", displayMode: "Visningsläge", "4numbers": "4 Siffror", allNumbers: "Alla Siffror", "4ticks": "4 Markeringar", allTicks: "Alla Markeringar", handFuzz: "Visaroskärpa", handLength: "Visarlängd", hourHand: "Timvisare", minuteHand: "Minutvisare", secondHand: "Sekundvisare", topCalendar: "Övre Kalender", bottomCalendar: "Nedre Kalender", timeShadow: "Tidsskugga", nightLights: "Nattljus", nightShadow: "Nattskugga", "3dEffects": "3D-effekter", speedDir: "Fart & Riktning", numStars: "Antal Stjärnor", sun: "Sol", land: "Land", water: "Vatten", ice: "Is", moonShadow: "Månskugga", moonPercent: "Månprocent", gradSpeed: "Gradienthastighet", boxSize: "Boxstorlek", boxFeather: "Box-ludd", glowIntensity: "Ljusintensitet", glow: "Ljus", bgColor: "Bakgrundsfärg", showMarkers: "Markörer", cycleSpeed: "Cykelfart", showDate: "Visa Datum", brightnessSettings: "Ljusstyrkeinställningar", brightness: "Ljusstyrka", autoBrightness: "Auto-ljusstyrka", darkRoomBrightness: "Mörkt Rum", brightRoomBrightness: "Ljust Rum", currentBrightness: "Nuvarande Ljusstyrka:", setDarkRoom: "Ställ in Mörkt", setBrightRoom: "Ställ in Ljust", weatherSettings: "Väderinställningar", timezone: "Tidszonsval", weatherService: "Vädertjänst", pirateApi: "Pirate Weather API", owmApi: "OpenWeatherMap API", weatherapiApi: "WeatherAPI.com API", getKey: "Hämta Nyckel", units: "Enheter", celsius: "Celsius", fahrenheit: "Fahrenheit", tempType: "Temperatur", actualTemp: "Faktisk Temp.", feelsLike: "Känns Som", city: "Stad", search: "Sök", latitude: "Latitud", longitude: "Longitud", systemSettings: "Systeminställningar", reboot: "Starta om", clearWifi: "Rensa WiFi", firmwareUpdate: "Firmware-uppdat.", formatSsd: "Formatera SSD"
         }
     };
@@ -751,6 +798,71 @@
         }
     }
 
+    const weatherStageNames=['idle','queued','validating','connecting','downloading','parsing','success','error','disabled'];
+    const weatherProviderNames={none:'None',pirateweather:'Pirate Weather',openweathermap:'OpenWeatherMap',weatherapi:'WeatherAPI.com'};
+    let lastWeatherData=null,lastWeatherStatusAt=0,weatherMonitorUntil=0;
+    function weatherText(key){
+        const lang=localStorage.getItem('language')||'en';
+        return (translations[lang]&&translations[lang][key])||translations.en[key]||key;
+    }
+    function formatWeatherBytes(bytes){
+        const value=Math.max(0,Number(bytes)||0);
+        if(value<1024)return Math.round(value)+' B';
+        return (value/1024).toFixed(value<10240?1:0)+' KB';
+    }
+    function updateWeatherDiagnostics(data){
+        if(!data)return;
+        lastWeatherData=data;
+        lastWeatherStatusAt=Date.now();
+        const stageNumber=Math.max(0,Math.min(8,Number(data.weather_stage)||0));
+        const state=weatherStageNames[stageNumber];
+        const provider=data.weather_provider||document.getElementById('weatherServiceSelect').value||'none';
+        const providerName=weatherProviderNames[provider]||provider;
+        const code=Number(data.weather_http_code)||0;
+        const bytes=Number(data.weather_bytes)||0;
+        const duration=Number(data.weather_duration_ms)||0;
+        const error=Number(data.weather_error)||0;
+        const successAge=Number(data.weather_success_age_s);
+        const monitor=document.getElementById('weatherMonitor');
+        if(!monitor)return;
+        monitor.dataset.state=state;
+        document.getElementById('weatherProviderBadge').textContent=providerName;
+        const titleKeys=['weatherWaiting','weatherQueued','weatherValidating','weatherConnecting','weatherDownloading','weatherParsing','weatherUpdated','weatherError','weatherDisabled'];
+        document.getElementById('weatherStateTitle').textContent=weatherText(titleKeys[stageNumber]);
+
+        let detail=weatherText('weatherIdle');
+        if(state==='queued') detail=`Request ${Number(data.weather_request)||0} is waiting for the weather task.`;
+        else if(state==='validating') detail=weatherText('weatherValidating')+'.';
+        else if(state==='connecting') detail=`Opening a connection to ${providerName}…`;
+        else if(state==='downloading') detail=`Connected to ${providerName}${code>0?' (HTTP '+code+')':''}. Downloading data…`;
+        else if(state==='parsing') detail=`${formatWeatherBytes(bytes)} received. Checking the response…`;
+        else if(state==='success') detail=`${formatWeatherBytes(bytes)} received from ${providerName} in ${(duration/1000).toFixed(1)} s${code>0?' (HTTP '+code+')':''}.`;
+        else if(state==='disabled') detail='Weather data has been cleared. Select a provider to start a new download.';
+        else if(state==='error') {
+            const errors={1:'The clock is not connected and running yet.',2:'Latitude and longitude are missing.',3:`The API key for ${providerName} is missing.`,4:'The selected weather provider is not recognised.',5:'The hourly API request limit has been reached.',6:'The provider returned an empty response.',7:'The downloaded data was not valid weather data.',8:(code===401||code===403)?`The provider rejected the API key (HTTP ${code}).`:(code===429?`The provider rate limit was reached (HTTP ${code}).`:(code>0?`The provider returned HTTP ${code}.`:'The clock could not connect to the provider.'))};
+            detail=errors[error]||'The weather update failed.';
+        }
+        document.getElementById('weatherStateDetail').textContent=detail;
+        let connection='—';
+        if(state==='disabled')connection='Off';
+        else if(state==='connecting')connection='Connecting…';
+        else if(code>0)connection='HTTP '+code;
+        else if(state==='queued'||state==='validating')connection='Waiting';
+        else if(state==='error')connection='No response';
+        document.getElementById('weatherConnectionValue').textContent=connection;
+        document.getElementById('weatherBytesValue').textContent=formatWeatherBytes(bytes);
+        document.getElementById('weatherAttemptValue').textContent=`${Number(data.weather_attempt)||0} / ${Number(data.weather_attempt_limit)||10}`;
+        document.getElementById('weatherLastUpdateValue').textContent=Number.isFinite(successAge)&&successAge>=0?(successAge<2?weatherText('weatherJustNow'):(successAge<60?Math.round(successAge)+' s ago':Math.round(successAge/60)+' min ago')):weatherText('weatherNever');
+        document.querySelector('.weather-refresh-row button').disabled=stageNumber>=1&&stageNumber<=5;
+        if(stageNumber>=1&&stageNumber<=5) weatherMonitorUntil=Date.now()+10000;
+    }
+    function startWeatherMonitor(provider){
+        weatherMonitorUntil=Date.now()+30000;
+        lastWeatherStatusAt=0;
+        if(provider) updateWeatherDiagnostics(Object.assign({weather_stage:1,weather_error:0,weather_http_code:0,weather_bytes:0,weather_attempt:0,weather_attempt_limit:10,weather_success_age_s:-1,weather_request:0},lastWeatherData||{},{weather_stage:1,weather_error:0,weather_http_code:0,weather_bytes:0,weather_provider:provider}));
+        setTimeout(()=>fetchCurrentBrightness(true),250);
+    }
+
     function setLanguage(lang) {
         if (!lang || !translations[lang]) lang = 'en';
         localStorage.setItem('language', lang);
@@ -764,6 +876,7 @@
         });
         document.getElementById('languageSelect').value = lang;
         if(lastWifiRssi!==null) updateWifiQuality(lastWifiRssi);
+        if(lastWeatherData) updateWeatherDiagnostics(lastWeatherData);
         if (!isLoadingSettings) deviceFetch(`/language?lang=${lang}`, {}, '/language');
     }
 
@@ -1120,7 +1233,13 @@
     }
 
     function showApiKeyField(service){document.getElementById("pirateWeatherRow").classList.toggle("hidden","pirateweather"!==service),document.getElementById("openWeatherMapRow").classList.toggle("hidden","openweathermap"!==service),document.getElementById("weatherApiRow").classList.toggle("hidden","weatherapi"!==service),document.getElementById("pirateWeatherLink").classList.toggle("hidden","pirateweather"!==service),document.getElementById("openWeatherMapLink").classList.toggle("hidden","openweathermap"!==service),document.getElementById("weatherApiLink").classList.toggle("hidden","weatherapi"!==service);const e="none"===service;["1","2","5"].forEach(t=>{const n=document.getElementById(`minmaxTempsSwitch${t}`);n&&(n.disabled=e)})}
-    function updateWeatherService(e){blockPolling(2000);if(isLoadingSettings)return;showApiKeyField(e),deviceFetch(`/weather_service?service=${e}`,{},'/weather_service')}
+    function updateWeatherService(e){
+        blockPolling(1000);
+        if(isLoadingSettings)return;
+        showApiKeyField(e);
+        startWeatherMonitor(e);
+        deviceFetch(`/weather_service?service=${e}`,{},'/weather_service').then(()=>startWeatherMonitor(e));
+    }
 
     // *** MODIFIED fetchSettings() FUNCTION ***
     function fetchSettings(){
@@ -1269,6 +1388,7 @@
 
         const e=document.getElementById("gpsLat").value,t=document.getElementById("gpsLon").value;
         if(e&&t) deviceFetch("/gps?lat="+encodeURIComponent(e)+"&lon="+encodeURIComponent(t),{},'/gps').then(() => {
+            startWeatherMonitor(document.getElementById('weatherServiceSelect').value);
             if(force) fetchSettings(); // Update settings after forced save
         });
     }
@@ -1298,39 +1418,65 @@
     function setDarkRoomLDR(){blockPolling(2000);if(isLoadingSettings)return;deviceFetch("/setDarkRoomLDR",{},'/setDarkRoomLDR').then(e=>e.text()).then(e=>{document.getElementById("darkRoomLux").textContent=e+" lux",fetchSettings()})}
     function setBrightRoomLDR(){blockPolling(2000);if(isLoadingSettings)return;deviceFetch("/setBrightRoomLDR",{},'/setBrightRoomLDR').then(e=>e.text()).then(e=>{document.getElementById("brightRoomLux").textContent=e+" lux",fetchSettings()})}
     function startFullYearAnimation(){blockPolling(2000);if(isLoadingSettings)return;deviceFetch("/fullYearAnimation",{},'/fullYearAnimation').then(e=>e.text())}
-    function updateWeather(){if(isLoadingSettings)return;deviceFetch("/weatherupdate",{},'/weatherupdate')}
+    function updateWeather(){if(isLoadingSettings)return;deviceFetch("/weatherupdate",{},'/weatherupdate').then(()=>startWeatherMonitor(document.getElementById('weatherServiceSelect').value))}
+    function refreshWeatherNow(){
+        if(isLoadingSettings)return;
+        const provider=document.getElementById('weatherServiceSelect').value;
+        startWeatherMonitor(provider);
+        deviceFetch("/weatherupdate",{},'/weatherupdate').then(()=>startWeatherMonitor(provider));
+    }
     function confirmAction(e){let t="Are you sure you want to "+e+"?";"formatSSD"==e&&(t="This will DELETE ALL SAVED SETTINGS. Are you sure?"),confirm(t)&&deviceFetch("/"+e,{},'/'+e).then(e=>e.text())}
     function confirmUpdate(){if(confirm("This will take the clock offline and open the firmware update portal. You will need to reconnect to your normal WiFi after updating. Continue?")){deviceFetch("/startUpdatePortal",{},'/startUpdatePortal')}}
 
     function bindQueuedControls(){
         const controls = [
-            ['timezoneSelect','/timezone?tz=','/timezone'],
-            ['pirateWeatherAPI','/pirateweatherapi?api=','/pirateweatherapi'],
-            ['openWeatherMapAPI','/openweathermapapi?api=','/openweathermapapi'],
-            ['weatherAPI_API','/weatherapi_api?api=','/weatherapi_api']
+            ['timezoneSelect','/timezone?tz=','/timezone',false],
+            ['pirateWeatherAPI','/pirateweatherapi?api=','/pirateweatherapi',true],
+            ['openWeatherMapAPI','/openweathermapapi?api=','/openweathermapapi',true],
+            ['weatherAPI_API','/weatherapi_api?api=','/weatherapi_api',true]
         ];
-        controls.forEach(([id,prefix,key])=>{
+        controls.forEach(([id,prefix,key,watchWeather])=>{
             const element=document.getElementById(id);
             if(!element)return;
             element.onchange=()=>{
                 blockPolling(2000);
-                deviceFetch(prefix+encodeURIComponent(element.value),{},key).then(fetchSettings);
+                deviceFetch(prefix+encodeURIComponent(element.value),{},key).then(()=>{
+                    if(watchWeather)startWeatherMonitor(document.getElementById('weatherServiceSelect').value);
+                    setTimeout(fetchSettings,2100);
+                });
             };
         });
     }
     let lastLiveStatusAt=0;
-    function applyLiveStatus(brightness,rssi){
+    function applyLiveStatus(brightness,rssi,weatherData){
         const brightnessNumber=Number(brightness);
         if(Number.isFinite(brightnessNumber)) {
             document.getElementById("currentBrightness").textContent=Math.round(brightnessNumber)+"%";
         }
         updateWifiQuality(rssi);
+        if(weatherData) updateWeatherDiagnostics(weatherData);
         lastLiveStatusAt=Date.now();
     }
     function applyLiveStatusHeaders(response){
         const brightness=response.headers.get('X-Current-Brightness');
         const rssi=response.headers.get('X-WiFi-RSSI');
-        if(brightness!==null && rssi!==null) applyLiveStatus(brightness,rssi);
+        const weatherStage=response.headers.get('X-Weather-Stage');
+        let weatherData=null;
+        if(weatherStage!==null) weatherData={
+            weather_stage:weatherStage,
+            weather_error:response.headers.get('X-Weather-Error'),
+            weather_http_code:response.headers.get('X-Weather-Code'),
+            weather_bytes:response.headers.get('X-Weather-Bytes'),
+            weather_attempt:response.headers.get('X-Weather-Attempt'),
+            weather_attempt_limit:10,
+            weather_duration_ms:response.headers.get('X-Weather-Duration'),
+            weather_success_age_s:response.headers.get('X-Weather-Success-Age'),
+            weather_stage_age_ms:response.headers.get('X-Weather-Stage-Age'),
+            weather_request:response.headers.get('X-Weather-Request'),
+            weather_provider:response.headers.get('X-Weather-Provider')
+        };
+        if(brightness!==null && rssi!==null) applyLiveStatus(brightness,rssi,weatherData);
+        else if(weatherData) updateWeatherDiagnostics(weatherData);
     }
     function fetchCurrentBrightness(priority=false){
         if(brightnessRequestInFlight || pollingPaused || document.hidden) return Promise.resolve();
@@ -1342,7 +1488,7 @@
         return fetchWithTimeout("/status", {}, priority?3000:5000, priority?'status':'passive')
             .then(e => { if(!e.ok) throw new Error('HTTP '+e.status); return e.json(); })
             .then(e => {
-                applyLiveStatus(e.current_brightness,e.rssi);
+                applyLiveStatus(e.current_brightness,e.rssi,e);
                 applySafeMode(e.safe_mode);
             })
             .catch(e => { if(e.name !== 'AbortError') console.debug('Brightness poll skipped:',e); })
@@ -1523,11 +1669,13 @@
         // fetchAndDrawScreenshot() additionally refuses to start if the
         // previous request is still in flight.
         initRefresh();
-        // Screenshots also carry brightness/RSSI headers. Only use /status as
-        // a priority fallback when no fresh live data has arrived for 5s.
+        // Screenshots carry brightness, RSSI and weather-state headers. While
+        // a weather request is active, fill any gap with a 1s /status poll;
+        // otherwise only poll when all live data has gone stale for 5s.
         autoBrightnessInterval=setInterval(()=>{
-            if(Date.now()-lastLiveStatusAt>5000) fetchCurrentBrightness(true);
-        },2000);
+            const now=Date.now();
+            if((now<weatherMonitorUntil&&now-lastWeatherStatusAt>850)||now-lastLiveStatusAt>5000) fetchCurrentBrightness(true);
+        },1000);
         setInterval(updateWeather,3e5);
         // Settings are low-priority background state. The shared in-flight
         // guard prevents this from colliding with preview/brightness traffic.

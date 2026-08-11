@@ -10,7 +10,7 @@
 
 // Single source of truth for the version. Auto-incremented by +0.01 on every
 // successful build by scripts/merge_firmware.py; see CHANGELOG.md for history.
-float ver = 3.63;
+float ver = 3.64;
 
 
 /* #################### To add a new screen (example screen6) ####################
@@ -572,10 +572,10 @@ int prevScreen = 1;  // Tracks the current screen (1, 2, or 3)
 
 // Rate limiting for API calls
 unsigned long lastApiCallTime = 0;    // Timestamp of last API call
-int apiCallCount = 0;                 // Number of API calls in the current hour
+volatile int apiCallCount = 0;        // Number of API calls in the current hour
 const int MAX_API_CALLS = 10;         // Maximum calls per hour
 const long HOUR_MS = 3600000;         // 1 hour in milliseconds
-int lastHttpCode = 0;  // Track last HTTP response code from fetchWeather()
+volatile int lastHttpCode = 0;  // Track last HTTP response code from fetchWeather()
 
 // Define bitmap list for Screen3
   enum Screen3BitmapType {
@@ -640,6 +640,52 @@ static unsigned long stateStartTime = 0;
 static unsigned long stateNOWIFITime = 0;
 volatile bool needWeatherUpdate = false; // Already volatile if added earlier
 volatile uint32_t weatherConfigRevision = 0; // Invalidates an in-flight request when its provider/key changes
+
+enum WeatherFetchStage : uint8_t {
+  WEATHER_IDLE,
+  WEATHER_QUEUED,
+  WEATHER_VALIDATING,
+  WEATHER_CONNECTING,
+  WEATHER_DOWNLOADING,
+  WEATHER_PARSING,
+  WEATHER_SUCCESS,
+  WEATHER_ERROR,
+  WEATHER_DISABLED
+};
+
+enum WeatherErrorDetail : uint8_t {
+  WEATHER_ERROR_NONE,
+  WEATHER_ERROR_NOT_RUNNING,
+  WEATHER_ERROR_MISSING_COORDINATES,
+  WEATHER_ERROR_MISSING_API_KEY,
+  WEATHER_ERROR_UNKNOWN_PROVIDER,
+  WEATHER_ERROR_RATE_LIMIT,
+  WEATHER_ERROR_EMPTY_RESPONSE,
+  WEATHER_ERROR_INVALID_DATA,
+  WEATHER_ERROR_NETWORK
+};
+
+volatile WeatherFetchStage weatherFetchStage = WEATHER_IDLE;
+volatile WeatherErrorDetail weatherErrorDetail = WEATHER_ERROR_NONE;
+volatile uint32_t weatherRequestGeneration = 0;
+volatile uint32_t weatherStageChangedAt = 0;
+volatile uint32_t weatherLastAttemptAt = 0;
+volatile uint32_t weatherLastSuccessAt = 0;
+volatile uint32_t weatherLastDurationMs = 0;
+volatile uint32_t weatherLastBytes = 0;
+
+void setWeatherFetchStage(WeatherFetchStage stage, WeatherErrorDetail error = WEATHER_ERROR_NONE) {
+  weatherFetchStage = stage;
+  weatherErrorDetail = error;
+  weatherStageChangedAt = millis();
+}
+
+void queueWeatherUpdate() {
+  ++weatherRequestGeneration;
+  needWeatherUpdate = true;
+  setWeatherFetchStage(WEATHER_QUEUED);
+}
+
 SemaphoreHandle_t settingsMutex = NULL; // Guards /settings.json + the settings globals serialized into it
 
 // ---------------------------------------------------------------------------
@@ -1529,7 +1575,8 @@ void handleSettings() {
 }
 
 void handleStatus() {
-  StaticJsonDocument<512> doc;
+  StaticJsonDocument<1024> doc;
+  const uint32_t now = millis();
   doc["safe_mode"] = safeModeActive;
   doc["current_brightness"] = map(currentBrightness, 0, 255, 0, 100);
   doc["temperature"] = currentTemp;
@@ -1540,7 +1587,18 @@ void handleStatus() {
   doc["max_temp"] = todayMaxTemp;
   doc["weather_icon"] = weatherIcon;
   doc["rssi"] = (WiFi.status() == WL_CONNECTED) ? WiFi.RSSI() : 0;
-  char response[512];
+  doc["weather_stage"] = (uint8_t)weatherFetchStage;
+  doc["weather_error"] = (uint8_t)weatherErrorDetail;
+  doc["weather_http_code"] = lastHttpCode;
+  doc["weather_bytes"] = weatherLastBytes;
+  doc["weather_attempt"] = apiCallCount;
+  doc["weather_attempt_limit"] = MAX_API_CALLS;
+  doc["weather_duration_ms"] = weatherLastDurationMs;
+  doc["weather_stage_age_ms"] = now - weatherStageChangedAt;
+  doc["weather_success_age_s"] = weatherLastSuccessAt ? (long)((now - weatherLastSuccessAt) / 1000) : -1;
+  doc["weather_request"] = weatherRequestGeneration;
+  doc["weather_provider"] = selectedWeatherService;
+  char response[1024];
   const size_t length = serializeJson(doc, response, sizeof(response));
   server.sendHeader("Cache-Control", "no-store");
   server.send(200, "application/json", String(response, length));
@@ -1552,7 +1610,7 @@ void handleWeatherService() {
     ++weatherConfigRevision;
     Serial.println("Weather Service set to: " + selectedWeatherService);
     apiCallCount = 0; // RESET API CALL COUNT
-    needWeatherUpdate = true; // was: fetchWeather(); — that blocked the whole web server for up to 15s
+    queueWeatherUpdate();
     saveSettings();
     server.send(200, "text/plain", "OK");
   } else {
@@ -1567,7 +1625,7 @@ void handlePirateWeatherAPI() {
     ++weatherConfigRevision;
     Serial.println("Pirate Weather API Key updated.");
     apiCallCount = 0; // RESET API CALL COUNT
-    needWeatherUpdate = true; // was: fetchWeather() — blocked the whole web server for up to 15s
+    queueWeatherUpdate();
     saveSettings();
     server.send(200, "text/plain", "API Key OK: " + apiKey);
   } else {
@@ -1581,7 +1639,7 @@ void handleOpenWeatherMapAPI() {
     ++weatherConfigRevision;
     Serial.println("OpenWeatherMap API Key updated.");
     apiCallCount = 0; // RESET API CALL COUNT
-    needWeatherUpdate = true; // was: fetchWeather() — blocked the whole web server for up to 15s
+    queueWeatherUpdate();
     saveSettings();
     server.send(200, "text/plain", "OK");
   } else {
@@ -1595,7 +1653,7 @@ void handleWeatherAPI_API() {
     ++weatherConfigRevision;
     Serial.println("WeatherAPI.com API Key updated.");
     apiCallCount = 0; // RESET API CALL COUNT
-    needWeatherUpdate = true; // was: fetchWeather() — blocked the whole web server for up to 15s
+    queueWeatherUpdate();
     saveSettings();
     server.send(200, "text/plain", "OK");
   } else {
@@ -1989,7 +2047,7 @@ void handleGPS() {
     Serial.print(", Longitude: ");
     Serial.println(gpsLon);
     apiCallCount = 0; // RESET API CALL COUNT
-    needWeatherUpdate = true; // Let the weather task perform HTTPS after this response
+    queueWeatherUpdate(); // Let the weather task perform HTTPS after this response
     saveSettings();
     server.send(200, "text/plain", "GPS OK - Lat: " + latStr + ", Lon: " + lonStr);
   } else {
@@ -2042,6 +2100,10 @@ float mapWeatherApiMoonPhase(String phase) {
 void fetchWeather() {
   const uint32_t requestConfigRevision = weatherConfigRevision;
   const String requestWeatherService = selectedWeatherService;
+  const uint32_t attemptStartedAt = millis();
+  weatherLastAttemptAt = attemptStartedAt;
+  weatherLastBytes = 0;
+  setWeatherFetchStage(WEATHER_VALIDATING);
 
   // === Handle "None" service option =========================
   if (requestWeatherService == "none") {
@@ -2062,6 +2124,9 @@ void fetchWeather() {
     moonPercentage = 25.0f; // Set the default percentage to match
     saveSettings(); // Save the cleared values (re-takes the same recursive mutex internally — safe)
     if (settingsMutex) xSemaphoreGiveRecursive(settingsMutex);
+    lastHttpCode = 0;
+    weatherLastDurationMs = millis() - attemptStartedAt;
+    setWeatherFetchStage(WEATHER_DISABLED);
     return; // Exit the function immediately
   }
   
@@ -2075,11 +2140,17 @@ void fetchWeather() {
   // request, then reported a count that climbed forever (15/10, 21/10, ...).
   if (currentState != STATE_RUNNING) {
     Serial.println("Skipping fetchWeather() - System not in STATE_RUNNING.");
-    lastHttpCode = -99; return;
+    lastHttpCode = -99;
+    weatherLastDurationMs = millis() - attemptStartedAt;
+    setWeatherFetchStage(WEATHER_ERROR, WEATHER_ERROR_NOT_RUNNING);
+    return;
   }
   if (gpsLat == 0.0 || gpsLon == 0.0) {
     Serial.println("Missing GPS coordinates.");
-    lastHttpCode = -1; return;
+    lastHttpCode = -1;
+    weatherLastDurationMs = millis() - attemptStartedAt;
+    setWeatherFetchStage(WEATHER_ERROR, WEATHER_ERROR_MISSING_COORDINATES);
+    return;
   }
 
   HTTPClient http;
@@ -2090,23 +2161,25 @@ void fetchWeather() {
   // ===================================================================
 
   if (requestWeatherService == "pirateweather") {
-    if (pirateWeatherAPI.isEmpty()) { Serial.println("Missing PirateWeather API key."); lastHttpCode = -1; return; }
+    if (pirateWeatherAPI.isEmpty()) { Serial.println("Missing PirateWeather API key."); lastHttpCode = -1; weatherLastDurationMs = millis() - attemptStartedAt; setWeatherFetchStage(WEATHER_ERROR, WEATHER_ERROR_MISSING_API_KEY); return; }
     String apiUnits = "si"; // ALWAYS "si" for Celsius
     url = "https://api.pirateweather.net/forecast/" + pirateWeatherAPI + "/" + String(gpsLat, 6) + "," + String(gpsLon, 6) + "?units=" + apiUnits;
   } 
   else if (requestWeatherService == "openweathermap") {
-    if (openWeatherMapAPI.isEmpty()) { Serial.println("Missing OpenWeatherMap API key."); lastHttpCode = -1; return; }
+    if (openWeatherMapAPI.isEmpty()) { Serial.println("Missing OpenWeatherMap API key."); lastHttpCode = -1; weatherLastDurationMs = millis() - attemptStartedAt; setWeatherFetchStage(WEATHER_ERROR, WEATHER_ERROR_MISSING_API_KEY); return; }
     String apiUnits = "metric"; // ALWAYS "metric" for Celsius
     url = "https://api.openweathermap.org/data/3.0/onecall?lat=" + String(gpsLat, 6) + "&lon=" + String(gpsLon, 6) + "&appid=" + openWeatherMapAPI + "&units=" + apiUnits + "&exclude=minutely,alerts";
   } 
   else if (requestWeatherService == "weatherapi") {
-    if (weatherAPI_API.isEmpty()) { Serial.println("Missing WeatherAPI.com API key."); lastHttpCode = -1; return; }
+    if (weatherAPI_API.isEmpty()) { Serial.println("Missing WeatherAPI.com API key."); lastHttpCode = -1; weatherLastDurationMs = millis() - attemptStartedAt; setWeatherFetchStage(WEATHER_ERROR, WEATHER_ERROR_MISSING_API_KEY); return; }
     // WeatherAPI provides both C and F, so no unit parameter is needed in the URL. We will parse the Celsius fields.
     url = "http://api.weatherapi.com/v1/forecast.json?key=" + weatherAPI_API + "&q=" + String(gpsLat, 6) + "," + String(gpsLon, 6) + "&days=1&aqi=no&alerts=no";
   }
   else {
     Serial.println("Unknown weather service selected: " + requestWeatherService);
     lastHttpCode = -1;
+    weatherLastDurationMs = millis() - attemptStartedAt;
+    setWeatherFetchStage(WEATHER_ERROR, WEATHER_ERROR_UNKNOWN_PROVIDER);
     return;
   }
 
@@ -2128,6 +2201,8 @@ void fetchWeather() {
       lastLimitPrint = currentTime;
     }
     lastHttpCode = -2;
+    weatherLastDurationMs = millis() - attemptStartedAt;
+    setWeatherFetchStage(WEATHER_ERROR, WEATHER_ERROR_RATE_LIMIT);
     return;
   }
   apiCallCount++;
@@ -2146,6 +2221,7 @@ void fetchWeather() {
   // empty on a 200 here, which showed up as "JSON parsing failed: EmptyInput"
   // and then burned API quota retrying a request that had actually succeeded.
   http.useHTTP10(true);
+  setWeatherFetchStage(WEATHER_CONNECTING);
   int httpCode = http.GET();
   lastHttpCode = httpCode;
   Serial.println(requestWeatherService + " API Response Code: " + String(httpCode));
@@ -2156,6 +2232,7 @@ void fetchWeather() {
     Serial.println("Discarding weather response for superseded configuration.");
     http.end();
     lastHttpCode = 0;
+    setWeatherFetchStage(WEATHER_QUEUED);
     return;
   }
 
@@ -2168,7 +2245,9 @@ void fetchWeather() {
   if (settingsMutex) xSemaphoreTakeRecursive(settingsMutex, pdMS_TO_TICKS(5000));
 
   if (httpCode == HTTP_CODE_OK) {
+    setWeatherFetchStage(WEATHER_DOWNLOADING);
     String payload = http.getString();
+    weatherLastBytes = payload.length();
     if (payload.length() == 0) {
       // 200 but nothing arrived - the body was lost in transit. Report it as a
       // transport failure rather than letting it look like malformed JSON.
@@ -2176,8 +2255,19 @@ void fetchWeather() {
       lastHttpCode = -3;
       http.end();
       if (settingsMutex) xSemaphoreGiveRecursive(settingsMutex);
+      weatherLastDurationMs = millis() - attemptStartedAt;
+      setWeatherFetchStage(WEATHER_ERROR, WEATHER_ERROR_EMPTY_RESPONSE);
       return;
     }
+    if (requestConfigRevision != weatherConfigRevision) {
+      Serial.println("Discarding downloaded weather data for superseded configuration.");
+      http.end();
+      if (settingsMutex) xSemaphoreGiveRecursive(settingsMutex);
+      lastHttpCode = 0;
+      setWeatherFetchStage(WEATHER_QUEUED);
+      return;
+    }
+    setWeatherFetchStage(WEATHER_PARSING);
     DynamicJsonDocument doc(2048);
     DeserializationError error;
 
@@ -2260,6 +2350,7 @@ void fetchWeather() {
     if (error) {
       Serial.println("JSON parsing failed: " + String(error.c_str()));
       lastHttpCode = -3;
+      setWeatherFetchStage(WEATHER_ERROR, WEATHER_ERROR_INVALID_DATA);
     } else {
       Serial.printf("JSON parsed successfully for %s. Free heap: %u\n", requestWeatherService.c_str(), ESP.getFreeHeap());
       noteNetworkSuccess(); // proves outbound + inbound are working
@@ -2279,13 +2370,17 @@ void fetchWeather() {
       Serial.println("Fetched Min/Max Temp (Celsius): " + String(todayMinTemp) + "°C / " + String(todayMaxTemp) + "°C");
       Serial.println("Fetched Weather Icon: " + weatherIcon);
       Serial.println("Fetched Moon Phase: " + String(moonPhase, 2) + " (" + String(moonPercentage, 1) + "%)");
+      weatherLastSuccessAt = millis();
+      setWeatherFetchStage(WEATHER_SUCCESS);
     }
   } else {
     Serial.println("HTTP Request failed, error: " + String(httpCode));
+    setWeatherFetchStage(WEATHER_ERROR, WEATHER_ERROR_NETWORK);
   }
 
   http.end();
   delay(10);
+  weatherLastDurationMs = millis() - attemptStartedAt;
   saveSettings(); // re-takes the same recursive mutex internally — safe, no deadlock
   if (settingsMutex) xSemaphoreGiveRecursive(settingsMutex);
 }
@@ -3298,6 +3393,7 @@ void handleFormatSSD() {
 void fetchWeatherTask(void *pvParameters) {
   static unsigned long lastWeatherSyncTime = 0;
   static unsigned long lastRetryTime = 0;
+  static uint32_t handledWeatherRequest = 0;
   const unsigned long weatherSyncInterval = 420000; // 7 minutes = 420000
   const unsigned long retryInterval = 30000;        // 30 seconds for retries
 
@@ -3309,10 +3405,12 @@ void fetchWeatherTask(void *pvParameters) {
       // User changes always win over a scheduled sync or retry. Clear the flag
       // before starting so a second change made during the HTTP request is not
       // accidentally erased when that request returns.
-      if (needWeatherUpdate) {
+      if (needWeatherUpdate || handledWeatherRequest != weatherRequestGeneration) {
+         const uint32_t requestBeingHandled = weatherRequestGeneration;
          needWeatherUpdate = false;
          Serial.println("Immediate weather update requested from Core 1...");
          fetchWeather();
+         handledWeatherRequest = requestBeingHandled;
          lastWeatherSyncTime = currentTime;
          lastRetryTime = currentTime;
       }
@@ -3402,6 +3500,18 @@ void handleScreenshot() {
   const String etag = "\"frame-" + String(revision) + "\"";
   const int brightnessPercent = map(currentBrightness, 0, 255, 0, 100);
   const long rssi = (WiFi.status() == WL_CONNECTED) ? (long)WiFi.RSSI() : 0;
+  const uint32_t now = millis();
+  const long successAge = weatherLastSuccessAt ? (long)((now - weatherLastSuccessAt) / 1000) : -1;
+  server.sendHeader("X-Weather-Stage", String((uint8_t)weatherFetchStage));
+  server.sendHeader("X-Weather-Error", String((uint8_t)weatherErrorDetail));
+  server.sendHeader("X-Weather-Code", String(lastHttpCode));
+  server.sendHeader("X-Weather-Bytes", String(weatherLastBytes));
+  server.sendHeader("X-Weather-Attempt", String(apiCallCount));
+  server.sendHeader("X-Weather-Duration", String(weatherLastDurationMs));
+  server.sendHeader("X-Weather-Success-Age", String(successAge));
+  server.sendHeader("X-Weather-Stage-Age", String(now - weatherStageChangedAt));
+  server.sendHeader("X-Weather-Request", String(weatherRequestGeneration));
+  server.sendHeader("X-Weather-Provider", selectedWeatherService);
   if (server.hasHeader("If-None-Match") && server.header("If-None-Match") == etag) {
     server.sendHeader("ETag", etag);
     server.sendHeader("X-Frame-Revision", String(revision));
@@ -3767,7 +3877,7 @@ void setup() {
   server.on("/schedulesenabled", handleSchedulesEnabled);
   server.on("/updateschedules", HTTP_POST, handleUpdateSchedules);
   server.on("/weather", []() { server.send(200, "text/plain", "Weather Updated: Temp=" + currentTemp + ", Humidity=" + currentHumidity + ", Conditions=" + currentConditions + ", Daily Min/Max=" + dailyMinMaxTemps + ", Icon=" + weatherIcon); });
-  server.on("/weatherupdate", [](){ if (currentState == STATE_RUNNING) { needWeatherUpdate = true; server.send(200, "text/plain", "Weather update requested."); } else { server.send(503, "text/plain", "Cannot update weather: Not connected or not in running state."); } });
+  server.on("/weatherupdate", [](){ if (currentState == STATE_RUNNING) { queueWeatherUpdate(); server.send(200, "text/plain", "Weather update requested."); } else { setWeatherFetchStage(WEATHER_ERROR, WEATHER_ERROR_NOT_RUNNING); server.send(503, "text/plain", "Cannot update weather: Not connected or not in running state."); } });
   server.on("/reboot", []() {
     server.send(200, "text/plain", "Rebooting...");
     if (settingsChanged) persistSettingsNow();
@@ -4318,7 +4428,7 @@ switch (currentState) {
           currentState = STATE_RUNNING;
           stateStartTime = millis();
           syncESPtoRTC();          
-          needWeatherUpdate = true; 
+          queueWeatherUpdate();
           ntpSyncAttemptedThisConnection = false; 
       } else if (ntpSyncAttemptedThisConnection && (millis() - lastNTPSync > 30000)) { 
           Serial.println("NTP sync timeout. Transitioning to STATE_RUNNING (using RTC).");

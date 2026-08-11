@@ -10,6 +10,18 @@ recorded — only version numbers and short notes.
 > some numbers below are just iteration builds with no shipped change of their
 > own. Entries are written against the version that first carried the change.
 
+## 3.63 - 2026-08-11
+- Added a live diagnostics panel to Weather Settings showing the provider and
+  each real fetch stage: queued, validation, connection, download, parsing,
+  success, error or disabled. It also reports HTTP status, downloaded bytes,
+  API-attempt usage, last-success age and an actionable error explanation.
+- Added a "Refresh weather now" button and temporary one-second monitoring
+  while a fetch is active; normal LCD preview responses carry the same weather
+  diagnostics so the feature adds no continuous polling load.
+- Replaced the one-bit weather-update trigger with a generation counter so a
+  provider/API-key/location change made during another request cannot be lost.
+  Switching from None back to a provider now always queues a fresh download.
+
 ## 3.61 - 2026-08-11
 - Fixed live Wi-Fi strength and current auto-brightness staying blank/stale when
   fast LCD preview polling repeatedly won the ESP32's single HTTP request slot.
