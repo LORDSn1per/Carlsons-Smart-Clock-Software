@@ -10,6 +10,34 @@ recorded — only version numbers and short notes.
 > some numbers below are just iteration builds with no shipped change of their
 > own. Entries are written against the version that first carried the change.
 
+## 3.59 - 2026-08-11
+- Added an active-page heartbeat watchdog for the ESP32/Orbi failure mode where
+  `WL_CONNECTED` remains true and outbound traffic works but inbound LAN packets
+  are black-holed. After three missed 15-second settings heartbeats, the clock
+  recycles Wi-Fi and rebuilds its network services.
+- Recovery is single-shot until a browser request is received again, preventing
+  a closed or sleeping browser tab from causing repeated reconnects.
+
+## 3.58 - 2026-08-11
+- Fixed the HTTP server remaining permanently closed after a Wi-Fi disconnect.
+  Web handling now pauses while offline and the listening socket, Arduino OTA,
+  mDNS and NetBIOS services are rebuilt when the station reconnects.
+- Network reconnection no longer creates duplicate web/weather FreeRTOS tasks;
+  persistent task handles ensure their stack allocations happen only once.
+
+## 3.57 - 2026-08-11
+- Fixed the page becoming permanently unresponsive when a background settings
+  request was slow or interrupted. Network polling no longer holds the global
+  control-loading guard while waiting for the ESP32.
+- Added one browser-side transport coordinator for settings, status, preview
+  and control requests. User changes cancel lower-priority polling, responses
+  are fully received before the next request starts, and stale settings can no
+  longer overwrite a newer control change.
+- Added automatic recovery after a stranded request and after Wi-Fi/browser
+  reconnection, while preserving the polling lock used during firmware upload.
+- Routed the timezone and all weather API-key controls through the same bounded
+  request queue instead of allowing them to collide with live-preview traffic.
+
 ## 3.56 - 2026-08-11
 - Fixed screen 3's Clock Face and Hour Hand colour controls sharing the same
   `time_col` value. The face now has its own persisted `clock_face_col`, API

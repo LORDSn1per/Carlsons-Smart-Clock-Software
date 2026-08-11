@@ -566,11 +566,11 @@
 
 <div class="control-group" id="weatherCard">
     <label class="card-label" data-translate-key="weatherSettings">Weather Settings</label>
-    <div class="control-row"><label data-translate-key="timezone">Timezone Selection</label><select id="timezoneSelect" onchange="blockPolling(1000); fetch('/timezone?tz='+this.value).then(() => fetchSettings())"><option value="UTC0">London: 0 GMT</option><option value="HST10HDT,M3.2.0,M11.1.0">Honolulu: -10 GMT</option><option value="AKST9AKDT,M3.2.0,M11.1.0">Anchorage: -9 GMT</option><option value="PST8PDT,M3.2.0,M11.1.0">Los Angeles: -8 GMT</option><option value="MST7MDT,M3.2.0,M11.1.0">Denver: -7 GMT</option><option value="CST6CDT,M3.2.0,M11.1.0">Chicago: -6 GMT</option><option value="EST5EDT,M3.2.0,M11.1.0">New York: -5 GMT</option><option value="<-04>4">Santiago: -4 GMT</option><option value="<-03>3">Buenos Aires: -3 GMT</option><option value="WAT-1">Lagos: +1 GMT</option><option value="CET-1CEST,M3.5.0,M10.5.0/3">Paris: +1 GMT</option><option value="EET-2EEST,M3.5.0/0,M10.5.0/0">Athens: +2 GMT</option><option value="EAT-3">Nairobi: +3 GMT</option><option value="<-05>5">New Delhi: +5 GMT</option><option value="<-06>6">Dhaka: +6 GMT</option><option value="<-07>7">Bangkok: +7 GMT</option><option value="<-08>8">Shanghai: +8 GMT</option><option value="AWST-8">Perth: +8 GMT</option><option value="<-09>9">Tokyo: +9 GMT</option><option value="ACST-9:30ACDT,M10.1.0,M4.1.0/3">Adelaide: +9:30 GMT</option><option value="AEST-10">Brisbane: +10 GMT</option><option value="ACST-9:30">Darwin: +9:30 GMT</option><option value="AEST-10AEDT,M10.1.0,M4.1.0/3">Sydney: +10 GMT</option><option value="NZST-12NZDT,M9.5.0,M4.1.0/3">Auckland: +12 GMT</option><option value="NZST-12NZDT,M9.5.0,M4.1.0/3">Wellington: +12 GMT</option><option value="NZST-12NZDT,M9.5.0,M4.1.0/3">Christchurch: +12 GMT</option></select></div>
+    <div class="control-row"><label data-translate-key="timezone">Timezone Selection</label><select id="timezoneSelect" onchange="blockPolling(1000); deviceFetch('/timezone?tz='+encodeURIComponent(this.value),{},'/timezone').then(() => fetchSettings())"><option value="UTC0">London: 0 GMT</option><option value="HST10HDT,M3.2.0,M11.1.0">Honolulu: -10 GMT</option><option value="AKST9AKDT,M3.2.0,M11.1.0">Anchorage: -9 GMT</option><option value="PST8PDT,M3.2.0,M11.1.0">Los Angeles: -8 GMT</option><option value="MST7MDT,M3.2.0,M11.1.0">Denver: -7 GMT</option><option value="CST6CDT,M3.2.0,M11.1.0">Chicago: -6 GMT</option><option value="EST5EDT,M3.2.0,M11.1.0">New York: -5 GMT</option><option value="<-04>4">Santiago: -4 GMT</option><option value="<-03>3">Buenos Aires: -3 GMT</option><option value="WAT-1">Lagos: +1 GMT</option><option value="CET-1CEST,M3.5.0,M10.5.0/3">Paris: +1 GMT</option><option value="EET-2EEST,M3.5.0/0,M10.5.0/0">Athens: +2 GMT</option><option value="EAT-3">Nairobi: +3 GMT</option><option value="<-05>5">New Delhi: +5 GMT</option><option value="<-06>6">Dhaka: +6 GMT</option><option value="<-07>7">Bangkok: +7 GMT</option><option value="<-08>8">Shanghai: +8 GMT</option><option value="AWST-8">Perth: +8 GMT</option><option value="<-09>9">Tokyo: +9 GMT</option><option value="ACST-9:30ACDT,M10.1.0,M4.1.0/3">Adelaide: +9:30 GMT</option><option value="AEST-10">Brisbane: +10 GMT</option><option value="ACST-9:30">Darwin: +9:30 GMT</option><option value="AEST-10AEDT,M10.1.0,M4.1.0/3">Sydney: +10 GMT</option><option value="NZST-12NZDT,M9.5.0,M4.1.0/3">Auckland: +12 GMT</option><option value="NZST-12NZDT,M9.5.0,M4.1.0/3">Wellington: +12 GMT</option><option value="NZST-12NZDT,M9.5.0,M4.1.0/3">Christchurch: +12 GMT</option></select></div>
     <div class="control-row"><label data-translate-key="weatherService">Weather Service</label><select id="weatherServiceSelect" onchange="updateWeatherService(this.value)"><option value="none">None</option><option value="pirateweather">Pirateweather</option><option value="openweathermap">OpenWeatherMap</option><option value="weatherapi">WeatherAPI.com</option></select></div>
-    <div id="pirateWeatherRow" class="control-row api-key-row"><label data-translate-key="pirateApi">Pirate Weather API</label><input type="text" id="pirateWeatherAPI" onchange="blockPolling(2000); fetch('/pirateweatherapi?api='+encodeURIComponent(this.value)).then(() => fetchSettings())"><a id="pirateWeatherLink" href="https://pirateweather.net/" target="_blank" class="provider-link hidden" data-translate-key="getKey">Get Key</a></div>
-    <div id="openWeatherMapRow" class="control-row api-key-row hidden"><label data-translate-key="owmApi">OpenWeatherMap API</label><input type="text" id="openWeatherMapAPI" onchange="blockPolling(2000); fetch('/openweathermapapi?api='+encodeURIComponent(this.value)).then(() => fetchSettings())"><a id="openWeatherMapLink" href="https://openweathermap.org/api" target="_blank" class="provider-link hidden" data-translate-key="getKey">Get Key</a></div>
-    <div id="weatherApiRow" class="control-row api-key-row hidden"><label data-translate-key="weatherapiApi">WeatherAPI.com API</label><input type="text" id="weatherAPI_API" onchange="blockPolling(2000); fetch('/weatherapi_api?api='+encodeURIComponent(this.value)).then(() => fetchSettings())"><a id="weatherApiLink" href="https://www.weatherapi.com/" target="_blank" class="provider-link hidden" data-translate-key="getKey">Get Key</a></div>
+    <div id="pirateWeatherRow" class="control-row api-key-row"><label data-translate-key="pirateApi">Pirate Weather API</label><input type="text" id="pirateWeatherAPI" onchange="blockPolling(2000); deviceFetch('/pirateweatherapi?api='+encodeURIComponent(this.value),{},'/pirateweatherapi').then(() => fetchSettings())"><a id="pirateWeatherLink" href="https://pirateweather.net/" target="_blank" class="provider-link hidden" data-translate-key="getKey">Get Key</a></div>
+    <div id="openWeatherMapRow" class="control-row api-key-row hidden"><label data-translate-key="owmApi">OpenWeatherMap API</label><input type="text" id="openWeatherMapAPI" onchange="blockPolling(2000); deviceFetch('/openweathermapapi?api='+encodeURIComponent(this.value),{},'/openweathermapapi').then(() => fetchSettings())"><a id="openWeatherMapLink" href="https://openweathermap.org/api" target="_blank" class="provider-link hidden" data-translate-key="getKey">Get Key</a></div>
+    <div id="weatherApiRow" class="control-row api-key-row hidden"><label data-translate-key="weatherapiApi">WeatherAPI.com API</label><input type="text" id="weatherAPI_API" onchange="blockPolling(2000); deviceFetch('/weatherapi_api?api='+encodeURIComponent(this.value),{},'/weatherapi_api').then(() => fetchSettings())"><a id="weatherApiLink" href="https://www.weatherapi.com/" target="_blank" class="provider-link hidden" data-translate-key="getKey">Get Key</a></div>
     <div class="control-row"><label data-translate-key="units">Units</label><select id="unitsSelect" onchange="updateNamedSetting('units', this.value)"><option value="celsius" data-translate-key="celsius">Celsius</option><option value="fahrenheit" data-translate-key="fahrenheit">Fahrenheit</option></select></div>
     <div class="control-row"><label data-translate-key="tempType">Temperature</label><select id="tempTypeSelect" onchange="updateNamedSetting('temp_type', this.value)"><option value="actual" data-translate-key="actualTemp">Actual Temperature</option><option value="feels_like" data-translate-key="feelsLike">Feels Like</option></select></div>
     <div class="control-row">
@@ -825,6 +825,7 @@
     let screenshotInFlight=false, settingsRequestInFlight=false, lastFrameRevision='', previewImageData=null;
     let brightnessRequestInFlight=false, passiveRequestInFlight=false;
     let passiveRequestAvailableAt=0;
+    let activeDeviceRequest=null, lastSuccessfulDeviceRequest=Date.now();
 
     function passiveRequestBlocked() {
         return mutationInFlight || passiveRequestInFlight || Date.now() < passiveRequestAvailableAt;
@@ -837,11 +838,61 @@
         passiveRequestAvailableAt = Date.now() + 750;
     }
 
-    function fetchWithTimeout(url, options, timeoutMs) {
+    function clearPassiveRequestFlags() {
+        screenshotInFlight=false;
+        settingsRequestInFlight=false;
+        brightnessRequestInFlight=false;
+        passiveRequestInFlight=false;
+    }
+
+    const transportDelay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+
+    async function acquireDeviceTransport(kind) {
+        if(!activeDeviceRequest) return;
+        if(kind==='passive') {
+            const busy=new Error('Device transport busy');
+            busy.name='AbortError';
+            throw busy;
+        }
+
+        // User actions take priority. Cancel a preview/settings/status poll and
+        // wait briefly for its fetch promise to release the one device socket.
+        if(activeDeviceRequest.kind==='passive') activeDeviceRequest.controller.abort();
+        const deadline=Date.now()+1000;
+        while(activeDeviceRequest && Date.now()<deadline) await transportDelay(20);
+        if(activeDeviceRequest) {
+            activeDeviceRequest.controller.abort();
+            activeDeviceRequest=null;
+            clearPassiveRequestFlags();
+        }
+    }
+
+    async function fetchWithTimeout(url, options, timeoutMs, kind='passive') {
+        await acquireDeviceTransport(kind);
         const controller = new AbortController();
+        const request={controller,kind};
+        activeDeviceRequest=request;
         const timer = setTimeout(() => controller.abort(), timeoutMs || 6500);
         const requestOptions = Object.assign({}, options || {}, {signal: controller.signal});
-        return fetch(url, requestOptions).finally(() => clearTimeout(timer));
+        try {
+            const response=await fetch(url, requestOptions);
+            // fetch() resolves when headers arrive. Drain a clone before
+            // releasing the ESP32 transport so no next request overlaps the
+            // still-arriving response body on its single-client web server.
+            await response.clone().arrayBuffer();
+            lastSuccessfulDeviceRequest=Date.now();
+            return response;
+        } finally {
+            clearTimeout(timer);
+            if(activeDeviceRequest===request) activeDeviceRequest=null;
+        }
+    }
+
+    function recoverDeviceTransport() {
+        if(activeDeviceRequest) activeDeviceRequest.controller.abort();
+        activeDeviceRequest=null;
+        clearPassiveRequestFlags();
+        passiveRequestAvailableAt=0;
     }
 
     // All device mutations share one queue. If several not-yet-started changes
@@ -860,7 +911,7 @@
             if(latestMutationByKey.get(mutationKey) !== sequence) return skippedResponse;
             mutationInFlight = true;
             try {
-                const response = await fetchWithTimeout(url, options || {}, 6500);
+                const response = await fetchWithTimeout(url, options || {}, 6500, 'mutation');
                 if(!response.ok) throw new Error('HTTP '+response.status+' for '+mutationKey);
                 return response;
             } finally {
@@ -921,7 +972,7 @@
         }
     }
 
-    let isLoadingSettings=!0,tB,tD,tBr,tPS,tPS2,tPS3,autoBrightnessInterval=null,pendingOptions={};
+    let isLoadingSettings=!0,settingsLoaded=false,tB,tD,tBr,tPS,tPS2,tPS3,autoBrightnessInterval=null,pendingOptions={};
 
     // NEW: Global flag to pause polling during interactions
     let pollingPaused = false;
@@ -943,14 +994,17 @@
 
         settingsRequestInFlight = true;
         passiveRequestInFlight = true;
-        isLoadingSettings = true;
-        // Add cache busting for iOS
+        const mutationAtStart=mutationSequence;
         fetchWithTimeout("/settings", {}, 6500)
             .then(response => {
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 return response.json();
             })
             .then(e => {
+                // A control changed after this poll began. Its response contains
+                // older state, so discard it instead of undoing the user's UI.
+                if(mutationAtStart!==mutationSequence) return;
+                isLoadingSettings=true;
                 let schedulesOn = e.schedulesEnabled || false;
 
                 // Determine dropdown value
@@ -1032,17 +1086,10 @@
                 if(e.time_color)document.getElementById("timeColorPicker3").value=rgbToHex(e.time_color.r,e.time_color.g,e.time_color.b);
                 if(e.hasOwnProperty("clock_switch"))toggleExpandableByIds("clockContainer","clockExpandable",e.clock_switch,e.clock_option||"colour","clockColourRow","clockImageRow");
                 document.getElementById("clockDisplayMode").value=e.clockDisplayMode||"4 numbers";
-                document.getElementById("brightnessSlider").value=e.brightness||150;document.getElementById("darkRoomBrightnessSlider").value=e.dark_room_brightness||0;document.getElementById("brightRoomBrightnessSlider").value=e.bright_room_brightness||255;document.getElementById("darkRoomLux").textContent=(e.dark_room_ldr_value?Math.round(e.dark_room_ldr_value/4095*360+40):0)+" lux";document.getElementById("brightRoomLux").textContent=(e.bright_room_ldr_value?Math.round(e.bright_room_ldr_value/4095*360+40):400)+" lux";updateBrightnessPercentage();updateDarkRoomBrightnessPercentage();updateBrightRoomBrightnessPercentage();setLanguage(e.language);isLoadingSettings=!1
+                document.getElementById("brightnessSlider").value=e.brightness||150;document.getElementById("darkRoomBrightnessSlider").value=e.dark_room_brightness||0;document.getElementById("brightRoomBrightnessSlider").value=e.bright_room_brightness||255;document.getElementById("darkRoomLux").textContent=(e.dark_room_ldr_value?Math.round(e.dark_room_ldr_value/4095*360+40):0)+" lux";document.getElementById("brightRoomLux").textContent=(e.bright_room_ldr_value?Math.round(e.bright_room_ldr_value/4095*360+40):400)+" lux";updateBrightnessPercentage();updateDarkRoomBrightnessPercentage();updateBrightRoomBrightnessPercentage();setLanguage(e.language);settingsLoaded=true;isLoadingSettings=!1
             })
             .catch(error => {
-                console.error("Fetch settings failed:", error);
-                // Re-apply translations locally BEFORE clearing the guard.
-                // setLanguage() POSTs to /language whenever isLoadingSettings is
-                // false, and that endpoint writes settings to flash. Clearing the
-                // guard first meant every failed poll triggered a flash write,
-                // which stalls the WiFi stack and causes the next poll to fail
-                // too - a spiral that locked the device up until a reboot.
-                setLanguage(localStorage.getItem('language') || 'en');
+                if(error.name!=='AbortError') console.error("Fetch settings failed:", error);
                 isLoadingSettings = false;
             })
             .finally(() => {
@@ -1291,7 +1338,24 @@
         // Settings are low-priority background state. The shared in-flight
         // guard prevents this from colliding with preview/brightness traffic.
         setInterval(() => { if (!document.hidden) fetchSettings(); }, 15000);
+        // If the browser or Wi-Fi stack strands a fetch, release every client
+        // guard and restart polling. User controls never wait for this watchdog.
+        setInterval(()=>{
+            if(!document.hidden && !pollingPaused && Date.now()-lastSuccessfulDeviceRequest>20000){
+                recoverDeviceTransport();
+                fetchSettings();
+            }
+        },5000);
     };
+    window.addEventListener('online',()=>{
+        if(!pollingPaused){recoverDeviceTransport();fetchSettings();}
+    });
+    document.addEventListener('visibilitychange',()=>{
+        if(!document.hidden && !pollingPaused && Date.now()-lastSuccessfulDeviceRequest>10000){
+            recoverDeviceTransport();
+            fetchSettings();
+        }
+    });
 </script>
 </body>
 </html>

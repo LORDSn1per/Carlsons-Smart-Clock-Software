@@ -10,7 +10,7 @@
 
 // Single source of truth for the version. Auto-incremented by +0.01 on every
 // successful build by scripts/merge_firmware.py; see CHANGELOG.md for history.
-float ver = 3.57;
+float ver = 3.60;
 
 
 /* #################### To add a new screen (example screen6) ####################
@@ -443,6 +443,9 @@ RGBColor web_background_col[6] = {
 }; // For seconds color (Screen 1, 2, 3, 4, 5, 6)
 
 volatile bool networkServicesStarted = false;
+static bool networkServicesEverStarted = false;
+static TaskHandle_t webServerTaskHandle = nullptr;
+static TaskHandle_t fetchWeatherTaskHandle = nullptr;
 bool ampmSwitch[6] = {false, true, false, false, false, false};        // AM/PM display toggle for each screen
 bool secondsSwitch[6] = {false, true, false, false, false, false};     // Seconds display toggle for each screen
 bool twentyFourHourSwitch[6] = {false, false, false, false, false, false}; // 24-hour format toggle for each screen
@@ -680,9 +683,34 @@ static uint32_t lastKeepAliveMs = 0;
 // ---------------------------------------------------------------------------
 static volatile uint32_t lastNetSuccessMs = 0; // updated by weather / NTP / web hits
 static const uint32_t NET_DEAD_REBOOT_MS = 30UL * 60UL * 1000UL; // 30 minutes
+static volatile uint32_t lastWebRequestMs = 0;
+static volatile bool webRecoveryArmed = false;
+static const uint32_t WEB_SESSION_DEAD_MS = 45UL * 1000UL;
 
 // Called from the places that prove the network is genuinely working.
 static inline void noteNetworkSuccess() { lastNetSuccessMs = millis(); }
+static inline void noteWebRequest() {
+  lastWebRequestMs = millis();
+  webRecoveryArmed = true;
+  noteNetworkSuccess();
+}
+
+// /settings is the browser's heartbeat while a page is open. If three 15s
+// heartbeats vanish while WiFi still claims to be connected, the mesh path or
+// listening PCB is stale. Force one reconnect, then disarm until a request is
+// actually received again; closing a tab therefore cannot cause a loop.
+static void serviceWebSessionRecovery() {
+  if (!webRecoveryArmed || currentState != STATE_RUNNING ||
+      WiFi.status() != WL_CONNECTED) return;
+  if (millis() - lastWebRequestMs < WEB_SESSION_DEAD_MS) return;
+
+  webRecoveryArmed = false;
+  networkServicesStarted = false; // pauses webServerTask before socket rebuild
+  Serial.println("[WebWatch] active page stopped reaching the clock - recycling WiFi.");
+  WiFi.disconnect(false, false);
+  currentState = STATE_WIFI_DISCONNECTED;
+  stateStartTime = millis();
+}
 
 static void serviceConnectivityWatchdog() {
   if (currentState != STATE_RUNNING) { noteNetworkSuccess(); return; }
@@ -1358,7 +1386,7 @@ void loadSettings() {
 }
 
 void handleSettings() {
-  noteNetworkSuccess(); // a request reached us, so inbound works
+  noteWebRequest(); // browser heartbeat: proves the inbound LAN path works
   const uint32_t revision = settingsRevision;
   const int responseScreen = currentScreen;
   const String etag = "\"settings-" + String(revision) + "-" + String(responseScreen) + "\"";
@@ -3306,18 +3334,11 @@ void fetchWeatherTask(void *pvParameters) {
 
 void webServerTask(void *pvParameters) {
   for (;;) { // Infinite loop for the task
-    // Handle web server clients only if WiFi is connected
+    // The listener is connection-bound. Stop touching it as soon as the state
+    // machine sees a disconnect so it can be safely rebuilt after WiFi returns.
     // WiFiManager handles its portal clients via myWM.process() in loop()
-    if (currentState >= STATE_WIFI_CONNECTING) { // Only handle web server once we have a potential IP
+    if (networkServicesStarted && WiFi.status() == WL_CONNECTED) {
        server.handleClient();
-    } else {
-        // Optional: Log if not handling clients because WiFi is down
-        // static bool logged = false;
-        // if (!logged) {
-        //     Serial.println("Web server not handling clients - WiFi not connected.");
-        //     logged = true;
-        // }
-        // logged = (WiFi.status() == WL_CONNECTED && currentState >= STATE_WIFI_CONNECTING);
     }
 
     vTaskDelay(pdMS_TO_TICKS(1)); // Yield frequently to other tasks on Core 0
@@ -4044,6 +4065,7 @@ void loop() {
   button.read();  // Check button state
 
   serviceLinkKeepAlive();        // keep our MAC fresh in the AP/mesh forwarding tables
+  serviceWebSessionRecovery();   // recover an active page from a false-connected link
   serviceConnectivityWatchdog(); // last-resort: reboot if the network stays dead
 
   // Low-rate health line: enough to spot a heap leak or a signal collapse after
@@ -4207,8 +4229,16 @@ switch (currentState) {
       
       if (!networkServicesStarted) {
           Serial.println("STATE_WIFI_CONNECTING: Starting network services...");
+          // WiFiServer's listening PCB can be invalidated by a station
+          // disconnect even after WL_CONNECTED returns. Rebuild it on every
+          // connection instead of leaving port 80 permanently closed.
+          server.stop();
           server.begin();
           Serial.println("Web server started.");
+          if (networkServicesEverStarted) {
+            ArduinoOTA.end(); // also releases the old mDNS responder
+            NBNS.end();
+          }
           // Name the OTA/mDNS service after the device too, so it resolves as
           // <AutoChipID>.local. ArduinoOTA.begin() starts mDNS itself, so this
           // must be set first - otherwise it registers as "esp32-xxxxxx".
@@ -4226,16 +4256,24 @@ switch (currentState) {
           Serial.printf("mDNS/NBNS: http://%s.local/  (name: %s, NBNS %s)\n",
                         AutoChipID, AutoChipID, nbnsOk ? "listening" : "FAILED");
 
-          // Task creation should be idempotent or handles should be checked if tasks can persist
-          // For simplicity, assume they are created once when networkServicesStarted is false
-          BaseType_t webServerTaskStatus = xTaskCreatePinnedToCore(webServerTask, "WebServerTask", 16384, NULL, 1, NULL, 0);
-          BaseType_t fetchWeatherTaskStatus = xTaskCreatePinnedToCore(fetchWeatherTask, "FetchWeatherTask", 8192, NULL, 1, NULL, 1);
+          // These tasks live for the life of the firmware. Only the sockets
+          // above are connection-bound; recreating tasks after every WiFi dip
+          // leaked stacks and eventually exhausted heap.
+          BaseType_t webServerTaskStatus = pdPASS;
+          BaseType_t fetchWeatherTaskStatus = pdPASS;
+          if (webServerTaskHandle == nullptr) {
+            webServerTaskStatus = xTaskCreatePinnedToCore(webServerTask, "WebServerTask", 16384, NULL, 1, &webServerTaskHandle, 0);
+          }
+          if (fetchWeatherTaskHandle == nullptr) {
+            fetchWeatherTaskStatus = xTaskCreatePinnedToCore(fetchWeatherTask, "FetchWeatherTask", 8192, NULL, 1, &fetchWeatherTaskHandle, 1);
+          }
 
           if (webServerTaskStatus != pdPASS || fetchWeatherTaskStatus != pdPASS) {
               Serial.println("Error: Failed to create one or more tasks!");
           } else {
-              Serial.println("WebServerTask and FetchWeatherTask created.");
+              Serial.println("WebServerTask and FetchWeatherTask ready.");
           }
+          networkServicesEverStarted = true;
           networkServicesStarted = true;
       }
       
@@ -4269,6 +4307,9 @@ switch (currentState) {
       displayClockFace = true;
       if (WiFi.status() != WL_CONNECTED) {
           Serial.println("WiFi disconnected during STATE_RUNNING. Transitioning to STATE_WIFI_DISCONNECTED.");
+          // Pause the web task immediately. STATE_WIFI_CONNECTING will rebuild
+          // the now-stale listening socket after the station reconnects.
+          networkServicesStarted = false;
           currentState = STATE_WIFI_DISCONNECTED;
           stateStartTime = millis();
           // Consider if OTA handle should be paused
