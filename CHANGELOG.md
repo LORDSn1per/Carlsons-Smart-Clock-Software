@@ -10,6 +10,19 @@ recorded — only version numbers and short notes.
 > some numbers below are just iteration builds with no shipped change of their
 > own. Entries are written against the version that first carried the change.
 
+## 3.65 - 2026-08-11
+- Removed the destructive boot path that automatically formatted SPIFFS after
+  any mount failure. The clock now retries a clean mount four times and leaves
+  the partition untouched if it is still unavailable; formatting is possible
+  only through the explicit Format SSD control.
+- The webpage reboot now locks settings writers, refuses to reboot if pending
+  settings cannot be saved, cleanly unmounts SPIFFS and only then restarts.
+- Settings writes now retain the previous file as a backup. Boot validates and
+  recovers the newest complete temporary snapshot, the main file, or the backup
+  instead of silently falling back after an interrupted/corrupt write.
+- Failed deferred saves remain pending for retry rather than being incorrectly
+  marked as successfully persisted.
+
 ## 3.64 - 2026-08-11
 - Fixed Pirate Weather returning HTTP 200 but appearing as an empty response on
   the ESP32. The clock no longer allocates one large String for the complete

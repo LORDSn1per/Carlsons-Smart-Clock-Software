@@ -10,7 +10,7 @@
 
 // Single source of truth for the version. Auto-incremented by +0.01 on every
 // successful build by scripts/merge_firmware.py; see CHANGELOG.md for history.
-float ver = 3.65;
+float ver = 3.66;
 
 
 /* #################### To add a new screen (example screen6) ####################
@@ -818,7 +818,7 @@ bool safeModeActive = false;
 //  Add a line here whenever you add a new function.
 // ===========================================================================
 void saveSettings();
-void persistSettingsNow();
+bool persistSettingsNow();
 void printSpiffsFile();
 void ClearWifi();
 float lerp(float a, float b, float t);
@@ -1038,10 +1038,11 @@ void debounceSaveSettings() {
   unsigned long currentTime = millis();
   if (currentTime - lastSettingsChangeTime >= saveDelay) {
     const uint32_t revisionBeingSaved = settingsRevision;
-    persistSettingsNow();
+    const bool saved = persistSettingsNow();
     // A handler on the other core may have changed a setting while SPIFFS was
     // being written. Only clear the flag if the saved snapshot is still current.
-    if (settingsRevision == revisionBeingSaved) settingsChanged = false;
+    if (saved && settingsRevision == revisionBeingSaved) settingsChanged = false;
+    else if (!saved) lastSettingsChangeTime = millis(); // retry later without hammering flash/logs every loop
   }
 }
 
@@ -1077,10 +1078,10 @@ static uint32_t settingsFingerprint(const String& s) {
 }
 static uint32_t lastSavedSettingsHash = 0;
 
-void persistSettingsNow() {
+bool persistSettingsNow() {
   if (settingsMutex && xSemaphoreTakeRecursive(settingsMutex, pdMS_TO_TICKS(5000)) != pdTRUE) {
     Serial.println("[Settings] Could not acquire settingsMutex — skipping save this cycle.");
-    return;
+    return false;
   }
 
   DynamicJsonDocument doc(8192);
@@ -1220,7 +1221,7 @@ void persistSettingsNow() {
   if (payload.length() == 0) {
     Serial.println("Failed to serialize settings");
     if (settingsMutex) xSemaphoreGiveRecursive(settingsMutex);
-    return;
+    return false;
   }
 
   // Skip the flash write when the content is byte-identical to what is already
@@ -1229,43 +1230,101 @@ void persistSettingsNow() {
   uint32_t hash = settingsFingerprint(payload);
   if (hash == lastSavedSettingsHash) {
     if (settingsMutex) xSemaphoreGiveRecursive(settingsMutex);
-    return; // nothing changed - no flash wear, no stall
+    return true; // nothing changed - already safely persisted
   }
 
   const char* finalPath = "/settings.json";
   const char* tmpPath   = "/settings.json.tmp";
+  const char* backupPath = "/settings.json.bak";
   File file = SPIFFS.open(tmpPath, "w");
   if (!file) {
     Serial.println("Failed to open settings tmp file for writing");
     if (settingsMutex) xSemaphoreGiveRecursive(settingsMutex);
-    return;
+    return false;
   }
   if (file.print(payload) != payload.length()) {
     Serial.println("Failed to write to settings tmp file");
     file.close();
     SPIFFS.remove(tmpPath);
     if (settingsMutex) xSemaphoreGiveRecursive(settingsMutex);
-    return;
+    return false;
   }
   file.close();
 
-  SPIFFS.remove(finalPath);           // SPIFFS.rename() refuses to overwrite an existing dest
+  // Keep the previous known-good file until the new one is fully written.
+  // If power is lost between these renames, boot recovery can use either the
+  // complete .tmp file or the previous .bak file.
+  SPIFFS.remove(backupPath);
+  if (SPIFFS.exists(finalPath) && !SPIFFS.rename(finalPath, backupPath)) {
+    Serial.println("CRITICAL: failed to preserve settings backup; current settings left untouched.");
+    SPIFFS.remove(tmpPath);
+    if (settingsMutex) xSemaphoreGiveRecursive(settingsMutex);
+    return false;
+  }
   if (!SPIFFS.rename(tmpPath, finalPath)) {
     Serial.println("CRITICAL: failed to rename settings tmp file into place!");
+    if (!SPIFFS.exists(finalPath) && SPIFFS.exists(backupPath)) {
+      SPIFFS.rename(backupPath, finalPath);
+    }
+    if (settingsMutex) xSemaphoreGiveRecursive(settingsMutex);
+    return false;
   } else {
     lastSavedSettingsHash = hash;
-    Serial.println("Settings saved to SPIFFS (atomic)");
+    Serial.println("Settings saved to SPIFFS (atomic + backup)");
   }
   if (settingsMutex) xSemaphoreGiveRecursive(settingsMutex);
+  return true;
+}
+
+bool settingsFileIsValid(const char* path) {
+  if (!SPIFFS.exists(path)) return false;
+  File file = SPIFFS.open(path, "r");
+  if (!file) return false;
+  DynamicJsonDocument probe(8192);
+  const DeserializationError error = deserializeJson(probe, file);
+  file.close();
+  return !error && probe.is<JsonObject>() && probe.size() > 0;
+}
+
+bool recoverSettingsFile() {
+  const char* finalPath = "/settings.json";
+  const char* tmpPath = "/settings.json.tmp";
+  const char* backupPath = "/settings.json.bak";
+
+  // A valid .tmp is a completely-written newer snapshot left just before the
+  // final rename. Prefer it, while preserving the previous final as backup.
+  if (settingsFileIsValid(tmpPath)) {
+    Serial.println("[Settings] Recovering complete pending settings snapshot.");
+    if (SPIFFS.exists(finalPath)) {
+      SPIFFS.remove(backupPath);
+      if (!SPIFFS.rename(finalPath, backupPath)) {
+        Serial.println("[Settings] Could not preserve old final during recovery.");
+        return settingsFileIsValid(finalPath);
+      }
+    }
+    if (SPIFFS.rename(tmpPath, finalPath)) return true;
+    Serial.println("[Settings] Could not promote pending settings snapshot.");
+  } else if (SPIFFS.exists(tmpPath)) {
+    Serial.println("[Settings] Removing incomplete temporary settings file.");
+    SPIFFS.remove(tmpPath);
+  }
+
+  if (settingsFileIsValid(finalPath)) return true;
+
+  if (settingsFileIsValid(backupPath)) {
+    Serial.println("[Settings] Main file missing/corrupt; restoring backup.");
+    SPIFFS.remove(finalPath);
+    if (SPIFFS.rename(backupPath, finalPath)) return true;
+  }
+
+  Serial.println("[Settings] No valid main, pending, or backup settings file found.");
+  return false;
 }
 
 void loadSettings() {
   if (settingsMutex) xSemaphoreTakeRecursive(settingsMutex, pdMS_TO_TICKS(5000));
 
-  if (!SPIFFS.exists("/settings.json") && SPIFFS.exists("/settings.json.tmp")) {
-    Serial.println("[Settings] Recovering orphaned .tmp left by an interrupted save.");
-    SPIFFS.rename("/settings.json.tmp", "/settings.json");
-  }
+  recoverSettingsFile();
 
   File file = SPIFFS.open("/settings.json", "r");
   if (!file) {
@@ -3617,13 +3676,20 @@ void setup() {
   // --- REBOOT GUARD V3: Using External RTC and SPIFFS ---
   // This method is robust against both warm reboots (resets) and cold reboots (power loss).
 
-  // 1. Mount SPIFFS unconditionally — must not depend on RTC presence.
-  bool spiffsOk = SPIFFS.begin(false); // try a clean mount first, no silent format
+  // 1. Mount SPIFFS unconditionally — must not depend on RTC presence. A
+  // transient mount failure must NEVER format user data. Formatting is only
+  // permitted through the explicit Format SSD button in the web UI.
+  bool spiffsOk = false;
+  for (int attempt = 1; attempt <= 4 && !spiffsOk; ++attempt) {
+    if (attempt > 1) {
+      SPIFFS.end();
+      delay(250);
+    }
+    spiffsOk = SPIFFS.begin(false);
+    Serial.printf("[SPIFFS] Mount attempt %d/4: %s\n", attempt, spiffsOk ? "OK" : "FAILED");
+  }
   if (!spiffsOk) {
-    Serial.println("[SPIFFS] Mount FAILED (missing/corrupt filesystem).");
-    Serial.println("[SPIFFS] Attempting recovery format — ALL saved settings/WiFi creds/cache will be lost.");
-    spiffsOk = SPIFFS.begin(true);
-    Serial.println(spiffsOk ? "[SPIFFS] Reformat succeeded." : "[SPIFFS] Reformat FAILED — unusable this boot.");
+    Serial.println("[SPIFFS] Filesystem left untouched. Settings are unavailable this boot; reboot or use explicit Format SSD only if recovery is impossible.");
   }
 
   // 2. Reboot guard now gates only on RTC presence + the SPIFFS mount state established above.
@@ -3695,7 +3761,7 @@ void setup() {
 
   // Load settings from the main settings file
   allScreenSettings.resize(NUM_CLOCK_SCREENS);
-  loadSettings(); 
+  if (spiffsOk) loadSettings();
   
   // If the guard was triggered, OVERWRITE the loaded settings with safe ones and SAVE them.
   if (safeModeActive) {
@@ -3708,7 +3774,7 @@ void setup() {
     Serial.printf("--> Manual Brightness set to %d (15%%).\n", brightness);
     Serial.println("*************************************************");
 
-    saveSettings(); // Save the new "safe" settings to the main settings file
+    if (spiffsOk) saveSettings(); // Save the new "safe" settings to the main settings file
   }
 
   // --- NOW, INITIALIZE THE POWER-HUNGRY DISPLAY ---
@@ -3878,9 +3944,25 @@ void setup() {
   server.on("/weather", []() { server.send(200, "text/plain", "Weather Updated: Temp=" + currentTemp + ", Humidity=" + currentHumidity + ", Conditions=" + currentConditions + ", Daily Min/Max=" + dailyMinMaxTemps + ", Icon=" + weatherIcon); });
   server.on("/weatherupdate", [](){ if (currentState == STATE_RUNNING) { queueWeatherUpdate(); server.send(200, "text/plain", "Weather update requested."); } else { setWeatherFetchStage(WEATHER_ERROR, WEATHER_ERROR_NOT_RUNNING); server.send(503, "text/plain", "Cannot update weather: Not connected or not in running state."); } });
   server.on("/reboot", []() {
-    server.send(200, "text/plain", "Rebooting...");
-    if (settingsChanged) persistSettingsNow();
-    delay(1000);
+    // Freeze all settings/weather writers, flush any pending user changes, and
+    // unmount cleanly. If the save cannot be proven safe, refuse the reboot.
+    if (settingsMutex && xSemaphoreTakeRecursive(settingsMutex, pdMS_TO_TICKS(5000)) != pdTRUE) {
+      server.send(503, "text/plain", "Reboot cancelled: settings storage is busy. Please try again.");
+      return;
+    }
+    if (settingsChanged) {
+      const uint32_t revisionBeingSaved = settingsRevision;
+      if (!persistSettingsNow()) {
+        if (settingsMutex) xSemaphoreGiveRecursive(settingsMutex);
+        server.send(500, "text/plain", "Reboot cancelled: settings could not be saved.");
+        return;
+      }
+      if (settingsRevision == revisionBeingSaved) settingsChanged = false;
+    }
+    server.send(200, "text/plain", "Settings saved. Rebooting...");
+    delay(750);
+    SPIFFS.end();
+    Serial.flush();
     ESP.restart();
   });
   server.on("/clearWifi", []() { server.send(200, "text/plain", "Clearing WiFi settings & Rebooting..."); myWM.resetSettings(); delay(1000); ESP.restart(); });

@@ -1425,7 +1425,14 @@
         startWeatherMonitor(provider);
         deviceFetch("/weatherupdate",{},'/weatherupdate').then(()=>startWeatherMonitor(provider));
     }
-    function confirmAction(e){let t="Are you sure you want to "+e+"?";"formatSSD"==e&&(t="This will DELETE ALL SAVED SETTINGS. Are you sure?"),confirm(t)&&deviceFetch("/"+e,{},'/'+e).then(e=>e.text())}
+    function confirmAction(e){
+        let message="Are you sure you want to "+e+"?";
+        if(e==="formatSSD")message="This will DELETE ALL SAVED SETTINGS. Are you sure?";
+        if(!confirm(message))return;
+        deviceFetch("/"+e,{},'/'+e).then(response=>response.text()).then(result=>{
+            if(e==="reboot"&&result)alert(result);
+        }).catch(error=>alert("Action failed: "+error.message));
+    }
     function confirmUpdate(){if(confirm("This will take the clock offline and open the firmware update portal. You will need to reconnect to your normal WiFi after updating. Continue?")){deviceFetch("/startUpdatePortal",{},'/startUpdatePortal')}}
 
     function bindQueuedControls(){
