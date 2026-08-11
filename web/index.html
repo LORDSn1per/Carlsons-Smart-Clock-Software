@@ -981,6 +981,14 @@
             throw busy;
         }
 
+        // Live status may pre-empt a background screenshot/settings transfer,
+        // but it must never cancel a setting the user is actively saving.
+        if(kind==='status' && activeDeviceRequest.kind==='mutation') {
+            const busy=new Error('Device transport busy');
+            busy.name='AbortError';
+            throw busy;
+        }
+
         // User actions take priority. Cancel a preview/settings/status poll and
         // wait briefly for its fetch promise to release the one device socket.
         if(activeDeviceRequest.kind==='passive') activeDeviceRequest.controller.abort();
@@ -1059,6 +1067,7 @@
         passiveRequestInFlight = true;
         try {
             const response = await fetchWithTimeout("/screenshot.bin", {}, 6000);
+            applyLiveStatusHeaders(response);
             if(!response.ok) return;
             const frameRevision=response.headers.get('X-Frame-Revision')||'';
             if(frameRevision && frameRevision===lastFrameRevision) return;
@@ -1169,9 +1178,6 @@
                 } else {
                     brightnessSlider.disabled = false;
                 }
-                fetchCurrentBrightness();
-                if (!autoBrightnessInterval) autoBrightnessInterval = setInterval(fetchCurrentBrightness, 5000);
-
                 document.getElementById("clockVersion").textContent = e.version ? "Version: " + e.version.toFixed(2) : "";
                 applySafeMode(e.safe_mode);
                 document.getElementById("timezoneSelect").value = e.timezone || "UTC0";
@@ -1312,16 +1318,32 @@
             };
         });
     }
-    function fetchCurrentBrightness(){
-        if(brightnessRequestInFlight || passiveRequestBlocked() || pollingPaused || document.hidden) return;
+    let lastLiveStatusAt=0;
+    function applyLiveStatus(brightness,rssi){
+        const brightnessNumber=Number(brightness);
+        if(Number.isFinite(brightnessNumber)) {
+            document.getElementById("currentBrightness").textContent=Math.round(brightnessNumber)+"%";
+        }
+        updateWifiQuality(rssi);
+        lastLiveStatusAt=Date.now();
+    }
+    function applyLiveStatusHeaders(response){
+        const brightness=response.headers.get('X-Current-Brightness');
+        const rssi=response.headers.get('X-WiFi-RSSI');
+        if(brightness!==null && rssi!==null) applyLiveStatus(brightness,rssi);
+    }
+    function fetchCurrentBrightness(priority=false){
+        if(brightnessRequestInFlight || pollingPaused || document.hidden) return Promise.resolve();
+        if(priority) {
+            if(mutationInFlight || (activeDeviceRequest && activeDeviceRequest.kind==='mutation')) return Promise.resolve();
+        } else if(passiveRequestBlocked()) return Promise.resolve();
         brightnessRequestInFlight = true;
         passiveRequestInFlight = true;
-        fetchWithTimeout("/status", {}, 6500)
+        return fetchWithTimeout("/status", {}, priority?3000:5000, priority?'status':'passive')
             .then(e => { if(!e.ok) throw new Error('HTTP '+e.status); return e.json(); })
             .then(e => {
-                document.getElementById("currentBrightness").textContent=e.current_brightness+"%";
+                applyLiveStatus(e.current_brightness,e.rssi);
                 applySafeMode(e.safe_mode);
-                updateWifiQuality(e.rssi);
             })
             .catch(e => { if(e.name !== 'AbortError') console.debug('Brightness poll skipped:',e); })
             .finally(() => { brightnessRequestInFlight=false; finishPassiveRequest(); });
@@ -1489,7 +1511,11 @@
         initStickyPreview();
         const savedLang = localStorage.getItem('language') || 'en';
         setLanguage(savedLang);
-        fetchSettings();
+        // Fetch the tiny live-status document first. Previously this request
+        // was attempted from inside fetchSettings() while that larger response
+        // still owned the ESP32's only HTTP slot, so it was always discarded.
+        // On a 1-second preview interval it could then be starved indefinitely.
+        fetchCurrentBrightness(true).finally(()=>setTimeout(fetchSettings,800));
         // Live preview refresh. 4s (was 1s): a 4KB screenshot could not
         // complete within 1s on a marginal WiFi link, so requests piled up
         // faster than they finished and saturated the single-threaded ESP32
@@ -1497,6 +1523,11 @@
         // fetchAndDrawScreenshot() additionally refuses to start if the
         // previous request is still in flight.
         initRefresh();
+        // Screenshots also carry brightness/RSSI headers. Only use /status as
+        // a priority fallback when no fresh live data has arrived for 5s.
+        autoBrightnessInterval=setInterval(()=>{
+            if(Date.now()-lastLiveStatusAt>5000) fetchCurrentBrightness(true);
+        },2000);
         setInterval(updateWeather,3e5);
         // Settings are low-priority background state. The shared in-flight
         // guard prevents this from colliding with preview/brightness traffic.

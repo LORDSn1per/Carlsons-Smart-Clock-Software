@@ -10,7 +10,7 @@
 
 // Single source of truth for the version. Auto-incremented by +0.01 on every
 // successful build by scripts/merge_firmware.py; see CHANGELOG.md for history.
-float ver = 3.61;
+float ver = 3.63;
 
 
 /* #################### To add a new screen (example screen6) ####################
@@ -639,6 +639,7 @@ volatile SystemState currentState = STATE_WIFI_NO_CREDENTIALS; // Volatile for c
 static unsigned long stateStartTime = 0;
 static unsigned long stateNOWIFITime = 0;
 volatile bool needWeatherUpdate = false; // Already volatile if added earlier
+volatile uint32_t weatherConfigRevision = 0; // Invalidates an in-flight request when its provider/key changes
 SemaphoreHandle_t settingsMutex = NULL; // Guards /settings.json + the settings globals serialized into it
 
 // ---------------------------------------------------------------------------
@@ -1548,6 +1549,7 @@ void handleStatus() {
 void handleWeatherService() {
   if (server.hasArg("service")) {
     selectedWeatherService = server.arg("service");
+    ++weatherConfigRevision;
     Serial.println("Weather Service set to: " + selectedWeatherService);
     apiCallCount = 0; // RESET API CALL COUNT
     needWeatherUpdate = true; // was: fetchWeather(); — that blocked the whole web server for up to 15s
@@ -1562,6 +1564,7 @@ void handlePirateWeatherAPI() {
   if (server.hasArg("api")) {
     String apiKey = server.arg("api");
     pirateWeatherAPI = apiKey;
+    ++weatherConfigRevision;
     Serial.println("Pirate Weather API Key updated.");
     apiCallCount = 0; // RESET API CALL COUNT
     needWeatherUpdate = true; // was: fetchWeather() — blocked the whole web server for up to 15s
@@ -1575,6 +1578,7 @@ void handlePirateWeatherAPI() {
 void handleOpenWeatherMapAPI() {
   if (server.hasArg("api")) {
     openWeatherMapAPI = server.arg("api");
+    ++weatherConfigRevision;
     Serial.println("OpenWeatherMap API Key updated.");
     apiCallCount = 0; // RESET API CALL COUNT
     needWeatherUpdate = true; // was: fetchWeather() — blocked the whole web server for up to 15s
@@ -1588,6 +1592,7 @@ void handleOpenWeatherMapAPI() {
 void handleWeatherAPI_API() {
   if (server.hasArg("api")) {
     weatherAPI_API = server.arg("api");
+    ++weatherConfigRevision;
     Serial.println("WeatherAPI.com API Key updated.");
     apiCallCount = 0; // RESET API CALL COUNT
     needWeatherUpdate = true; // was: fetchWeather() — blocked the whole web server for up to 15s
@@ -1978,6 +1983,7 @@ void handleGPS() {
     String lonStr = server.arg("lon");
     gpsLat = latStr.toFloat();
     gpsLon = lonStr.toFloat();
+    ++weatherConfigRevision;
     Serial.print("GPS Coordinates Updated - Latitude: ");
     Serial.print(gpsLat);
     Serial.print(", Longitude: ");
@@ -2034,8 +2040,11 @@ float mapWeatherApiMoonPhase(String phase) {
 }
 
 void fetchWeather() {
+  const uint32_t requestConfigRevision = weatherConfigRevision;
+  const String requestWeatherService = selectedWeatherService;
+
   // === Handle "None" service option =========================
-  if (selectedWeatherService == "none") {
+  if (requestWeatherService == "none") {
     Serial.println("Weather service is set to 'None'. Clearing weather data.");
     if (settingsMutex) xSemaphoreTakeRecursive(settingsMutex, pdMS_TO_TICKS(5000));
     currentTemp = "";
@@ -2080,23 +2089,23 @@ void fetchWeather() {
   // === SERVICE SELECTION AND URL CONSTRUCTION (ALWAYS CELSIUS) =====
   // ===================================================================
 
-  if (selectedWeatherService == "pirateweather") {
+  if (requestWeatherService == "pirateweather") {
     if (pirateWeatherAPI.isEmpty()) { Serial.println("Missing PirateWeather API key."); lastHttpCode = -1; return; }
     String apiUnits = "si"; // ALWAYS "si" for Celsius
     url = "https://api.pirateweather.net/forecast/" + pirateWeatherAPI + "/" + String(gpsLat, 6) + "," + String(gpsLon, 6) + "?units=" + apiUnits;
   } 
-  else if (selectedWeatherService == "openweathermap") {
+  else if (requestWeatherService == "openweathermap") {
     if (openWeatherMapAPI.isEmpty()) { Serial.println("Missing OpenWeatherMap API key."); lastHttpCode = -1; return; }
     String apiUnits = "metric"; // ALWAYS "metric" for Celsius
     url = "https://api.openweathermap.org/data/3.0/onecall?lat=" + String(gpsLat, 6) + "&lon=" + String(gpsLon, 6) + "&appid=" + openWeatherMapAPI + "&units=" + apiUnits + "&exclude=minutely,alerts";
   } 
-  else if (selectedWeatherService == "weatherapi") {
+  else if (requestWeatherService == "weatherapi") {
     if (weatherAPI_API.isEmpty()) { Serial.println("Missing WeatherAPI.com API key."); lastHttpCode = -1; return; }
     // WeatherAPI provides both C and F, so no unit parameter is needed in the URL. We will parse the Celsius fields.
     url = "http://api.weatherapi.com/v1/forecast.json?key=" + weatherAPI_API + "&q=" + String(gpsLat, 6) + "," + String(gpsLon, 6) + "&days=1&aqi=no&alerts=no";
   }
   else {
-    Serial.println("Unknown weather service selected: " + selectedWeatherService);
+    Serial.println("Unknown weather service selected: " + requestWeatherService);
     lastHttpCode = -1;
     return;
   }
@@ -2126,9 +2135,11 @@ void fetchWeather() {
     lastApiCallTime = currentTime; // start of this hour's window
   }
   Serial.printf("Starting fetchWeather() for service '%s' (requesting Celsius)... (Attempt %d of %d)\n",
-                selectedWeatherService.c_str(), apiCallCount, MAX_API_CALLS);
+                requestWeatherService.c_str(), apiCallCount, MAX_API_CALLS);
 
-  http.setTimeout(15000);
+  // A dead provider must not hold the weather task for 15 seconds while a new
+  // selection waits behind it. Six seconds is ample for these small replies.
+  http.setTimeout(6000);
   http.begin(url);
   // Force HTTP/1.0 so the server sends a plain Content-Length body instead of a
   // chunked one. With chunked encoding getString() intermittently came back
@@ -2137,7 +2148,16 @@ void fetchWeather() {
   http.useHTTP10(true);
   int httpCode = http.GET();
   lastHttpCode = httpCode;
-  Serial.println(selectedWeatherService + " API Response Code: " + String(httpCode));
+  Serial.println(requestWeatherService + " API Response Code: " + String(httpCode));
+
+  // The user changed provider/key/coordinates while this HTTP request was in
+  // flight. Discard its stale response; the update flag schedules the new one.
+  if (requestConfigRevision != weatherConfigRevision) {
+    Serial.println("Discarding weather response for superseded configuration.");
+    http.end();
+    lastHttpCode = 0;
+    return;
+  }
 
   // ===================================================================
   // === JSON PARSING (ALWAYS PARSING CELSIUS VALUES) ==================
@@ -2161,7 +2181,7 @@ void fetchWeather() {
     DynamicJsonDocument doc(2048);
     DeserializationError error;
 
-    if (selectedWeatherService == "pirateweather") {
+    if (requestWeatherService == "pirateweather") {
       StaticJsonDocument<512> filter;
       filter["currently"]["temperature"] = true;
       filter["currently"]["humidity"] = true;
@@ -2183,7 +2203,7 @@ void fetchWeather() {
         moonPhase = doc["daily"]["data"][0]["moonPhase"].as<float>();
       }
     } 
-    else if (selectedWeatherService == "openweathermap") {
+    else if (requestWeatherService == "openweathermap") {
       StaticJsonDocument<512> filter;
       filter["current"]["temp"] = true;
       filter["current"]["feels_like"] = true;
@@ -2209,7 +2229,7 @@ void fetchWeather() {
         moonPhase = doc["daily"][0]["moon_phase"].as<float>();
       }
     } 
-    else if (selectedWeatherService == "weatherapi") {
+    else if (requestWeatherService == "weatherapi") {
       StaticJsonDocument<512> filter;
       // Request Celsius fields specifically
       filter["current"]["temp_c"] = true;
@@ -2241,7 +2261,7 @@ void fetchWeather() {
       Serial.println("JSON parsing failed: " + String(error.c_str()));
       lastHttpCode = -3;
     } else {
-      Serial.printf("JSON parsed successfully for %s. Free heap: %u\n", selectedWeatherService.c_str(), ESP.getFreeHeap());
+      Serial.printf("JSON parsed successfully for %s. Free heap: %u\n", requestWeatherService.c_str(), ESP.getFreeHeap());
       noteNetworkSuccess(); // proves outbound + inbound are working
       
       // Store the fetched Celsius values as strings
@@ -3286,8 +3306,18 @@ void fetchWeatherTask(void *pvParameters) {
     if (currentState == STATE_RUNNING) {
       unsigned long currentTime = millis();
 
+      // User changes always win over a scheduled sync or retry. Clear the flag
+      // before starting so a second change made during the HTTP request is not
+      // accidentally erased when that request returns.
+      if (needWeatherUpdate) {
+         needWeatherUpdate = false;
+         Serial.println("Immediate weather update requested from Core 1...");
+         fetchWeather();
+         lastWeatherSyncTime = currentTime;
+         lastRetryTime = currentTime;
+      }
       // Scheduled sync
-      if (currentTime - lastWeatherSyncTime >= weatherSyncInterval) {
+      else if (currentTime - lastWeatherSyncTime >= weatherSyncInterval) {
         //Serial.println("Scheduled weather sync attempt from Core 1...");
         fetchWeather();
         lastWeatherSyncTime = currentTime; // Update sync time regardless of success
@@ -3310,14 +3340,6 @@ void fetchWeatherTask(void *pvParameters) {
          fetchWeather();
          lastRetryTime = currentTime; // Update retry time
       }
-      // Manual update request from web server
-      else if (needWeatherUpdate) {
-         Serial.println("Manual weather update requested from Core 1...");
-         fetchWeather();
-         needWeatherUpdate = false; // Clear the flag
-         lastWeatherSyncTime = currentTime; // Update sync time
-         lastRetryTime = currentTime;     // Reset retry timer
-      }
     }
     
     // Log stack high water mark periodically (optional)
@@ -3328,7 +3350,7 @@ void fetchWeatherTask(void *pvParameters) {
        lastStackLog = millis();
     }
 
-    vTaskDelay(pdMS_TO_TICKS(1000)); // Check every 1 seconds
+    vTaskDelay(pdMS_TO_TICKS(250)); // Apply provider/key changes promptly
   }
 }
 
@@ -3378,9 +3400,13 @@ void handleScreenshot() {
   
   const uint32_t revision = screenshotRevision;
   const String etag = "\"frame-" + String(revision) + "\"";
+  const int brightnessPercent = map(currentBrightness, 0, 255, 0, 100);
+  const long rssi = (WiFi.status() == WL_CONNECTED) ? (long)WiFi.RSSI() : 0;
   if (server.hasHeader("If-None-Match") && server.header("If-None-Match") == etag) {
     server.sendHeader("ETag", etag);
     server.sendHeader("X-Frame-Revision", String(revision));
+    server.sendHeader("X-Current-Brightness", String(brightnessPercent));
+    server.sendHeader("X-WiFi-RSSI", String(rssi));
     server.send(304);
     return;
   }
@@ -3388,6 +3414,8 @@ void handleScreenshot() {
   server.sendHeader("Cache-Control", "no-cache");
   server.sendHeader("ETag", etag);
   server.sendHeader("X-Frame-Revision", String(revision));
+  server.sendHeader("X-Current-Brightness", String(brightnessPercent));
+  server.sendHeader("X-WiFi-RSSI", String(rssi));
 
   server.send_P(200, "application/octet-stream", (const char*)screenshotBuffer, sizeof(screenshotBuffer)); // Send the SAFE screenshot buffer, not the live dma_canvas buffer.
 }

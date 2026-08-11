@@ -10,6 +10,16 @@ recorded — only version numbers and short notes.
 > some numbers below are just iteration builds with no shipped change of their
 > own. Entries are written against the version that first carried the change.
 
+## 3.61 - 2026-08-11
+- Fixed live Wi-Fi strength and current auto-brightness staying blank/stale when
+  fast LCD preview polling repeatedly won the ESP32's single HTTP request slot.
+  Live values now arrive immediately from `/status`, ride along with every LCD
+  preview response, and use a priority fallback only when those updates stop.
+- Weather provider, API-key and coordinate changes now take priority over
+  scheduled updates and retries, are checked four times per second, and cannot
+  be lost or overwritten by a request for the previous provider. A stalled
+  weather API now times out after 6 seconds instead of 15.
+
 ## 3.60 - 2026-08-11
 - Added live Wi-Fi quality to the settings page using the RSSI already supplied
   by `/status`: four signal bars, Excellent/Good/Fair/Weak classification, dBm
