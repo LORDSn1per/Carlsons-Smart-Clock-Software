@@ -10,7 +10,7 @@
 
 // Single source of truth for the version. Auto-incremented by +0.01 on every
 // successful build by scripts/merge_firmware.py; see CHANGELOG.md for history.
-float ver = 3.38;
+float ver = 3.40;
 
 
 /* #################### To add a new screen (example screen6) ####################
@@ -2208,7 +2208,10 @@ void handleRoot() {
   Serial.printf("Serving gzipped webpage (%u bytes)...\n", WEBPAGE_GZ_LEN);
 
   server.sendHeader("Content-Encoding", "gzip");
-  server.send_P(200, "text/html", (const char*)WEBPAGE_GZ, WEBPAGE_GZ_LEN);
+  // charset=utf-8 matters: the page carries German (ä ö ü ß) and Swedish
+  // (ä ö å) translations. Without it browsers fall back to Latin-1 and every
+  // accented character renders as mojibake.
+  server.send_P(200, "text/html; charset=utf-8", (const char*)WEBPAGE_GZ, WEBPAGE_GZ_LEN);
 }
 
 

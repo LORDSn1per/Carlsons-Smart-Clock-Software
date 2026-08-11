@@ -10,6 +10,16 @@ recorded — only version numbers and short notes.
 > some numbers below are just iteration builds with no shipped change of their
 > own. Entries are written against the version that first carried the change.
 
+## 3.39 - 2026-08-11
+- Removed the red "Safe Mode active" label under Live Refresh, and Safe Mode no
+  longer disables the dropdown. It now simply selects 4s and leaves the control
+  fully usable — a hint rather than a restriction.
+- **Fixed page charset.** The page had no `<meta charset>` and the server sent
+  `text/html` with no charset, so browsers fell back to Latin-1 and mangled
+  every accented character — that label's em-dash rendered as `â€"`, and more
+  importantly all 70+ umlauts in the German (ä ö ü ß) and Swedish (ä ö å)
+  translations were affected. Now declared in both the header and the document.
+
 ## 3.37 - 2026-08-11
 - **Browser OTA now accepts the merged `BIN/SmartClock_vX.XX.bin` files.**
   Previously only the app-only `firmware.bin` worked; picking a merged image

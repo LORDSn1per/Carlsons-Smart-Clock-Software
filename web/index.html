@@ -1,7 +1,8 @@
 <!DOCTYPE HTML>
 <html>
 <head>
-    <title>Carlson's Smart Clock - v2</title>
+    
+    <meta charset="utf-8"><title>Carlson's Smart Clock - v2</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f0f0f0; font-size: 18px; }
@@ -170,7 +171,6 @@
             <option value="4000">4 s</option>
         </select>
     </div>
-    <div id="safeModeNotice" class="hidden" style="text-align:center;font-size:12px;color:#e5484d;margin:-5px 0 10px;" data-translate-key="safeModeNotice">Safe Mode active — refresh locked to 4s</div>
 
     <!-- Schedules Control Area (Hidden unless Schedules selected) -->
     <div id="schedulesContainer" class="hidden">
@@ -358,15 +358,15 @@
 <script>
     const translations = {
         en: {
-            liveRefresh:"Live Refresh", safeModeNotice:"Safe Mode active — refresh locked to 4s", uploadFirmware:"Upload Firmware", otaHint:"Pick any SmartClock_vX.XX.bin from the BIN folder (or firmware.bin). Uploads in 32KB chunks over WiFi - about 5-10 minutes. Settings are kept; the clock reboots when done.", otaUpload:"Upload",
+            liveRefresh:"Live Refresh", uploadFirmware:"Upload Firmware", otaHint:"Pick any SmartClock_vX.XX.bin from the BIN folder (or firmware.bin). Uploads in 32KB chunks over WiFi - about 5-10 minutes. Settings are kept; the clock reboots when done.", otaUpload:"Upload",
             schedules: "Schedules", scheduleSettings: "Schedule Settings", defaultScreen: "Default Screen", addSchedule: "Add", indoorOffset: "Indoor Temp Offset", language: "Language", mainTitle: "Carlson's Smart Clock", clockSettings: "Clock Settings", screenSelection: "Screen Selection", panelType: "Panel Type (Reboot Req.)", screen1: "Screen 1 - Classic Digital", screen2: "Screen 2 - Alt. Digital", screen3: "Screen 3 - Analog", screen4: "Screen 4 - World Map", screen5: "Screen 5 - Moon Phase", screen6: "Screen 6 - Gradient Clock", screen7: "Screen 7 - Digital Watch", screen8: "Screen 8 - Color Analog", screen9: "Screen 9 - Nixie Tube", fullYearAnimation: "Full Year Animation", "24hour": "24 Hour", icons: "Icons", minMaxTemps: "Min/Max Temps", ampm: "AM/PM", seconds: "Seconds", time: "Time", day: "Day", date: "Date", month: "Month", dateBg: "Date Background", divider: "Divider", temperature: "Temperature", humidity: "Humidity", clockFace: "Clock Face", option: "Option", colour: "Colour", image: "Image", clockOptions: "Clock Options", displayMode: "Display Mode", "4numbers": "4 Numbers", allNumbers: "All Numbers", "4ticks": "4 Ticks", allTicks: "All Ticks", handFuzz: "Hand Fuzziness", handLength: "Hand Length", hourHand: "Hour Hand", minuteHand: "Minute Hand", secondHand: "Second Hand", topCalendar: "Top Calendar", bottomCalendar: "Bottom Calendar", timeShadow: "Time Shadow", nightLights: "Night Lights", nightShadow: "Night Shadow", "3dEffects": "3D Effects", speedDir: "Speed & Direction", numStars: "Number of Stars", sun: "Sun", land: "Land", water: "Water", ice: "Ice", moonShadow: "Moon Shadow", moonPercent: "Moon Percentage", gradSpeed: "Gradient Speed", boxSize: "Box Size", boxFeather: "Box Feather", glowIntensity: "Glow Intensity", glow: "Glow", bgColor: "Background Colour", showMarkers: "Show Markers", cycleSpeed: "Cycle Speed", showDate: "Show Date", brightnessSettings: "Brightness Settings", brightness: "Brightness", autoBrightness: "Auto Brightness", darkRoomBrightness: "Dark Room Brightness", brightRoomBrightness: "Bright Room Brightness", currentBrightness: "Current Brightness:", setDarkRoom: "Set Dark Room", setBrightRoom: "Set Bright Room", weatherSettings: "Weather Settings", timezone: "Timezone Selection", weatherService: "Weather Service", pirateApi: "Pirate Weather API", owmApi: "OpenWeatherMap API", weatherapiApi: "WeatherAPI.com API", getKey: "Get Key", units: "Units", celsius: "Celsius", fahrenheit: "Fahrenheit", tempType: "Temperature", actualTemp: "Actual Temperature", feelsLike: "Feels Like", city: "City", search: "Search", latitude: "Latitude", longitude: "Longitude", systemSettings: "System Settings", reboot: "Reboot", clearWifi: "Clear Wifi", firmwareUpdate: "Firmware Update", formatSsd: "Format SSD"
         },
         de: {
-            liveRefresh:"Aktualisierung", safeModeNotice:"Sicherheitsmodus aktiv — Aktualisierung auf 4s festgelegt", uploadFirmware:"Firmware hochladen", otaHint:"Beliebige SmartClock_vX.XX.bin aus dem BIN-Ordner wählen (oder firmware.bin). Upload in 32KB-Blöcken über WLAN - ca. 5-10 Minuten. Einstellungen bleiben erhalten; die Uhr startet danach neu.", otaUpload:"Hochladen",
+            liveRefresh:"Aktualisierung", uploadFirmware:"Firmware hochladen", otaHint:"Beliebige SmartClock_vX.XX.bin aus dem BIN-Ordner wählen (oder firmware.bin). Upload in 32KB-Blöcken über WLAN - ca. 5-10 Minuten. Einstellungen bleiben erhalten; die Uhr startet danach neu.", otaUpload:"Hochladen",
             schedules: "Zeitpläne", scheduleSettings: "Zeitplan-Einstellungen", defaultScreen: "Standardbildschirm", addSchedule: "Hinzufügen", indoorOffset: "Innen-Temp Offset", language: "Sprache", mainTitle: "Carlson's Smart Clock", clockSettings: "Uhreinstellungen", screenSelection: "Bildschirmauswahl", panelType: "Panel-Typ (Neustart Erf.)", screen1: "Bildschirm 1 - Klassisch Digital", screen2: "Bildschirm 2 - Alt. Digital", screen3: "Bildschirm 3 - Analog", screen4: "Bildschirm 4 - Weltkarte", screen5: "Bildschirm 5 - Mondphase", screen6: "Bildschirm 6 - Farbverlauf", screen7: "Bildschirm 7 - Digitaluhr", screen8: "Bildschirm 8 - Farb-Analog", screen9: "Bildschirm 9 - Nixie-Röhre", fullYearAnimation: "Ganzjahresanimation", "24hour": "24-Stunden", icons: "Symbole", minMaxTemps: "Min/Max Temp.", ampm: "AM/PM", seconds: "Sekunden", time: "Zeit", day: "Tag", date: "Datum", month: "Monat", dateBg: "Datum-Hintergrund", divider: "Trennlinie", temperature: "Temperatur", humidity: "Luftfeuchtigkeit", clockFace: "Zifferblatt", option: "Option", colour: "Farbe", image: "Bild", clockOptions: "Uhrenoptionen", displayMode: "Anzeigemodus", "4numbers": "4 Zahlen", allNumbers: "Alle Zahlen", "4ticks": "4 Striche", allTicks: "Alle Striche", handFuzz: "Zeigerunschärfe", handLength: "Zeigerlänge", hourHand: "Stundenzeiger", minuteHand: "Minutenzeiger", secondHand: "Sekundenzeiger", topCalendar: "Oberer Kalender", bottomCalendar: "Unterer Kalender", timeShadow: "Zeitschatten", nightLights: "Nachtlichter", nightShadow: "Nachtschatten", "3dEffects": "3D-Effekte", speedDir: "Geschw. & Richtung", numStars: "Anzahl Sterne", sun: "Sonne", land: "Land", water: "Wasser", ice: "Eis", moonShadow: "Mondschatten", moonPercent: "Mond in Prozent", gradSpeed: "Farbverlaufgeschw.", boxSize: "Boxgröße", boxFeather: "Box-Weichzeichnung", glowIntensity: "Leuchtintensität", glow: "Leuchten", bgColor: "Hintergrundfarbe", showMarkers: "Markierungen", cycleSpeed: "Zyklusgeschw.", showDate: "Datum anzeigen", brightnessSettings: "Helligkeitseinstellungen", brightness: "Helligkeit", autoBrightness: "Auto-Helligkeit", darkRoomBrightness: "Dunkler Raum", brightRoomBrightness: "Heller Raum", currentBrightness: "Aktuelle Helligkeit:", setDarkRoom: "Dunkel einst.", setBrightRoom: "Hell einst.", weatherSettings: "Wettereinstellungen", timezone: "Zeitzonenauswahl", weatherService: "Wetterdienst", pirateApi: "Pirate Weather API", owmApi: "OpenWeatherMap API", weatherapiApi: "WeatherAPI.com API", getKey: "Schlüssel holen", units: "Einheiten", celsius: "Celsius", fahrenheit: "Fahrenheit", tempType: "Temperatur", actualTemp: "Tatsächliche Temp.", feelsLike: "Gefühlte Temp.", city: "Stadt", search: "Suchen", latitude: "Breitengrad", longitude: "Längengrad", systemSettings: "Systemeinstellungen", reboot: "Neustart", clearWifi: "WLAN löschen", firmwareUpdate: "Firmware-Update", formatSsd: "SSD formatieren"
         },
         sv: {
-            liveRefresh:"Uppdatering", safeModeNotice:"Säkert läge aktivt — uppdatering låst till 4s", uploadFirmware:"Ladda upp firmware", otaHint:"Välj valfri SmartClock_vX.XX.bin från BIN-mappen (eller firmware.bin). Laddas upp i 32KB-block över WiFi - cirka 5-10 minuter. Inställningarna behålls; klockan startar om när den är klar.", otaUpload:"Ladda upp",
+            liveRefresh:"Uppdatering", uploadFirmware:"Ladda upp firmware", otaHint:"Välj valfri SmartClock_vX.XX.bin från BIN-mappen (eller firmware.bin). Laddas upp i 32KB-block över WiFi - cirka 5-10 minuter. Inställningarna behålls; klockan startar om när den är klar.", otaUpload:"Ladda upp",
             schedules: "Tidsscheman", scheduleSettings: "Schemainställningar", defaultScreen: "Standardskärm", addSchedule: "Lägg till", indoorOffset: "Inomhus Temp Offset", language: "Språk", mainTitle: "Carlsons Smartklocka", clockSettings: "Klockinställningar", screenSelection: "Skärmval", panelType: "Paneltyp (Kräver omstart)", screen1: "Skärm 1 - Klassisk Digital", screen2: "Skärm 2 - Alt. Digital", screen3: "Skärm 3 - Analog", screen4: "Skärm 4 - Världskarta", screen5: "Skärm 5 - Månfas", screen6: "Skärm 6 - Gradientklocka", screen7: "Skärm 7 - Digitalt Armbandsur", screen8: "Skärm 8 - Färg-Analog", screen9: "Skärm 9 - Nixie-rör", fullYearAnimation: "Helårsanimation", "24hour": "24-timmars", icons: "Ikoner", minMaxTemps: "Min/Max Temp.", ampm: "AM/PM", seconds: "Sekunder", time: "Tid", day: "Dag", date: "Datum", month: "Månad", dateBg: "Datum-bakgrund", divider: "Avdelare", temperature: "Temperatur", humidity: "Luftfuktighet", clockFace: "Urtavla", option: "Alternativ", colour: "Färg", image: "Bild", clockOptions: "Klockalternativ", displayMode: "Visningsläge", "4numbers": "4 Siffror", allNumbers: "Alla Siffror", "4ticks": "4 Markeringar", allTicks: "Alla Markeringar", handFuzz: "Visaroskärpa", handLength: "Visarlängd", hourHand: "Timvisare", minuteHand: "Minutvisare", secondHand: "Sekundvisare", topCalendar: "Övre Kalender", bottomCalendar: "Nedre Kalender", timeShadow: "Tidsskugga", nightLights: "Nattljus", nightShadow: "Nattskugga", "3dEffects": "3D-effekter", speedDir: "Fart & Riktning", numStars: "Antal Stjärnor", sun: "Sol", land: "Land", water: "Vatten", ice: "Is", moonShadow: "Månskugga", moonPercent: "Månprocent", gradSpeed: "Gradienthastighet", boxSize: "Boxstorlek", boxFeather: "Box-ludd", glowIntensity: "Ljusintensitet", glow: "Ljus", bgColor: "Bakgrundsfärg", showMarkers: "Markörer", cycleSpeed: "Cykelfart", showDate: "Visa Datum", brightnessSettings: "Ljusstyrkeinställningar", brightness: "Ljusstyrka", autoBrightness: "Auto-ljusstyrka", darkRoomBrightness: "Mörkt Rum", brightRoomBrightness: "Ljust Rum", currentBrightness: "Nuvarande Ljusstyrka:", setDarkRoom: "Ställ in Mörkt", setBrightRoom: "Ställ in Ljust", weatherSettings: "Väderinställningar", timezone: "Tidszonsval", weatherService: "Vädertjänst", pirateApi: "Pirate Weather API", owmApi: "OpenWeatherMap API", weatherapiApi: "WeatherAPI.com API", getKey: "Hämta Nyckel", units: "Enheter", celsius: "Celsius", fahrenheit: "Fahrenheit", tempType: "Temperatur", actualTemp: "Faktisk Temp.", feelsLike: "Känns Som", city: "Stad", search: "Sök", latitude: "Latitud", longitude: "Longitud", systemSettings: "Systeminställningar", reboot: "Starta om", clearWifi: "Rensa WiFi", firmwareUpdate: "Firmware-uppdat.", formatSsd: "Formatera SSD"
         }
     };
@@ -775,7 +775,6 @@
     function setRefreshInterval(v){
         var ms = parseInt(v,10);
         if(REFRESH_ALLOWED.indexOf(ms) === -1) ms = 4000;
-        if(safeModeOn) ms = 4000;              // safe mode always wins
         refreshMs = ms;
         try{ localStorage.setItem('refreshMs', String(ms)); }catch(e){}
         var sel=document.getElementById('refreshSelect'); if(sel) sel.value=String(ms);
@@ -790,19 +789,18 @@
         applyRefreshTimer();
     }
     /* Reboot Guard tripped on the device -> force the gentlest refresh and lock it. */
+    /* Safe Mode (Reboot Guard tripped) just nudges the refresh down to its
+       gentlest setting. The dropdown stays enabled - it is a hint, not a
+       restriction, so it can be changed straight back if wanted. */
     function applySafeMode(on){
         on = !!on;
         var changed = (on !== safeModeOn);
         safeModeOn = on;
-        var notice=document.getElementById('safeModeNotice');
-        if(notice) notice.classList.toggle('hidden', !on);
-        var sel=document.getElementById('refreshSelect');
-        if(on){
-            if(refreshMs !== 4000 || changed){ refreshMs = 4000; applyRefreshTimer(); }
-            if(sel){ sel.value='4000'; sel.disabled=true; sel.title='Locked to 4s while Safe Mode is active'; }
-        } else if(sel && sel.disabled){
-            sel.disabled=false; sel.title='';
-            initRefresh();                       // restore the saved preference
+        if (on && changed) {
+            refreshMs = 4000;
+            var sel = document.getElementById('refreshSelect');
+            if (sel) sel.value = '4000';
+            applyRefreshTimer();
         }
     }
 
