@@ -501,6 +501,10 @@
             <option value="7" data-translate-key="screen7">Screen 7 - Digital Watch</option>
             <option value="8" data-translate-key="screen8">Screen 8 - Color Analog</option>
             <option value="9" data-translate-key="screen9">Screen 9 - Nixie Tube</option>
+            <option value="10" data-translate-key="screen10">Screen 10 - Rainline</option>
+            <option value="11" data-translate-key="screen11">Screen 11 - Sunpath</option>
+            <option value="12" data-translate-key="screen12">Screen 12 - Wind Dial</option>
+            <option value="13" data-translate-key="screen13">Screen 13 - Infographic</option>
             <option value="99" data-translate-key="schedules">Schedules</option>
         </select>
     </div>
@@ -526,6 +530,10 @@
                 <option value="7" data-translate-key="screen7">Screen 7 - Digital Watch</option>
                 <option value="8" data-translate-key="screen8">Screen 8 - Color Analog</option>
                 <option value="9" data-translate-key="screen9">Screen 9 - Nixie Tube</option>
+                <option value="10" data-translate-key="screen10">Screen 10 - Rainline</option>
+                <option value="11" data-translate-key="screen11">Screen 11 - Sunpath</option>
+                <option value="12" data-translate-key="screen12">Screen 12 - Wind Dial</option>
+                <option value="13" data-translate-key="screen13">Screen 13 - Infographic</option>
             </select>
         </div>
 
@@ -638,6 +646,86 @@
     <div class="control-row"><label data-translate-key="24hour">24 Hour</label><div class="color-picker"></div><label class="switch switch-col"><input type="checkbox" id="24hourSwitch9" onchange="updateSwitch('24hour',this.checked,9)"><span class="slider"></span></label></div>
     <div class="control-row"><label data-translate-key="showDate">Show Date</label><div class="color-picker"></div><label class="switch switch-col"><input type="checkbox" id="dateSwitch9" onchange="updateSwitch('date',this.checked,9)"><span class="slider"></span></label></div>
 </div>
+<div id="screen10ClockControls" class="screen-clock-controls hidden">
+    <div class="control-row"><label data-translate-key="24hour">24 Hour</label><div class="color-picker"></div><label class="switch switch-col"><input type="checkbox" id="24hourSwitch10" onchange="updateSwitch('24hour',this.checked,10)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="weatherGlyph">Weather Glyph</label><div class="color-picker"></div><label class="switch switch-col"><input type="checkbox" id="iconsSwitch10" onchange="updateSwitch('icons',this.checked,10)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="time">Time</label><div class="color-picker"><input type="color" id="timeColorPicker10" onchange="updateColor('timecolor',this.value.substring(1),10)"></div><div class="switch-col"></div></div>
+    <div class="control-row"><label data-translate-key="secondsLine">Seconds Line</label><div class="color-picker"><input type="color" id="landColorPicker10" onchange="updateColor('landcolor',this.value.substring(1),10)"></div><label class="switch switch-col"><input type="checkbox" id="spareSwitch10" onchange="updateSwitch('spare_switch',this.checked,10)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="externalTemperature">External Temperature</label><div class="color-picker"><input type="color" id="tempColorPicker10" onchange="updateColor('tempcolor',this.value.substring(1),10)"></div><label class="switch switch-col"><input type="checkbox" id="temperatureSwitch10" onchange="updateSwitch('temperature',this.checked,10)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="internalTemperature">Internal Temperature</label><div class="color-picker"><input type="color" id="ampmColorPicker10" onchange="updateColor('ampmcolor',this.value.substring(1),10)"></div><label class="switch switch-col"><input type="checkbox" id="internalTemperatureSwitch10" onchange="updateSwitch('internaltemperature',this.checked,10)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="rainBars">Rain Line</label><div class="color-picker"><input type="color" id="humidityColorPicker10" onchange="updateColor('humiditycolor',this.value.substring(1),10)"></div><div class="switch-col"></div></div>
+    <div class="control-row"><label data-translate-key="chartLine">Chart Line</label><div class="color-picker"><input type="color" id="dateBGColorPicker10" onchange="updateColor('datebgcolor',this.value.substring(1),10)"></div><label class="switch switch-col"><input type="checkbox" id="chartLineSwitch10" onchange="updateSwitch('chartline',this.checked,10)"><span class="slider"></span></label></div>
+</div>
+<div id="screen11ClockControls" class="screen-clock-controls hidden">
+    <div class="control-row"><label data-translate-key="24hour">24 Hour</label><div class="color-picker"></div><label class="switch switch-col"><input type="checkbox" id="24hourSwitch11" onchange="updateSwitch('24hour',this.checked,11)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="weatherIcons">Weather Icons</label><div class="color-picker"><input type="color" id="humidityColorPicker11" onchange="updateColor('humiditycolor',this.value.substring(1),11)"></div><label class="switch switch-col"><input type="checkbox" id="iconsSwitch11" onchange="updateSwitch('icons',this.checked,11)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="time">Time</label><div class="color-picker"><input type="color" id="timeColorPicker11" onchange="updateColor('timecolor',this.value.substring(1),11)"></div><div class="switch-col"></div></div>
+    <div class="control-row"><label data-translate-key="secondsLine">Seconds Line</label><div class="color-picker"><input type="color" id="landColorPicker11" onchange="updateColor('landcolor',this.value.substring(1),11)"></div><label class="switch switch-col"><input type="checkbox" id="spareSwitch11" onchange="updateSwitch('spare_switch',this.checked,11)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="dateHeader">Date Header</label><div class="color-picker"><input type="color" id="dayColorPicker11" onchange="updateColor('daycolor',this.value.substring(1),11)"></div><label class="switch switch-col"><input type="checkbox" id="daySwitch11" onchange="updateSwitch('day',this.checked,11)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="date">Date</label><div class="color-picker"><input type="color" id="dateColorPicker11" onchange="updateColor('datecolor',this.value.substring(1),11)"></div><label class="switch switch-col"><input type="checkbox" id="dateSwitch11" onchange="updateSwitch('date',this.checked,11)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="externalTemperature">External Temperature</label><div class="color-picker"><input type="color" id="tempColorPicker11" onchange="updateColor('tempcolor',this.value.substring(1),11)"></div><label class="switch switch-col"><input type="checkbox" id="temperatureSwitch11" onchange="updateSwitch('temperature',this.checked,11)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="internalTemperature">Internal Temperature</label><div class="color-picker"><input type="color" id="ampmColorPicker11" onchange="updateColor('ampmcolor',this.value.substring(1),11)"></div><label class="switch switch-col"><input type="checkbox" id="internalTemperatureSwitch11" onchange="updateSwitch('internaltemperature',this.checked,11)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="sunArc">Sun Arc</label><div class="color-picker"><input type="color" id="dateBGColorPicker11" onchange="updateColor('datebgcolor',this.value.substring(1),11)"></div><div class="switch-col"></div></div>
+    <div class="control-row"><label data-translate-key="minMaxTemps">Min/Max Temps</label><div class="color-picker"></div><label class="switch switch-col"><input type="checkbox" id="minmaxTempsSwitch11" onchange="updateSwitch('minmaxtemps',this.checked,11)"><span class="slider"></span></label></div>
+</div>
+<div id="screen12ClockControls" class="screen-clock-controls hidden">
+    <div class="control-row"><label data-translate-key="24hour">24 Hour</label><div class="color-picker"></div><label class="switch switch-col"><input type="checkbox" id="24hourSwitch12" onchange="updateSwitch('24hour',this.checked,12)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="compass">Compass</label><div class="color-picker"><input type="color" id="dateBGColorPicker12" onchange="updateColor('datebgcolor',this.value.substring(1),12)"></div><label class="switch switch-col"><input type="checkbox" id="iconsSwitch12" onchange="updateSwitch('icons',this.checked,12)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="windArrow">Wind Arrow</label><div class="color-picker"><input type="color" id="humidityColorPicker12" onchange="updateColor('humiditycolor',this.value.substring(1),12)"></div><div class="switch-col"></div></div>
+    <div class="control-row"><label data-translate-key="time">Time</label><div class="color-picker"><input type="color" id="timeColorPicker12" onchange="updateColor('timecolor',this.value.substring(1),12)"></div><div class="switch-col"></div></div>
+    <div class="control-row"><label data-translate-key="secondsLine">Seconds Line</label><div class="color-picker"><input type="color" id="landColorPicker12" onchange="updateColor('landcolor',this.value.substring(1),12)"></div><label class="switch switch-col"><input type="checkbox" id="spareSwitch12" onchange="updateSwitch('spare_switch',this.checked,12)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="temperature">Temperature</label><div class="color-picker"><input type="color" id="tempColorPicker12" onchange="updateColor('tempcolor',this.value.substring(1),12)"></div><label class="switch switch-col"><input type="checkbox" id="temperatureSwitch12" onchange="updateSwitch('temperature',this.checked,12)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="feelsLike">Feels Like</label><div class="color-picker"><input type="color" id="ampmColorPicker12" onchange="updateColor('ampmcolor',this.value.substring(1),12)"></div><label class="switch switch-col"><input type="checkbox" id="humiditySwitch12" onchange="updateSwitch('humidity',this.checked,12)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="gusts">Gusts</label><div class="color-picker"><input type="color" id="secondsColorPicker12" onchange="updateColor('secondscolor',this.value.substring(1),12)"></div><label class="switch switch-col"><input type="checkbox" id="secondsSwitch12" onchange="updateSwitch('seconds',this.checked,12)"><span class="slider"></span></label></div>
+</div>
+<div id="screen13ClockControls" class="screen-clock-controls hidden">
+    <div class="control-row"><label data-translate-key="24hour">24 Hour</label><div class="color-picker"></div><label class="switch switch-col"><input type="checkbox" id="24hourSwitch13" onchange="updateSwitch('24hour',this.checked,13)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="time">Time</label><div class="color-picker"><input type="color" id="timeColorPicker13" onchange="updateColor('timecolor',this.value.substring(1),13)"></div><div class="switch-col"></div></div>
+    <div class="control-row"><label data-translate-key="pmIndicator">PM Indicator</label><div class="color-picker"><input type="color" id="ampmColorPicker13" onchange="updateColor('ampmcolor',this.value.substring(1),13)"></div><label class="switch switch-col"><input type="checkbox" id="ampmSwitch13" onchange="updateSwitch('ampm',this.checked,13)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="secondsLine">Seconds Line</label><div class="color-picker"><input type="color" id="landColorPicker13" onchange="updateColor('landcolor',this.value.substring(1),13)"></div><label class="switch switch-col"><input type="checkbox" id="spareSwitch13" onchange="updateSwitch('spare_switch',this.checked,13)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="internalExternalTemperature">Internal / External Temperature</label><div class="color-picker"><input type="color" id="tempColorPicker13" onchange="updateColor('tempcolor',this.value.substring(1),13)"></div><label class="switch switch-col"><input type="checkbox" id="temperatureSwitch13" onchange="updateSwitch('temperature',this.checked,13)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="internalExternalHumidity">Internal / External Humidity</label><div class="color-picker"><input type="color" id="humidityColorPicker13" onchange="updateColor('humiditycolor',this.value.substring(1),13)"></div><label class="switch switch-col"><input type="checkbox" id="humiditySwitch13" onchange="updateSwitch('humidity',this.checked,13)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="dateHeader">Date Header</label><div class="color-picker"><input type="color" id="dayColorPicker13" onchange="updateColor('daycolor',this.value.substring(1),13)"></div><label class="switch switch-col"><input type="checkbox" id="daySwitch13" onchange="updateSwitch('day',this.checked,13)"><span class="slider"></span></label></div>
+    <div class="control-row"><label data-translate-key="date">Date</label><div class="color-picker"><input type="color" id="dateColorPicker13" onchange="updateColor('datecolor',this.value.substring(1),13)"></div><label class="switch switch-col"><input type="checkbox" id="dateSwitch13" onchange="updateSwitch('date',this.checked,13)"><span class="slider"></span></label></div>
+
+    <div class="expandable-container" id="infographicSunContainer">
+        <div class="control-row"><label data-translate-key="sunriseSunset">Sunrise / Sunset</label><div class="color-picker"></div><label class="switch switch-col"><input type="checkbox" id="infographicSunpathSwitch13" onchange="updateInfographicModule('sunpath',this.checked);toggleInfographicBox('Sun',this.checked)"><span class="slider"></span></label></div>
+        <div id="infographicSunExpandable" class="expandable">
+            <div class="control-row"><label data-translate-key="sunArcGraph">Sun Arc Graph</label><div class="color-picker"><input type="color" id="infographicSunGraphColor13" onchange="updateInfographicColor('sungraph',this.value.substring(1))"></div><div class="switch-col"></div></div>
+            <div class="control-row"><label data-translate-key="sunArcHours">Sunrise / Sunset Hours</label><div class="color-picker"><input type="color" id="infographicSunHoursColor13" onchange="updateInfographicColor('sunhours',this.value.substring(1))"></div><div class="switch-col"></div></div>
+        </div>
+    </div>
+    <div class="expandable-container" id="infographicRainContainer">
+        <div class="control-row"><label data-translate-key="rainForecast">Rain Forecast</label><div class="color-picker"></div><label class="switch switch-col"><input type="checkbox" id="infographicRainSwitch13" onchange="updateInfographicModule('rain',this.checked);toggleInfographicBox('Rain',this.checked)"><span class="slider"></span></label></div>
+        <div id="infographicRainExpandable" class="expandable">
+            <div class="control-row"><label data-translate-key="forecastGraph">Forecast Graph</label><div class="color-picker"><input type="color" id="infographicRainGraphColor13" onchange="updateInfographicColor('raingraph',this.value.substring(1))"></div><div class="switch-col"></div></div>
+            <div class="control-row"><label data-translate-key="forecastHours">Forecast Hours</label><div class="color-picker"><input type="color" id="infographicRainHoursColor13" onchange="updateInfographicColor('rainhours',this.value.substring(1))"></div><div class="switch-col"></div></div>
+            <div class="control-row"><label data-translate-key="weatherIcon">Weather Icon</label><div class="color-picker"></div><label class="switch switch-col"><input type="checkbox" id="infographicRainIconSwitch13" onchange="updateInfographicModule('rainicon',this.checked)"><span class="slider"></span></label></div>
+        </div>
+    </div>
+    <div class="expandable-container" id="infographicWindContainer">
+        <div class="control-row"><label data-translate-key="windDial">Wind Dial</label><div class="color-picker"></div><label class="switch switch-col"><input type="checkbox" id="infographicWindSwitch13" onchange="updateInfographicModule('wind',this.checked);toggleInfographicBox('Wind',this.checked)"><span class="slider"></span></label></div>
+        <div id="infographicWindExpandable" class="expandable">
+            <div class="control-row"><label data-translate-key="compass">Compass</label><div class="color-picker"><input type="color" id="infographicCompassColor13" onchange="updateInfographicColor('compass',this.value.substring(1))"></div><label class="switch switch-col"><input type="checkbox" id="infographicWindCompassSwitch13" onchange="updateInfographicModule('windcompass',this.checked)"><span class="slider"></span></label></div>
+            <div class="control-row"><label data-translate-key="windArrow">Arrow</label><div class="color-picker"><input type="color" id="infographicArrowColor13" onchange="updateInfographicColor('arrow',this.value.substring(1))"></div><div class="switch-col"></div></div>
+            <div class="control-row"><label data-translate-key="windSpeed">Speed</label><div class="color-picker"><input type="color" id="infographicSpeedColor13" onchange="updateInfographicColor('speed',this.value.substring(1))"></div><div class="switch-col"></div></div>
+            <div class="control-row"><label data-translate-key="windUnits">KMH / MPH</label><div class="color-picker"><input type="color" id="infographicUnitsColor13" onchange="updateInfographicColor('units',this.value.substring(1))"></div><div class="switch-col"></div></div>
+        </div>
+    </div>
+    <div class="expandable-container" id="infographicForecastContainer">
+        <div class="control-row"><label data-translate-key="weatherForecast">Weather Forecast</label><div class="color-picker"></div><label class="switch switch-col"><input type="checkbox" id="infographicForecastSwitch13" onchange="updateInfographicModule('forecast',this.checked);toggleInfographicBox('Forecast',this.checked)"><span class="slider"></span></label></div>
+        <div id="infographicForecastExpandable" class="expandable">
+            <div class="control-row"><label data-translate-key="forecastDay">Day</label><div class="color-picker"><input type="color" id="infographicForecastDayColor13" onchange="updateInfographicColor('forecastday',this.value.substring(1))"></div><div class="switch-col"></div></div>
+            <div class="control-row"><label data-translate-key="forecastMin">Min Temperature</label><div class="color-picker"><input type="color" id="infographicForecastMinColor13" onchange="updateInfographicColor('forecastmin',this.value.substring(1))"></div><div class="switch-col"></div></div>
+            <div class="control-row"><label data-translate-key="forecastMax">Max Temperature</label><div class="color-picker"><input type="color" id="infographicForecastMaxColor13" onchange="updateInfographicColor('forecastmax',this.value.substring(1))"></div><div class="switch-col"></div></div>
+            <div class="control-row"><label data-translate-key="divider">Divider</label><div class="color-picker"><input type="color" id="infographicForecastDividerColor13" onchange="updateInfographicColor('forecastdivider',this.value.substring(1))"></div><div class="switch-col"></div></div>
+        </div>
+    </div>
+    <div id="infographicTransitionControls" class="hidden">
+        <div class="control-row"><label data-translate-key="transition">Transition</label><select id="infographicTransition13" onchange="updateInfographicTransition(this.value)"><option value="0" data-translate-key="transitionCrossfade">Crossfade</option><option value="1" data-translate-key="transitionSlideLeft">Slide Left</option><option value="2" data-translate-key="transitionSlideUp">Slide Up</option><option value="3" data-translate-key="transitionFadeBlack">Fade to Black</option><option value="4" data-translate-key="transitionDissolve">Dissolve</option></select></div>
+        <div class="control-row"><label data-translate-key="transitionTime">Time Between Transitions</label><div class="color-picker" style="display:flex;align-items:center;width:auto"><input type="range" id="infographicHold13" min="2" max="60" value="8" oninput="document.getElementById('infographicHoldValue13').textContent=this.value+' s'" onchange="updateInfographicHold(this.value)"><span class="brightness-value" id="infographicHoldValue13">8 s</span></div><div class="switch-col"></div></div>
+    </div>
+</div>
 </div>
 
 <div class="control-group" id="brightnessCard">
@@ -698,7 +786,7 @@
     <label class="card-label" data-translate-key="uploadFirmware">Upload Firmware</label>
     <div style="text-align:center;padding:10px;border:1.5px dashed #ccc;border-radius:6px;">
         <input type="file" id="otaFile" accept=".bin">
-        <div style="font-size:11px;color:#888;margin-top:6px;" data-translate-key="otaHint">Pick any SmartClock_vX.XX.bin from the BIN folder (or firmware.bin). Uploads in 32KB chunks over WiFi - about 5-10 minutes. Settings are kept; the clock reboots when done.</div>
+        <div style="font-size:11px;color:#888;margin-top:6px;" data-translate-key="otaHint">Pick any SmartClock_vX.XX.bin from the BIN folder (or firmware.bin). Uploads in retry-safe 16KB chunks over WiFi. Settings are kept; the clock reboots when done.</div>
     </div>
     <div id="otaBar" style="display:none;height:6px;border-radius:3px;background:#eee;overflow:hidden;margin-top:10px;"><i id="otaFill" style="display:block;height:100%;width:0;background:#4CAF50;"></i></div>
     <div id="otaStatus" style="font-size:12px;margin-top:6px;min-height:16px;"></div>
@@ -748,18 +836,46 @@
 <script>
     const translations = {
         en: {
-            liveRefresh:"Live Refresh", liveDisplay:"Live display", wifiSignal:"Wi-Fi signal", wifiExcellent:"Excellent", wifiGood:"Good", wifiFair:"Fair", wifiWeak:"Weak", wifiOffline:"Offline", uploadFirmware:"Upload Firmware", otaHint:"Pick any SmartClock_vX.XX.bin from the BIN folder (or firmware.bin). Uploads in 32KB chunks over WiFi - about 5-10 minutes. Settings are kept; the clock reboots when done.", otaUpload:"Upload", weatherLive:"Live weather activity", weatherWaiting:"Waiting for weather", weatherConnection:"Connection", weatherDownloaded:"Downloaded", weatherAttempt:"API attempts", weatherLastUpdate:"Last update", refreshWeather:"Refresh weather now", weatherNever:"Never", weatherJustNow:"Just now", weatherIdle:"No weather request has run yet.", weatherQueued:"Weather update queued", weatherValidating:"Checking provider, API key and location", weatherConnecting:"Connecting to weather provider", weatherDownloading:"Connected — downloading weather data", weatherParsing:"Checking downloaded weather data", weatherUpdated:"Weather updated successfully", weatherError:"Weather update failed", weatherDisabled:"Weather is disabled",
-            schedules: "Schedules", scheduleSettings: "Schedule Settings", defaultScreen: "Default Screen", addSchedule: "Add", indoorOffset: "Indoor Temp Offset", language: "Language", mainTitle: "Carlson's Smart Clock", clockSettings: "Clock Settings", screenSelection: "Screen Selection", panelType: "Panel Type (Reboot Req.)", screen1: "Screen 1 - Classic Digital", screen2: "Screen 2 - Alt. Digital", screen3: "Screen 3 - Analog", screen4: "Screen 4 - World Map", screen5: "Screen 5 - Moon Phase", screen6: "Screen 6 - Gradient Clock", screen7: "Screen 7 - Digital Watch", screen8: "Screen 8 - Color Analog", screen9: "Screen 9 - Nixie Tube", fullYearAnimation: "Full Year Animation", "24hour": "24 Hour", icons: "Icons", minMaxTemps: "Min/Max Temps", ampm: "AM/PM", seconds: "Seconds", time: "Time", day: "Day", date: "Date", month: "Month", dateBg: "Date Background", divider: "Divider", temperature: "Temperature", humidity: "Humidity", clockFace: "Clock Face", option: "Option", colour: "Colour", image: "Image", clockOptions: "Clock Options", displayMode: "Display Mode", "4numbers": "4 Numbers", allNumbers: "All Numbers", "4ticks": "4 Ticks", allTicks: "All Ticks", handFuzz: "Hand Fuzziness", handLength: "Hand Length", hourHand: "Hour Hand", minuteHand: "Minute Hand", secondHand: "Second Hand", topCalendar: "Top Calendar", bottomCalendar: "Bottom Calendar", timeShadow: "Time Shadow", nightLights: "Night Lights", nightShadow: "Night Shadow", "3dEffects": "3D Effects", speedDir: "Speed & Direction", numStars: "Number of Stars", sun: "Sun", land: "Land", water: "Water", ice: "Ice", moonShadow: "Moon Shadow", moonPercent: "Moon Percentage", gradSpeed: "Gradient Speed", boxSize: "Box Size", boxFeather: "Box Feather", glowIntensity: "Glow Intensity", glow: "Glow", bgColor: "Background Colour", showMarkers: "Show Markers", cycleSpeed: "Cycle Speed", showDate: "Show Date", brightnessSettings: "Brightness Settings", brightness: "Brightness", autoBrightness: "Auto Brightness", darkRoomBrightness: "Dark Room Brightness", brightRoomBrightness: "Bright Room Brightness", currentBrightness: "Current Brightness:", setDarkRoom: "Set Dark Room", setBrightRoom: "Set Bright Room", weatherSettings: "Weather Settings", timezone: "Timezone Selection", weatherService: "Weather Service", pirateApi: "Pirate Weather API", owmApi: "OpenWeatherMap API", weatherapiApi: "WeatherAPI.com API", getKey: "Get Key", units: "Units", celsius: "Celsius", fahrenheit: "Fahrenheit", tempType: "Temperature", actualTemp: "Actual Temperature", feelsLike: "Feels Like", city: "City", search: "Search", latitude: "Latitude", longitude: "Longitude", systemSettings: "System Settings", reboot: "Reboot", clearWifi: "Clear Wifi", firmwareUpdate: "Firmware Update", formatSsd: "Format SSD"
+            liveRefresh:"Live Refresh", liveDisplay:"Live display", wifiSignal:"Wi-Fi signal", wifiExcellent:"Excellent", wifiGood:"Good", wifiFair:"Fair", wifiWeak:"Weak", wifiOffline:"Offline", uploadFirmware:"Upload Firmware", otaHint:"Pick any SmartClock_vX.XX.bin from the BIN folder (or firmware.bin). Uploads in retry-safe 16KB chunks over WiFi. Settings are kept; the clock reboots when done.", otaUpload:"Upload", weatherLive:"Live weather activity", weatherWaiting:"Waiting for weather", weatherConnection:"Connection", weatherDownloaded:"Downloaded", weatherAttempt:"API attempts", weatherLastUpdate:"Last update", refreshWeather:"Refresh weather now", weatherNever:"Never", weatherJustNow:"Just now", weatherIdle:"No weather request has run yet.", weatherQueued:"Weather update queued", weatherValidating:"Checking provider, API key and location", weatherConnecting:"Connecting to weather provider", weatherDownloading:"Connected — downloading weather data", weatherParsing:"Checking downloaded weather data", weatherUpdated:"Weather updated successfully", weatherError:"Weather update failed", weatherDisabled:"Weather is disabled",
+            schedules: "Schedules", scheduleSettings: "Schedule Settings", defaultScreen: "Default Screen", addSchedule: "Add", indoorOffset: "Indoor Temp Offset", language: "Language", mainTitle: "Carlson's Smart Clock", clockSettings: "Clock Settings", screenSelection: "Screen Selection", panelType: "Panel Type (Reboot Req.)", screen1: "Screen 1 - Classic Digital", screen2: "Screen 2 - Alt. Digital", screen3: "Screen 3 - Analog", screen4: "Screen 4 - World Map", screen5: "Screen 5 - Moon Phase", screen6: "Screen 6 - Gradient Clock", screen7: "Screen 7 - Digital Watch", screen8: "Screen 8 - Color Analog", screen9: "Screen 9 - Nixie Tube", screen10: "Screen 10 - Rainline", screen11: "Screen 11 - Sunpath", screen12: "Screen 12 - Wind Dial", weatherGlyph: "Weather Glyph", weatherIcons: "Weather Icons", rainBars: "Rain Bars", chartLine: "Chart Line", dateHeader: "Date Header", sunArc: "Sun Arc", compass: "Compass", windArrow: "Wind Arrow", gusts: "Gusts", fullYearAnimation: "Full Year Animation", "24hour": "24 Hour", icons: "Icons", minMaxTemps: "Min/Max Temps", ampm: "AM/PM", seconds: "Seconds", time: "Time", day: "Day", date: "Date", month: "Month", dateBg: "Date Background", divider: "Divider", temperature: "Temperature", humidity: "Humidity", clockFace: "Clock Face", option: "Option", colour: "Colour", image: "Image", clockOptions: "Clock Options", displayMode: "Display Mode", "4numbers": "4 Numbers", allNumbers: "All Numbers", "4ticks": "4 Ticks", allTicks: "All Ticks", handFuzz: "Hand Fuzziness", handLength: "Hand Length", hourHand: "Hour Hand", minuteHand: "Minute Hand", secondHand: "Second Hand", topCalendar: "Top Calendar", bottomCalendar: "Bottom Calendar", timeShadow: "Time Shadow", nightLights: "Night Lights", nightShadow: "Night Shadow", "3dEffects": "3D Effects", speedDir: "Speed & Direction", numStars: "Number of Stars", sun: "Sun", land: "Land", water: "Water", ice: "Ice", moonShadow: "Moon Shadow", moonPercent: "Moon Percentage", gradSpeed: "Gradient Speed", boxSize: "Box Size", boxFeather: "Box Feather", glowIntensity: "Glow Intensity", glow: "Glow", bgColor: "Background Colour", showMarkers: "Show Markers", cycleSpeed: "Cycle Speed", showDate: "Show Date", brightnessSettings: "Brightness Settings", brightness: "Brightness", autoBrightness: "Auto Brightness", darkRoomBrightness: "Dark Room Brightness", brightRoomBrightness: "Bright Room Brightness", currentBrightness: "Current Brightness:", setDarkRoom: "Set Dark Room", setBrightRoom: "Set Bright Room", weatherSettings: "Weather Settings", timezone: "Timezone Selection", weatherService: "Weather Service", pirateApi: "Pirate Weather API", owmApi: "OpenWeatherMap API", weatherapiApi: "WeatherAPI.com API", getKey: "Get Key", units: "Units", celsius: "Celsius", fahrenheit: "Fahrenheit", tempType: "Temperature", actualTemp: "Actual Temperature", feelsLike: "Feels Like", city: "City", search: "Search", latitude: "Latitude", longitude: "Longitude", systemSettings: "System Settings", reboot: "Reboot", clearWifi: "Clear Wifi", firmwareUpdate: "Firmware Update", formatSsd: "Format SSD"
         },
         de: {
-            liveRefresh:"Aktualisierung", liveDisplay:"Live-Anzeige", wifiSignal:"WLAN-Signal", wifiExcellent:"Ausgezeichnet", wifiGood:"Gut", wifiFair:"Mittel", wifiWeak:"Schwach", wifiOffline:"Offline", uploadFirmware:"Firmware hochladen", otaHint:"Beliebige SmartClock_vX.XX.bin aus dem BIN-Ordner wählen (oder firmware.bin). Upload in 32KB-Blöcken über WLAN - ca. 5-10 Minuten. Einstellungen bleiben erhalten; die Uhr startet danach neu.", otaUpload:"Hochladen", weatherLive:"Live-Wetteraktivität", weatherWaiting:"Warten auf Wetter", weatherConnection:"Verbindung", weatherDownloaded:"Heruntergeladen", weatherAttempt:"API-Versuche", weatherLastUpdate:"Letzte Aktualisierung", refreshWeather:"Wetter jetzt aktualisieren", weatherNever:"Nie", weatherJustNow:"Gerade eben", weatherIdle:"Noch keine Wetterabfrage.", weatherQueued:"Wetteraktualisierung eingeplant", weatherValidating:"Anbieter, API-Schlüssel und Ort werden geprüft", weatherConnecting:"Verbindung zum Wetteranbieter", weatherDownloading:"Verbunden — Wetterdaten werden geladen", weatherParsing:"Wetterdaten werden geprüft", weatherUpdated:"Wetter erfolgreich aktualisiert", weatherError:"Wetteraktualisierung fehlgeschlagen", weatherDisabled:"Wetter ist deaktiviert",
+            liveRefresh:"Aktualisierung", liveDisplay:"Live-Anzeige", wifiSignal:"WLAN-Signal", wifiExcellent:"Ausgezeichnet", wifiGood:"Gut", wifiFair:"Mittel", wifiWeak:"Schwach", wifiOffline:"Offline", uploadFirmware:"Firmware hochladen", otaHint:"Beliebige SmartClock_vX.XX.bin aus dem BIN-Ordner wählen (oder firmware.bin). Upload in wiederholbaren 16KB-Blöcken über WLAN. Einstellungen bleiben erhalten; die Uhr startet danach neu.", otaUpload:"Hochladen", weatherLive:"Live-Wetteraktivität", weatherWaiting:"Warten auf Wetter", weatherConnection:"Verbindung", weatherDownloaded:"Heruntergeladen", weatherAttempt:"API-Versuche", weatherLastUpdate:"Letzte Aktualisierung", refreshWeather:"Wetter jetzt aktualisieren", weatherNever:"Nie", weatherJustNow:"Gerade eben", weatherIdle:"Noch keine Wetterabfrage.", weatherQueued:"Wetteraktualisierung eingeplant", weatherValidating:"Anbieter, API-Schlüssel und Ort werden geprüft", weatherConnecting:"Verbindung zum Wetteranbieter", weatherDownloading:"Verbunden — Wetterdaten werden geladen", weatherParsing:"Wetterdaten werden geprüft", weatherUpdated:"Wetter erfolgreich aktualisiert", weatherError:"Wetteraktualisierung fehlgeschlagen", weatherDisabled:"Wetter ist deaktiviert",
+            screen10:"Bildschirm 10 - Regenlinie", screen11:"Bildschirm 11 - Sonnenbahn", screen12:"Bildschirm 12 - Windrose", weatherGlyph:"Wettersymbol", weatherIcons:"Wettersymbole", rainBars:"Regenbalken", chartLine:"Diagrammlinie", dateHeader:"Datumskopf", sunArc:"Sonnenbogen", compass:"Kompass", windArrow:"Windpfeil", gusts:"Böen",
             schedules: "Zeitpläne", scheduleSettings: "Zeitplan-Einstellungen", defaultScreen: "Standardbildschirm", addSchedule: "Hinzufügen", indoorOffset: "Innen-Temp Offset", language: "Sprache", mainTitle: "Carlson's Smart Clock", clockSettings: "Uhreinstellungen", screenSelection: "Bildschirmauswahl", panelType: "Panel-Typ (Neustart Erf.)", screen1: "Bildschirm 1 - Klassisch Digital", screen2: "Bildschirm 2 - Alt. Digital", screen3: "Bildschirm 3 - Analog", screen4: "Bildschirm 4 - Weltkarte", screen5: "Bildschirm 5 - Mondphase", screen6: "Bildschirm 6 - Farbverlauf", screen7: "Bildschirm 7 - Digitaluhr", screen8: "Bildschirm 8 - Farb-Analog", screen9: "Bildschirm 9 - Nixie-Röhre", fullYearAnimation: "Ganzjahresanimation", "24hour": "24-Stunden", icons: "Symbole", minMaxTemps: "Min/Max Temp.", ampm: "AM/PM", seconds: "Sekunden", time: "Zeit", day: "Tag", date: "Datum", month: "Monat", dateBg: "Datum-Hintergrund", divider: "Trennlinie", temperature: "Temperatur", humidity: "Luftfeuchtigkeit", clockFace: "Zifferblatt", option: "Option", colour: "Farbe", image: "Bild", clockOptions: "Uhrenoptionen", displayMode: "Anzeigemodus", "4numbers": "4 Zahlen", allNumbers: "Alle Zahlen", "4ticks": "4 Striche", allTicks: "Alle Striche", handFuzz: "Zeigerunschärfe", handLength: "Zeigerlänge", hourHand: "Stundenzeiger", minuteHand: "Minutenzeiger", secondHand: "Sekundenzeiger", topCalendar: "Oberer Kalender", bottomCalendar: "Unterer Kalender", timeShadow: "Zeitschatten", nightLights: "Nachtlichter", nightShadow: "Nachtschatten", "3dEffects": "3D-Effekte", speedDir: "Geschw. & Richtung", numStars: "Anzahl Sterne", sun: "Sonne", land: "Land", water: "Wasser", ice: "Eis", moonShadow: "Mondschatten", moonPercent: "Mond in Prozent", gradSpeed: "Farbverlaufgeschw.", boxSize: "Boxgröße", boxFeather: "Box-Weichzeichnung", glowIntensity: "Leuchtintensität", glow: "Leuchten", bgColor: "Hintergrundfarbe", showMarkers: "Markierungen", cycleSpeed: "Zyklusgeschw.", showDate: "Datum anzeigen", brightnessSettings: "Helligkeitseinstellungen", brightness: "Helligkeit", autoBrightness: "Auto-Helligkeit", darkRoomBrightness: "Dunkler Raum", brightRoomBrightness: "Heller Raum", currentBrightness: "Aktuelle Helligkeit:", setDarkRoom: "Dunkel einst.", setBrightRoom: "Hell einst.", weatherSettings: "Wettereinstellungen", timezone: "Zeitzonenauswahl", weatherService: "Wetterdienst", pirateApi: "Pirate Weather API", owmApi: "OpenWeatherMap API", weatherapiApi: "WeatherAPI.com API", getKey: "Schlüssel holen", units: "Einheiten", celsius: "Celsius", fahrenheit: "Fahrenheit", tempType: "Temperatur", actualTemp: "Tatsächliche Temp.", feelsLike: "Gefühlte Temp.", city: "Stadt", search: "Suchen", latitude: "Breitengrad", longitude: "Längengrad", systemSettings: "Systemeinstellungen", reboot: "Neustart", clearWifi: "WLAN löschen", firmwareUpdate: "Firmware-Update", formatSsd: "SSD formatieren"
         },
         sv: {
-            liveRefresh:"Uppdatering", liveDisplay:"Livevisning", wifiSignal:"Wi-Fi-signal", wifiExcellent:"Utmärkt", wifiGood:"Bra", wifiFair:"Måttlig", wifiWeak:"Svag", wifiOffline:"Offline", uploadFirmware:"Ladda upp firmware", otaHint:"Välj valfri SmartClock_vX.XX.bin från BIN-mappen (eller firmware.bin). Laddas upp i 32KB-block över WiFi - cirka 5-10 minuter. Inställningarna behålls; klockan startar om när den är klar.", otaUpload:"Ladda upp", weatherLive:"Live väderaktivitet", weatherWaiting:"Väntar på väder", weatherConnection:"Anslutning", weatherDownloaded:"Nedladdat", weatherAttempt:"API-försök", weatherLastUpdate:"Senaste uppdatering", refreshWeather:"Uppdatera väder nu", weatherNever:"Aldrig", weatherJustNow:"Just nu", weatherIdle:"Ingen väderhämtning har körts ännu.", weatherQueued:"Väderuppdatering köad", weatherValidating:"Kontrollerar leverantör, API-nyckel och plats", weatherConnecting:"Ansluter till väderleverantören", weatherDownloading:"Ansluten — hämtar väderdata", weatherParsing:"Kontrollerar hämtad väderdata", weatherUpdated:"Vädret uppdaterades", weatherError:"Väderuppdateringen misslyckades", weatherDisabled:"Väder är avstängt",
+            liveRefresh:"Uppdatering", liveDisplay:"Livevisning", wifiSignal:"Wi-Fi-signal", wifiExcellent:"Utmärkt", wifiGood:"Bra", wifiFair:"Måttlig", wifiWeak:"Svag", wifiOffline:"Offline", uploadFirmware:"Ladda upp firmware", otaHint:"Välj valfri SmartClock_vX.XX.bin från BIN-mappen (eller firmware.bin). Laddas upp i återförsökssäkra 16KB-block över WiFi. Inställningarna behålls; klockan startar om när den är klar.", otaUpload:"Ladda upp", weatherLive:"Live väderaktivitet", weatherWaiting:"Väntar på väder", weatherConnection:"Anslutning", weatherDownloaded:"Nedladdat", weatherAttempt:"API-försök", weatherLastUpdate:"Senaste uppdatering", refreshWeather:"Uppdatera väder nu", weatherNever:"Aldrig", weatherJustNow:"Just nu", weatherIdle:"Ingen väderhämtning har körts ännu.", weatherQueued:"Väderuppdatering köad", weatherValidating:"Kontrollerar leverantör, API-nyckel och plats", weatherConnecting:"Ansluter till väderleverantören", weatherDownloading:"Ansluten — hämtar väderdata", weatherParsing:"Kontrollerar hämtad väderdata", weatherUpdated:"Vädret uppdaterades", weatherError:"Väderuppdateringen misslyckades", weatherDisabled:"Väder är avstängt",
+            screen10:"Skärm 10 - Regnlinje", screen11:"Skärm 11 - Solbana", screen12:"Skärm 12 - Vindratt", weatherGlyph:"Vädersymbol", weatherIcons:"Väderikoner", rainBars:"Regnstaplar", chartLine:"Diagramlinje", dateHeader:"Datumrubrik", sunArc:"Solbåge", compass:"Kompass", windArrow:"Vindpil", gusts:"Vindbyar",
             schedules: "Tidsscheman", scheduleSettings: "Schemainställningar", defaultScreen: "Standardskärm", addSchedule: "Lägg till", indoorOffset: "Inomhus Temp Offset", language: "Språk", mainTitle: "Carlsons Smartklocka", clockSettings: "Klockinställningar", screenSelection: "Skärmval", panelType: "Paneltyp (Kräver omstart)", screen1: "Skärm 1 - Klassisk Digital", screen2: "Skärm 2 - Alt. Digital", screen3: "Skärm 3 - Analog", screen4: "Skärm 4 - Världskarta", screen5: "Skärm 5 - Månfas", screen6: "Skärm 6 - Gradientklocka", screen7: "Skärm 7 - Digitalt Armbandsur", screen8: "Skärm 8 - Färg-Analog", screen9: "Skärm 9 - Nixie-rör", fullYearAnimation: "Helårsanimation", "24hour": "24-timmars", icons: "Ikoner", minMaxTemps: "Min/Max Temp.", ampm: "AM/PM", seconds: "Sekunder", time: "Tid", day: "Dag", date: "Datum", month: "Månad", dateBg: "Datum-bakgrund", divider: "Avdelare", temperature: "Temperatur", humidity: "Luftfuktighet", clockFace: "Urtavla", option: "Alternativ", colour: "Färg", image: "Bild", clockOptions: "Klockalternativ", displayMode: "Visningsläge", "4numbers": "4 Siffror", allNumbers: "Alla Siffror", "4ticks": "4 Markeringar", allTicks: "Alla Markeringar", handFuzz: "Visaroskärpa", handLength: "Visarlängd", hourHand: "Timvisare", minuteHand: "Minutvisare", secondHand: "Sekundvisare", topCalendar: "Övre Kalender", bottomCalendar: "Nedre Kalender", timeShadow: "Tidsskugga", nightLights: "Nattljus", nightShadow: "Nattskugga", "3dEffects": "3D-effekter", speedDir: "Fart & Riktning", numStars: "Antal Stjärnor", sun: "Sol", land: "Land", water: "Vatten", ice: "Is", moonShadow: "Månskugga", moonPercent: "Månprocent", gradSpeed: "Gradienthastighet", boxSize: "Boxstorlek", boxFeather: "Box-ludd", glowIntensity: "Ljusintensitet", glow: "Ljus", bgColor: "Bakgrundsfärg", showMarkers: "Markörer", cycleSpeed: "Cykelfart", showDate: "Visa Datum", brightnessSettings: "Ljusstyrkeinställningar", brightness: "Ljusstyrka", autoBrightness: "Auto-ljusstyrka", darkRoomBrightness: "Mörkt Rum", brightRoomBrightness: "Ljust Rum", currentBrightness: "Nuvarande Ljusstyrka:", setDarkRoom: "Ställ in Mörkt", setBrightRoom: "Ställ in Ljust", weatherSettings: "Väderinställningar", timezone: "Tidszonsval", weatherService: "Vädertjänst", pirateApi: "Pirate Weather API", owmApi: "OpenWeatherMap API", weatherapiApi: "WeatherAPI.com API", getKey: "Hämta Nyckel", units: "Enheter", celsius: "Celsius", fahrenheit: "Fahrenheit", tempType: "Temperatur", actualTemp: "Faktisk Temp.", feelsLike: "Känns Som", city: "Stad", search: "Sök", latitude: "Latitud", longitude: "Longitud", systemSettings: "Systeminställningar", reboot: "Starta om", clearWifi: "Rensa WiFi", firmwareUpdate: "Firmware-uppdat.", formatSsd: "Formatera SSD"
         }
     };
+
+    translations.en.rainBars = "Rain Line";
+    translations.de.rainBars = "Regenlinie";
+    translations.sv.rainBars = "Regnlinje";
+    translations.en.externalTemperature = "External Temperature";
+    translations.en.internalTemperature = "Internal Temperature";
+    translations.de.externalTemperature = "Außentemperatur";
+    translations.de.internalTemperature = "Innentemperatur";
+    translations.sv.externalTemperature = "Utomhustemperatur";
+    translations.sv.internalTemperature = "Inomhustemperatur";
+    translations.en.secondsLine = "Seconds Line";
+    translations.de.secondsLine = "Sekundenlinie";
+    translations.sv.secondsLine = "Sekundlinje";
+    Object.assign(translations.en, {
+        screen13:"Screen 13 - Infographic", sunriseSunset:"Sunrise / Sunset",
+        rainForecast:"Rain Forecast", windDial:"Wind Dial", weatherForecast:"Weather Forecast",
+        forecastLabels:"Forecast Labels", transition:"Transition", pmIndicator:"PM Indicator",
+        internalExternalTemperature:"Internal / External Temperature", internalExternalHumidity:"Internal / External Humidity",
+        sunArcGraph:"Sun Arc Graph", sunArcHours:"Sunrise / Sunset Hours",
+        forecastGraph:"Forecast Graph", forecastHours:"Forecast Hours", weatherIcon:"Weather Icon",
+        windSpeed:"Speed", windUnits:"KMH / MPH", forecastDay:"Day",
+        forecastMin:"Min Temperature", forecastMax:"Max Temperature",
+        transitionTime:"Time Between Transitions", transitionCrossfade:"Crossfade",
+        transitionSlideLeft:"Slide Left", transitionSlideUp:"Slide Up",
+        transitionFadeBlack:"Fade to Black", transitionDissolve:"Dissolve"
+    });
 
     let lastWifiRssi = null;
     function updateWifiQuality(value) {
@@ -900,7 +1016,9 @@
     const screenNames = [
         "Screen 1 - Classic Digital", "Screen 2 - Alt. Digital", "Screen 3 - Analog",
         "Screen 4 - World Map", "Screen 5 - Moon Phase", "Screen 6 - Gradient Clock",
-        "Screen 7 - Digital Watch", "Screen 8 - Color Analog", "Screen 9 - Nixie Tube"
+        "Screen 7 - Digital Watch", "Screen 8 - Color Analog", "Screen 9 - Nixie Tube",
+        "Screen 10 - Rainline", "Screen 11 - Sunpath", "Screen 12 - Wind Dial",
+        "Screen 13 - Infographic"
     ];
     let currentSchedules = [];
 
@@ -916,7 +1034,7 @@
             if (!isSchedules) {
                 // Manually selecting a screen
                 const t = parseInt(value, 10);
-                if (t >= 1 && t <= 9) {
+                if (t >= 1 && t <= 13) {
                     updateScreenVisibility(t);
                     deviceFetch("/screen?value=" + t, {}, '/screen').finally(() => { setTimeout(fetchSettings, 200); });
                 }
@@ -1232,7 +1350,7 @@
         pollingPauseTimeout = setTimeout(() => { pollingPaused = false; }, duration);
     }
 
-    function showApiKeyField(service){document.getElementById("pirateWeatherRow").classList.toggle("hidden","pirateweather"!==service),document.getElementById("openWeatherMapRow").classList.toggle("hidden","openweathermap"!==service),document.getElementById("weatherApiRow").classList.toggle("hidden","weatherapi"!==service),document.getElementById("pirateWeatherLink").classList.toggle("hidden","pirateweather"!==service),document.getElementById("openWeatherMapLink").classList.toggle("hidden","openweathermap"!==service),document.getElementById("weatherApiLink").classList.toggle("hidden","weatherapi"!==service);const e="none"===service;["1","2","5"].forEach(t=>{const n=document.getElementById(`minmaxTempsSwitch${t}`);n&&(n.disabled=e)})}
+    function showApiKeyField(service){document.getElementById("pirateWeatherRow").classList.toggle("hidden","pirateweather"!==service),document.getElementById("openWeatherMapRow").classList.toggle("hidden","openweathermap"!==service),document.getElementById("weatherApiRow").classList.toggle("hidden","weatherapi"!==service),document.getElementById("pirateWeatherLink").classList.toggle("hidden","pirateweather"!==service),document.getElementById("openWeatherMapLink").classList.toggle("hidden","openweathermap"!==service),document.getElementById("weatherApiLink").classList.toggle("hidden","weatherapi"!==service);const e="none"===service;["1","2","5","11"].forEach(t=>{const n=document.getElementById(`minmaxTempsSwitch${t}`);n&&(n.disabled=e)})}
     function updateWeatherService(e){
         blockPolling(1000);
         if(isLoadingSettings)return;
@@ -1269,7 +1387,7 @@
                 // AND IMPORTANTLY: HIDE specific screen controls if schedule is on
                 if(schedulesOn) {
                     document.getElementById('schedulesContainer').classList.remove('hidden');
-                    updateScreenVisibility(99); // This hides 1-9 controls
+                    updateScreenVisibility(99); // This hides all per-screen controls
                 } else {
                     document.getElementById('schedulesContainer').classList.add('hidden');
                     updateScreenVisibility(parseInt(mainDropdownVal));
@@ -1329,7 +1447,33 @@
                 }
 
                 // Populate Settings (even if hidden, good to keep state)
-                for(let idx_loop_t=1;idx_loop_t<=9;idx_loop_t++){let i;if(idx_loop_t!==3){i=document.getElementById("ampmSwitch"+idx_loop_t);if(i&&e.hasOwnProperty("ampm_switch"))i.checked=e.ampm_switch;i=document.getElementById("secondsSwitch"+idx_loop_t);if(i&&e.hasOwnProperty("seconds_switch"))i.checked=e.seconds_switch;i=document.getElementById("24hourSwitch"+idx_loop_t);if(i&&e.hasOwnProperty("24hour_switch"))i.checked=e["24hour_switch"];i=document.getElementById("iconsSwitch"+idx_loop_t);if(i&&e.hasOwnProperty("icons_switch"))i.checked=e.icons_switch;i=document.getElementById("minmaxTempsSwitch"+idx_loop_t);if(i&&e.hasOwnProperty("minmax_temps_switch"))i.checked=e.minmax_temps_switch;i=document.getElementById("timeColorPicker"+idx_loop_t);if(i&&e.time_color)i.value=rgbToHex(e.time_color.r,e.time_color.g,e.time_color.b);i=document.getElementById("humiditySwitch"+idx_loop_t);if(i&&e.hasOwnProperty("humidity_switch"))i.checked=e.humidity_switch;i=document.getElementById("humidityColorPicker"+idx_loop_t);if(i&&e.humidity_color)i.value=rgbToHex(e.humidity_color.r,e.humidity_color.g,e.humidity_color.b)}i=document.getElementById("temperatureSwitch"+idx_loop_t);if(i&&e.hasOwnProperty("temperature_switch"))i.checked=e.temperature_switch;i=document.getElementById("daySwitch"+idx_loop_t);if(i&&e.hasOwnProperty("day_switch"))i.checked=e.day_switch;i=document.getElementById("dateSwitch"+idx_loop_t);if(i&&e.hasOwnProperty("date_switch"))i.checked=e.date_switch;i=document.getElementById("monthSwitch"+idx_loop_t);if(i&&e.hasOwnProperty("month_switch"))i.checked=e.month_switch;i=document.getElementById("dayColorPicker"+idx_loop_t);if(i&&e.day_color)i.value=rgbToHex(e.day_color.r,e.day_color.g,e.day_color.b);i=document.getElementById("dateColorPicker"+idx_loop_t);if(i&&e.date_color)i.value=rgbToHex(e.date_color.r,e.date_color.g,e.date_color.b);i=document.getElementById("monthColorPicker"+idx_loop_t);if(i&&e.month_color)i.value=rgbToHex(e.month_color.r,e.month_color.g,e.month_color.b);i=document.getElementById("dateBGColorPicker"+idx_loop_t);if(i&&e.date_bg_color)i.value=rgbToHex(e.date_bg_color.r,e.date_bg_color.g,e.date_bg_color.b);i=document.getElementById("tempColorPicker"+idx_loop_t);if(i&&e.temp_color)i.value=rgbToHex(e.temp_color.r,e.temp_color.g,e.temp_color.b);i=document.getElementById("ampmColorPicker"+idx_loop_t);if(i&&e.ampm_color)i.value=rgbToHex(e.ampm_color.r,e.ampm_color.g,e.ampm_color.b);i=document.getElementById("secondsColorPicker"+idx_loop_t);if(i&&e.seconds_color)i.value=rgbToHex(e.seconds_color.r,e.seconds_color.g,e.seconds_color.b);let bg=document.getElementById('backgroundSwitch'+idx_loop_t);if(bg&&e.hasOwnProperty("backgroundSwitch"))bg.checked=e.backgroundSwitch;i=document.getElementById("dayLabel"+idx_loop_t);if(i){if(idx_loop_t==3){if(e.current_screen===3&&e.hasOwnProperty("day_switch"))toggleClockOptions(e.day_switch,3)}else{}}}
+                for(let idx_loop_t=1;idx_loop_t<=13;idx_loop_t++){let i;if(idx_loop_t!==3){i=document.getElementById("ampmSwitch"+idx_loop_t);if(i&&e.hasOwnProperty("ampm_switch"))i.checked=e.ampm_switch;i=document.getElementById("secondsSwitch"+idx_loop_t);if(i&&e.hasOwnProperty("seconds_switch"))i.checked=e.seconds_switch;i=document.getElementById("24hourSwitch"+idx_loop_t);if(i&&e.hasOwnProperty("24hour_switch"))i.checked=e["24hour_switch"];i=document.getElementById("iconsSwitch"+idx_loop_t);if(i&&e.hasOwnProperty("icons_switch"))i.checked=e.icons_switch;i=document.getElementById("minmaxTempsSwitch"+idx_loop_t);if(i&&e.hasOwnProperty("minmax_temps_switch"))i.checked=e.minmax_temps_switch;i=document.getElementById("timeColorPicker"+idx_loop_t);if(i&&e.time_color)i.value=rgbToHex(e.time_color.r,e.time_color.g,e.time_color.b);i=document.getElementById("humiditySwitch"+idx_loop_t);if(i&&e.hasOwnProperty("humidity_switch"))i.checked=e.humidity_switch;i=document.getElementById("humidityColorPicker"+idx_loop_t);if(i&&e.humidity_color)i.value=rgbToHex(e.humidity_color.r,e.humidity_color.g,e.humidity_color.b)}i=document.getElementById("temperatureSwitch"+idx_loop_t);if(i&&e.hasOwnProperty("temperature_switch"))i.checked=e.temperature_switch;i=document.getElementById("daySwitch"+idx_loop_t);if(i&&e.hasOwnProperty("day_switch"))i.checked=e.day_switch;i=document.getElementById("dateSwitch"+idx_loop_t);if(i&&e.hasOwnProperty("date_switch"))i.checked=e.date_switch;i=document.getElementById("monthSwitch"+idx_loop_t);if(i&&e.hasOwnProperty("month_switch"))i.checked=e.month_switch;i=document.getElementById("dayColorPicker"+idx_loop_t);if(i&&e.day_color)i.value=rgbToHex(e.day_color.r,e.day_color.g,e.day_color.b);i=document.getElementById("dateColorPicker"+idx_loop_t);if(i&&e.date_color)i.value=rgbToHex(e.date_color.r,e.date_color.g,e.date_color.b);i=document.getElementById("monthColorPicker"+idx_loop_t);if(i&&e.month_color)i.value=rgbToHex(e.month_color.r,e.month_color.g,e.month_color.b);i=document.getElementById("dateBGColorPicker"+idx_loop_t);if(i&&e.date_bg_color)i.value=rgbToHex(e.date_bg_color.r,e.date_bg_color.g,e.date_bg_color.b);i=document.getElementById("tempColorPicker"+idx_loop_t);if(i&&e.temp_color)i.value=rgbToHex(e.temp_color.r,e.temp_color.g,e.temp_color.b);i=document.getElementById("ampmColorPicker"+idx_loop_t);if(i&&e.ampm_color)i.value=rgbToHex(e.ampm_color.r,e.ampm_color.g,e.ampm_color.b);i=document.getElementById("secondsColorPicker"+idx_loop_t);if(i&&e.seconds_color)i.value=rgbToHex(e.seconds_color.r,e.seconds_color.g,e.seconds_color.b);let bg=document.getElementById('backgroundSwitch'+idx_loop_t);if(bg&&e.hasOwnProperty("backgroundSwitch"))bg.checked=e.backgroundSwitch;i=document.getElementById("dayLabel"+idx_loop_t);if(i){if(idx_loop_t==3){if(e.current_screen===3&&e.hasOwnProperty("day_switch"))toggleClockOptions(e.day_switch,3)}else{}}}
+                for(let weatherScreen=10;weatherScreen<=13;weatherScreen++){
+                    const secondsLineSwitch=document.getElementById("spareSwitch"+weatherScreen);
+                    if(secondsLineSwitch&&e.hasOwnProperty("spare_switch"))secondsLineSwitch.checked=e.spare_switch;
+                    const secondsLineColor=document.getElementById("landColorPicker"+weatherScreen);
+                    if(secondsLineColor&&e.land_color)secondsLineColor.value=rgbToHex(e.land_color.r,e.land_color.g,e.land_color.b);
+                    const internalTempSwitch=document.getElementById("internalTemperatureSwitch"+weatherScreen);
+                    if(internalTempSwitch&&e.hasOwnProperty("internal_temperature_switch"))internalTempSwitch.checked=e.internal_temperature_switch;
+                    const chartLineSwitch=document.getElementById("chartLineSwitch"+weatherScreen);
+                    if(chartLineSwitch&&e.hasOwnProperty("chart_line_switch"))chartLineSwitch.checked=e.chart_line_switch;
+                }
+                const infographicValues={Sunpath:e.infographic_sunpath_switch,Rain:e.infographic_rain_switch,Wind:e.infographic_wind_switch,Forecast:e.infographic_forecast_switch};
+                Object.entries(infographicValues).forEach(([name,value])=>{const control=document.getElementById('infographic'+name+'Switch13');if(control&&typeof value==='boolean'){control.checked=value;toggleInfographicBox(name==='Sunpath'?'Sun':name,value)}});
+                const rainIcon=document.getElementById('infographicRainIconSwitch13');if(rainIcon&&e.hasOwnProperty('infographic_rain_icon_switch'))rainIcon.checked=e.infographic_rain_icon_switch;
+                const windCompass=document.getElementById('infographicWindCompassSwitch13');if(windCompass&&e.hasOwnProperty('infographic_wind_compass_switch'))windCompass.checked=e.infographic_wind_compass_switch;
+                const infographicColors={
+                    infographicSunHoursColor13:e.infographic_sun_hours_color,infographicSunGraphColor13:e.infographic_sun_graph_color,
+                    infographicRainHoursColor13:e.infographic_rain_hours_color,infographicRainGraphColor13:e.infographic_rain_graph_color,
+                    infographicCompassColor13:e.infographic_compass_color,infographicArrowColor13:e.infographic_arrow_color,
+                    infographicSpeedColor13:e.infographic_speed_color,infographicUnitsColor13:e.infographic_units_color,
+                    infographicForecastDayColor13:e.infographic_forecast_day_color,infographicForecastMinColor13:e.infographic_forecast_min_color,
+                    infographicForecastMaxColor13:e.infographic_forecast_max_color,infographicForecastDividerColor13:e.infographic_forecast_divider_color
+                };
+                Object.entries(infographicColors).forEach(([id,color])=>{const picker=document.getElementById(id);if(picker&&color)picker.value=rgbToHex(color.r,color.g,color.b)});
+                const infographicTransition=document.getElementById('infographicTransition13');if(infographicTransition)infographicTransition.value=String(e.infographic_transition||0);
+                const infographicHold=document.getElementById('infographicHold13');if(infographicHold){infographicHold.value=e.infographic_hold_seconds||8;document.getElementById('infographicHoldValue13').textContent=infographicHold.value+' s'}
+                updateInfographicTransitionVisibility();
                 if(e.hasOwnProperty("clock_switch"))document.getElementById("clockSwitch").checked=e.clock_switch;
                 document.getElementById("clockOption").value=e.clock_option||"colour";
                 document.getElementById("clockImageSelect").value=e.clock_bitmap_index||0;
@@ -1393,7 +1537,13 @@
         });
     }
 
-    function updateScreenVisibility(e){for(let t=0;t<=9;t++){let n=0===t?"globalSettingsControls":"screen"+t+"ClockControls",o=document.getElementById(n);o&&o.classList.toggle("hidden",t!==e)}}
+    function updateScreenVisibility(e){for(let t=0;t<=13;t++){let n=0===t?"globalSettingsControls":"screen"+t+"ClockControls",o=document.getElementById(n);o&&o.classList.toggle("hidden",t!==e)}}
+    function updateInfographicTransitionVisibility(){const count=['Sunpath','Rain','Wind','Forecast'].filter(name=>document.getElementById('infographic'+name+'Switch13')?.checked).length;document.getElementById('infographicTransitionControls')?.classList.toggle('hidden',count<2)}
+    function toggleInfographicBox(name,state){toggleExpandableByIds('infographic'+name+'Container','infographic'+name+'Expandable',state,null,null,null)}
+    function updateInfographicModule(module,state){blockPolling(2000);updateInfographicTransitionVisibility();deviceFetch(`/infographicmodule?module=${module}&state=${state}&screen=13`,{},`/infographicmodule?screen=13&module=${module}`)}
+    function updateInfographicColor(part,value){blockPolling(2000);if(isLoadingSettings)return;deviceFetch(`/infographiccolor?part=${part}&value=${value}&screen=13`,{},`/infographiccolor?screen=13&part=${part}`)}
+    function updateInfographicTransition(value){blockPolling(2000);deviceFetch(`/infographictransition?value=${value}&screen=13`,{},'/infographictransition?screen=13')}
+    function updateInfographicHold(value){blockPolling(2000);deviceFetch(`/infographichold?value=${value}&screen=13`,{},'/infographichold?screen=13')}
     function updateSwitch(e,t,n){blockPolling(2000);if(isLoadingSettings)return;deviceFetch(`/${e}?state=${t}&screen=${n}`,{},'/'+e+'?screen='+n)}
     function updateColor(e,t,n){blockPolling(2000);if(isLoadingSettings)return;deviceFetch(`/${e}?value=${t}&screen=${n}`,{},'/'+e+'?screen='+n)}
     function updateBitmap(e,t,n){blockPolling(2000);if(isLoadingSettings)return;deviceFetch(`/${e}?value=${t}&screen=${n}`,{},'/'+e+'?screen='+n)}
@@ -1581,30 +1731,32 @@
     }
 
     /* ---------- browser OTA upload ---------- */
-    /* Upload the firmware in sequential chunks.
-       A single POST is useless for progress: the browser buffers the whole
-       file and xhr.upload fires 100% immediately, long before the ESP32 has
-       flashed anything. Posting chunk-by-chunk gives a true byte count, and
-       lets a chunk lost to a WiFi dip be retried on its own instead of
-       restarting the entire ~1.6MB transfer.
-       Each chunk names its own offset: ota_<start>_<total>.bin              */
-    var OTA_CHUNK = 32768;      /* 32KB - big enough to be quick, small enough to retry cheaply */
-    var OTA_RETRIES = 4;
+    /* The clock prepares the OTA partition first, then accepts completely
+       buffered 16KB chunks. A repeated offset is safe: the firmware reports
+       its committed offset instead of writing the same bytes twice. */
+    var OTA_CHUNK = 16384;
+    var OTA_ATTEMPTS = 4;
+
+    function otaFetch(url, options, timeoutMs) {
+        var controller = new AbortController();
+        var timer = setTimeout(function(){ controller.abort(); }, timeoutMs);
+        var request = Object.assign({method:'POST', cache:'no-store'}, options || {}, {signal:controller.signal});
+        return fetch(url, request).then(function(r){
+            return r.text().then(function(t){
+                if (!r.ok) throw new Error(t || ('HTTP ' + r.status));
+                return t;
+            });
+        }).finally(function(){ clearTimeout(timer); });
+    }
 
     function otaPostChunk(file, start, end) {
         var fd = new FormData();
         fd.append('update', file.slice(start, end),
                   'ota_' + start + '_' + file.size + '.bin');
-        return fetch('/update', { method: 'POST', body: fd })
-            .then(function(r){
-                return r.text().then(function(t){
-                    if (!r.ok) throw new Error(t || ('HTTP ' + r.status));
-                    return t;
-                });
-            });
+        return otaFetch('/update', {body:fd}, 30000);
     }
 
-    function uploadFirmware(){
+    async function uploadFirmware(){
         var f=document.getElementById('otaFile'), st=document.getElementById('otaStatus');
         var bar=document.getElementById('otaBar'), fill=document.getElementById('otaFill');
         var btn=document.getElementById('otaBtn');
@@ -1618,45 +1770,80 @@
         blockPolling(900000);   /* keep the settings poll off the air while flashing */
         btn.disabled=true; bar.style.display='block'; fill.style.width='0%';
 
-        var sent = 0;
-        function step(){
-            if (sent >= file.size) return;
-            var end = Math.min(sent + OTA_CHUNK, file.size);
-            var attempt = 0;
+        var sent=0, completed=false;
+        try {
+            // Stop and drain any preview/status request that was already in
+            // flight when Upload was pressed. OTA then owns the only socket.
+            recoverDeviceTransport();
+            await transportDelay(750);
 
-            function tryChunk(){
-                attempt++;
-                otaPostChunk(file, sent, end).then(function(resp){
-                    sent = end;
-                    var pc = Math.round(sent / file.size * 100);
-                    fill.style.width = pc + '%';
-                    st.textContent = 'Uploading ' + Math.round(sent/1024) + ' / ' + totalKb +
-                                     ' KB  (' + pc + '%)';
-                    if (resp.indexOf('DONE') === 0 || sent >= file.size) {
-                        fill.style.width = '100%';
-                        st.style.color = '#2ea043';
-                        st.textContent = 'Done - ' + totalKb + ' KB flashed. The clock is rebooting; ' +
-                                         'reload this page in ~20 seconds.';
-                        return;
+            var header = await file.slice(0, 0x24).arrayBuffer();
+            if (header.byteLength < 0x24) throw new Error('Firmware file is too small.');
+            var magic = new DataView(header).getUint32(0x20, true);
+            var merged = magic !== 0xABCD5432;
+            st.style.color=''; st.textContent='Preparing clock and protecting settings...';
+
+            var prepared=false, prepareError=null;
+            for(var prepAttempt=1;prepAttempt<=OTA_ATTEMPTS&&!prepared;prepAttempt++) {
+                try {
+                    var reply=await otaFetch('/update/start?total='+file.size+'&merged='+(merged?1:0), {}, 60000);
+                    if(reply.indexOf('READY:')!==0) throw new Error('Unexpected preparation response.');
+                    prepared=true;
+                } catch(error) {
+                    prepareError=error;
+                    if(prepAttempt<OTA_ATTEMPTS) {
+                        st.style.color='#d98a00';
+                        st.textContent='Preparing clock (attempt '+(prepAttempt+1)+'/'+OTA_ATTEMPTS+')...';
+                        await transportDelay(1500);
                     }
-                    step();
-                }).catch(function(err){
-                    if (attempt <= OTA_RETRIES) {
-                        st.style.color = '#d98a00';
-                        st.textContent = 'Retrying chunk at ' + Math.round(sent/1024) +
-                                         ' KB (attempt ' + attempt + '/' + OTA_RETRIES + ')...';
-                        setTimeout(tryChunk, 1200);   /* let a WiFi dip pass */
-                    } else {
-                        st.style.color = '#e5484d';
-                        st.textContent = 'Upload failed at ' + Math.round(sent/1024) + ' / ' +
-                                         totalKb + ' KB: ' + err.message;
-                        btn.disabled = false;
-                    }
-                });
+                }
             }
-            tryChunk();
+            if(!prepared) throw prepareError || new Error('Clock did not prepare for upload.');
+
+            while(sent<file.size) {
+                var end=Math.min(sent+OTA_CHUNK,file.size), response='', chunkError=null;
+                for(var attempt=1;attempt<=OTA_ATTEMPTS;attempt++) {
+                    try {
+                        response=await otaPostChunk(file,sent,end);
+                        var acknowledged=response.indexOf('DONE')===0 ? file.size :
+                            (response.indexOf('OK:')===0 ? parseInt(response.substring(3),10) : NaN);
+                        if(!Number.isFinite(acknowledged)||acknowledged<end) throw new Error('Clock did not acknowledge this chunk.');
+                        chunkError=null;
+                        break;
+                    } catch(error) {
+                        chunkError=error;
+                        if(attempt<OTA_ATTEMPTS) {
+                            st.style.color='#d98a00';
+                            st.textContent='Retrying '+Math.round(sent/1024)+' KB (attempt '+(attempt+1)+'/'+OTA_ATTEMPTS+')...';
+                            await transportDelay(1200);
+                        }
+                    }
+                }
+                if(chunkError) throw chunkError;
+
+                sent=end;
+                var pc=Math.round(sent/file.size*100);
+                fill.style.width=pc+'%';
+                st.style.color='';
+                st.textContent='Uploading '+Math.round(sent/1024)+' / '+totalKb+' KB  ('+pc+'%)';
+                if(response.indexOf('DONE')===0) { completed=true; break; }
+            }
+
+            if(!completed && sent>=file.size) completed=true;
+            if(completed) {
+                fill.style.width='100%';
+                st.style.color='#2ea043';
+                st.textContent='Done - '+totalKb+' KB flashed. The clock is rebooting; reload this page in ~20 seconds.';
+            }
+        } catch(err) {
+            // Best effort only. If WiFi is down the firmware's own two-minute
+            // session timeout releases the OTA writer without a reboot.
+            otaFetch('/update/cancel',{},5000).catch(function(){});
+            st.style.color='#e5484d';
+            st.textContent='Upload failed at '+Math.round(sent/1024)+' / '+totalKb+' KB: '+
+                (err.name==='AbortError'?'clock response timed out':err.message);
+            btn.disabled=false;
         }
-        step();
     }
 
     window.onload=()=>{
@@ -1684,15 +1871,16 @@
             if((now<weatherMonitorUntil&&now-lastWeatherStatusAt>850)||now-lastLiveStatusAt>5000) fetchCurrentBrightness(true);
         },1000);
         setInterval(updateWeather,3e5);
-        // Settings are low-priority background state. The shared in-flight
-        // guard prevents this from colliding with preview/brightness traffic.
-        setInterval(() => { if (!document.hidden) fetchSettings(); }, 15000);
+        // Settings are fetched on load, screen changes and after mutations.
+        // Do not repeatedly transfer the full document as a heartbeat: the
+        // preview/status responses already prove the clock is reachable.
         // If the browser or Wi-Fi stack strands a fetch, release every client
-        // guard and restart polling. User controls never wait for this watchdog.
+        // guard and probe with the small status response. User controls never
+        // wait for this watchdog.
         setInterval(()=>{
             if(!document.hidden && !pollingPaused && Date.now()-lastSuccessfulDeviceRequest>20000){
                 recoverDeviceTransport();
-                fetchSettings();
+                fetchCurrentBrightness(true);
             }
         },5000);
     };

@@ -10,7 +10,7 @@
 
 // Single source of truth for the version. Auto-incremented by +0.01 on every
 // successful build by scripts/merge_firmware.py; see CHANGELOG.md for history.
-float ver = 3.70;
+float ver = 4.02;
 
 
 /* #################### To add a new screen (example screen6) ####################
@@ -38,6 +38,10 @@ float ver = 3.70;
 // Screen7 = Digital Watch
 // Screen8 = Full Analog Clock
 // Screen9 = Nixie Tube Clock
+// Screen10 = Rainline
+// Screen11 = Sunpath
+// Screen12 = Wind Dial
+// Screen13 = Infographic
 
 // Screen90 = Setup Clock QR code page
 // Screen91 = Setup Wifi (when no credentials saved or connection failed)
@@ -111,6 +115,14 @@ struct RGBColor {
 };
 
 GFXcanvas16 dma_canvas(PANEL_RES_X, PANEL_RES_Y); // Create Canvas
+
+// Screen13's two module-transition canvases (2688 bytes each). Deliberately
+// globals rather than function-local statics: as statics they were malloc'd the
+// first time the user opened Screen 13, i.e. in the middle of a running system,
+// carving two holes out of whatever contiguous free space WiFi/TLS/SPIFFS had
+// left. Constructed here they come out of a pristine heap before setup() runs.
+GFXcanvas16 infographicFromCanvas(64, 21);
+GFXcanvas16 infographicToCanvas(64, 21);
 MatrixPanel_I2S_DMA *dma_display = nullptr;  // Declare globally
 // A dedicated buffer to hold the last completed frame for web screenshots.
 // This prevents sending partially-drawn frames (race condition).
@@ -119,7 +131,7 @@ volatile uint32_t screenshotRevision = 1;
 
 // Global variables to store web-selected settings for each screen
 // To add a new screen, you just increment this number and add the new screen function.
-const int NUM_CLOCK_SCREENS = 9;
+const int NUM_CLOCK_SCREENS = 13;
 const int SCREEN_ID_SETUP_QR    = 90;
 const int SCREEN_ID_WIFI_PORTAL = 91;
 const int SCREEN_ID_MENU        = 92;
@@ -184,6 +196,20 @@ struct ScreenSettings {
   RGBColor land_col       = {119, 187, 65};
   RGBColor water_col      = {0, 66, 170};
   RGBColor ice_col        = {192, 192, 192};
+  // Screen 13 module colours are independent so changing one infographic
+  // cannot unexpectedly recolour another one.
+  RGBColor infographicSunHoursColor = {255, 164, 0};
+  RGBColor infographicSunGraphColor = {255, 164, 0};
+  RGBColor infographicRainHoursColor = {38, 211, 255};
+  RGBColor infographicRainGraphColor = {38, 211, 255};
+  RGBColor infographicCompassColor = {255, 164, 0};
+  RGBColor infographicArrowColor = {38, 211, 255};
+  RGBColor infographicSpeedColor = {38, 211, 255};
+  RGBColor infographicUnitsColor = {190, 205, 235};
+  RGBColor infographicForecastDayColor = {190, 205, 235};
+  RGBColor infographicForecastMinColor = {38, 211, 255};
+  RGBColor infographicForecastMaxColor = {255, 216, 0};
+  RGBColor infographicForecastDividerColor = {255, 164, 0};
   
   // Switches
   bool ampmSwitch         = false;
@@ -191,6 +217,14 @@ struct ScreenSettings {
   bool twentyFourHourSwitch = false;
   bool iconsSwitch        = true;
   bool temperatureSwitch  = true;
+  bool internalTemperatureSwitch = true;
+  bool chartLineSwitch    = true;
+  bool infographicSunpathSwitch = true;
+  bool infographicRainSwitch = true;
+  bool infographicWindSwitch = true;
+  bool infographicForecastSwitch = true;
+  bool infographicRainIconSwitch = true;
+  bool infographicWindCompassSwitch = true;
   bool minMaxTempsSwitch  = true;
   bool daySwitch          = true;
   bool dateSwitch         = true;
@@ -209,6 +243,8 @@ struct ScreenSettings {
   int pageSlider          = 128;
   int pageSlider2         = 128;
   int pageSlider3         = 128;
+  uint8_t infographicTransition = 0;
+  uint8_t infographicHoldSeconds = 8;
 
   // Image/Colour Options
   bool land_use_image     = false;
@@ -233,6 +269,80 @@ struct ScreenSettings {
 };
 // NEW: A single vector to hold the settings for all clock screens.
 std::vector<ScreenSettings> allScreenSettings;
+
+void applyNewWeatherScreenDefaults() {
+  if (allScreenSettings.size() < NUM_CLOCK_SCREENS) return;
+
+  ScreenSettings& rainline = allScreenSettings[9];
+  rainline.time_col = {255, 244, 220};
+  rainline.temp_col = {255, 216, 0};
+  rainline.ampm_col = {255, 80, 180};
+  rainline.humidity_col = {38, 211, 255};
+  rainline.dateBG_col = {30, 96, 255};
+  rainline.twentyFourHourSwitch = true;
+  rainline.iconsSwitch = true;
+  rainline.land_col = {255, 80, 180};
+
+  ScreenSettings& sunpath = allScreenSettings[10];
+  sunpath.time_col = {255, 244, 220};
+  sunpath.day_col = {0, 220, 255};
+  sunpath.date_col = {255, 164, 0};
+  sunpath.dateBG_col = {255, 164, 0};
+  sunpath.temp_col = {255, 225, 0};
+  sunpath.ampm_col = {255, 80, 180};
+  sunpath.humidity_col = {68, 206, 255};
+  sunpath.twentyFourHourSwitch = true;
+  sunpath.iconsSwitch = true;
+  sunpath.minMaxTempsSwitch = true;
+  sunpath.land_col = {255, 80, 180};
+
+  ScreenSettings& windDial = allScreenSettings[11];
+  windDial.time_col = {255, 244, 220};
+  windDial.dateBG_col = {0, 220, 255};
+  windDial.humidity_col = {150, 255, 30};
+  windDial.temp_col = {255, 216, 0};
+  windDial.ampm_col = {0, 220, 255};
+  windDial.seconds_col = {255, 55, 190};
+  windDial.land_col = {255, 80, 180};
+  windDial.twentyFourHourSwitch = true;
+  windDial.iconsSwitch = true;
+  windDial.humiditySwitch = true;
+  windDial.secondsSwitch = true;
+
+  ScreenSettings& infographic = allScreenSettings[12];
+  infographic.time_col = {255, 244, 220};
+  infographic.dateBG_col = {255, 164, 0};
+  infographic.humidity_col = {38, 211, 255};
+  infographic.temp_col = {255, 216, 0};
+  infographic.day_col = {0, 220, 255};
+  infographic.date_col = {255, 164, 0};
+  infographic.twentyFourHourSwitch = true;
+  infographic.infographicSunpathSwitch = true;
+  infographic.infographicRainSwitch = true;
+  infographic.infographicWindSwitch = true;
+  infographic.infographicForecastSwitch = true;
+  infographic.infographicRainIconSwitch = true;
+  infographic.infographicWindCompassSwitch = true;
+  infographic.SpareSwitch = true;
+  infographic.temperatureSwitch = true;
+  infographic.humiditySwitch = true;
+  infographic.daySwitch = true;
+  infographic.dateSwitch = true;
+  infographic.infographicSunHoursColor = {255, 164, 0};
+  infographic.infographicSunGraphColor = {255, 164, 0};
+  infographic.infographicRainHoursColor = {38, 211, 255};
+  infographic.infographicRainGraphColor = {38, 211, 255};
+  infographic.infographicCompassColor = {255, 164, 0};
+  infographic.infographicArrowColor = {38, 211, 255};
+  infographic.infographicSpeedColor = {38, 211, 255};
+  infographic.infographicUnitsColor = {190, 205, 235};
+  infographic.infographicForecastDayColor = {190, 205, 235};
+  infographic.infographicForecastMinColor = {38, 211, 255};
+  infographic.infographicForecastMaxColor = {255, 216, 0};
+  infographic.infographicForecastDividerColor = {255, 164, 0};
+  infographic.infographicTransition = 0;
+  infographic.infographicHoldSeconds = 8;
+}
 
   // --- NEW: Schedule-related variables ---
   struct Schedule {
@@ -268,6 +378,10 @@ void Screen6(); // Gradient Clock
 void Screen7(); // Digital Watch
 void Screen8(); // Full Analog Clock
 void Screen9(); // Nixie Tube Clock
+void Screen10(); // Rainline
+void Screen11(); // Sunpath
+void Screen12(); // Wind Dial
+void Screen13(); // Infographic
 
 void Screen90(); // Setup Clock QR code page
 void Screen91(); // Setup Wifi (when no credentials saved or connection failed)
@@ -284,7 +398,11 @@ void (*clockScreenFunctions[NUM_CLOCK_SCREENS])() = {
   Screen6,
   Screen7,
   Screen8,
-  Screen9
+  Screen9,
+  Screen10,
+  Screen11,
+  Screen12,
+  Screen13
   // To add Screen6 (as a clock face), add it here and increase NUM_CLOCK_SCREENS.
 };
 
@@ -499,6 +617,20 @@ uint8_t brightRoomBrightness = 255; // Renamed from maxBrightness
 bool autoBrightnessEnabled = false; // variable to toggle auto-brightness
 volatile bool settingsChanged = false; // Persist once the user stops changing controls
 volatile uint32_t settingsRevision = 1; // Invalidates the cached /settings response
+static const size_t OTA_BROWSER_CHUNK_SIZE = 16384;
+static const size_t OTA_MERGED_APP_OFFSET = 0x10000;
+static uint8_t* otaBrowserChunk = nullptr; // allocated only while an OTA session is active
+static volatile bool otaBrowserActive = false;
+static volatile bool otaBrowserReady = false;
+static bool otaBrowserMerged = false;
+static bool otaBrowserChunkDuplicate = false;
+static bool otaBrowserChunkRejected = false;
+static size_t otaBrowserTotal = 0;
+static size_t otaBrowserExpectedOffset = 0;
+static size_t otaBrowserChunkStart = 0;
+static size_t otaBrowserChunkBytes = 0;
+static volatile uint32_t otaBrowserLastActivity = 0;
+static volatile uint8_t diagnosticScreen13Mask = 0;
 String cachedSettingsResponse;
 uint32_t cachedSettingsRevision = 0;
 int cachedSettingsScreen = -1;
@@ -506,7 +638,12 @@ uint8_t targetBrightness = 0; // Target brightness for smooth transition
 uint8_t currentBrightness = 200; // Current brightness 200 is for bootup brightness
 unsigned long lastBrightnessUpdate = 0; // For smooth transition timing
 const unsigned long brightnessUpdateInterval = 75; // Fast enough to fade smoothly, slow enough to avoid visible hunting
-const uint8_t HYBRID_OE_FLOOR = 40; // ~15%: below this, keep OE stable and dim in the RGB bitplanes
+// Short OE pulses are unstable on this panel. Use at least this OE setting for
+// non-zero output, then compensate its quantised clock width with RGB scaling.
+// Unlike the old hybrid threshold, the compensation remains active across the
+// entire range so there is no visible hand-off at about 15%.
+const uint8_t MIN_STABLE_OE_BRIGHTNESS = 40;
+const uint8_t FULL_SCALE_OE_CLOCKS = 61; // 64-pixel row with two-clock latch blanking
 const uint32_t LDR_SAMPLE_INTERVAL_MS = 25;
 const uint32_t LDR_TARGET_HOLD_MS = 350;
 uint16_t ldrRawValue = 0;
@@ -572,12 +709,52 @@ String currentApparentTemp = "";
 String currentHumidity = "";          // Store current humidity (0 decimal places)
 String currentConditions = "";        // Store current conditions
 String dailyMinMaxTemps = "";         // Store daily min/max temperatures (0 decimal places)
-String weatherIcon = "";              // Store weather icon (e.g., "clear-day", "rain")
+// Icon names are fixed char buffers, NOT Strings, on purpose. fetchWeatherTask
+// rewrites them from its own task while the render task in loop() is comparing
+// them ~8x per frame (Screen13 draws up to four icons, doubled mid-transition).
+// Reassigning a String frees its heap buffer, so a renderer preempted midway
+// through a comparison could dereference freed memory - an intermittent
+// LoadProhibited panic that looks like a random crash. Overwriting a fixed
+// buffer in place is worst-case a torn name for one frame, which simply falls
+// through to the default icon. See setIconName().
+constexpr size_t WEATHER_ICON_NAME_LEN = 24;
+char weatherIcon[WEATHER_ICON_NAME_LEN] = "";  // e.g. "clear-day", "rain"
 float currentTemperature = 0.0;  // Store as float for precision
 float currentApparentTemperature = 0.0;
 float currentHumidityFloat = 0.0;     // Store as float for precision
 int todayMinTemp = 0;  // Initialize to 0, will be updated by fetchWeather()
 int todayMaxTemp = 0;  // Initialize to 0, will be updated by fetchWeather()
+constexpr uint8_t WEATHER_TIMELINE_POINTS = 5;
+uint8_t hourlyRainChance[WEATHER_TIMELINE_POINTS] = {0};
+uint8_t hourlyForecastHour[WEATHER_TIMELINE_POINTS] = {0};
+uint8_t hourlyForecastCount = 0;
+float currentWindSpeedKph = 0.0f;
+float currentWindGustKph = 0.0f;
+uint16_t currentWindBearing = 0;
+uint16_t sunriseMinuteOfDay = 6 * 60;
+uint16_t sunsetMinuteOfDay = 18 * 60;
+bool solarTimesValid = false;
+constexpr uint8_t DAILY_FORECAST_DAYS = 3;
+char dailyForecastIcon[DAILY_FORECAST_DAYS][WEATHER_ICON_NAME_LEN] = {"none", "none", "none"};
+float dailyForecastMin[DAILY_FORECAST_DAYS] = {0.0f, 0.0f, 0.0f};
+float dailyForecastMax[DAILY_FORECAST_DAYS] = {0.0f, 0.0f, 0.0f};
+uint8_t dailyForecastWeekday[DAILY_FORECAST_DAYS] = {0, 0, 0};
+uint8_t dailyForecastCount = 0;
+
+// Publish an icon name into one of the fixed buffers above. Bounded, always
+// NUL-terminated, and never reallocates - which is the whole point (see the
+// comment on weatherIcon). Callers pass the array itself so N is deduced.
+static inline void setIconName(char* destination, size_t size, const char* source) {
+  if (!destination || size == 0) return;
+  if (!source) source = "none";
+  strncpy(destination, source, size - 1);
+  destination[size - 1] = '\0';
+}
+template <size_t N>
+static inline void setIconName(char (&destination)[N], const char* source) {
+  setIconName(destination, N, source);
+}
+
 int currentScreen = 1;  // Tracks the current screen (1, 2, or 3)
 int prevScreen = 1;  // Tracks the current screen (1, 2, or 3)
 
@@ -650,6 +827,62 @@ enum SystemState {
 volatile SystemState currentState = STATE_WIFI_NO_CREDENTIALS; // Volatile for cross-core access
 static unsigned long stateStartTime = 0;
 static unsigned long stateNOWIFITime = 0;
+static esp_reset_reason_t bootResetReason = ESP_RST_UNKNOWN;
+RTC_DATA_ATTR static uint32_t retainedResetSequence = 0;
+
+// ---------------------------------------------------------------------------
+// Crash breadcrumb
+//
+// RTC_NOINIT_ATTR survives a panic, a watchdog reset and esp_restart(); only a
+// power cycle clears it. loop() stamps the cheap facts here every iteration, so
+// after an unexpected reboot the NEXT boot can report what the clock was doing
+// microseconds before it died - which screen was rendering, how much heap was
+// left, and crucially the largest CONTIGUOUS block, since heap exhaustion shows
+// up as maxAlloc collapsing long before freeHeap does.
+//
+// This exists because the clock lives without a serial console, so every crash
+// so far has been diagnosed by guesswork. Guarded by a magic value so a
+// power-on boot doesn't report uninitialised RTC RAM as a real breadcrumb.
+// ---------------------------------------------------------------------------
+struct CrashBreadcrumb {
+  uint32_t magic;
+  uint32_t uptimeMs;
+  uint32_t freeHeap;
+  uint32_t maxAllocHeap;
+  uint32_t minFreeHeap;
+  int32_t  screen;
+  int32_t  state;
+  uint32_t settingsSaveInProgress; // 1 while persistSettingsNow() is writing
+};
+static const uint32_t CRASH_BREADCRUMB_MAGIC = 0x5343424Du; // "SCBM"
+RTC_NOINIT_ATTR static CrashBreadcrumb liveBreadcrumb;
+static CrashBreadcrumb previousBootBreadcrumb;   // snapshot taken at boot
+static bool previousBootBreadcrumbValid = false;
+static volatile uint32_t settingsSaveInProgress = 0;
+
+static void updateCrashBreadcrumb() {
+  // The cheap fields are plain reads, so they stay exact right up to the moment
+  // of death - that is the part that says WHICH screen was rendering.
+  liveBreadcrumb.magic = CRASH_BREADCRUMB_MAGIC;
+  liveBreadcrumb.uptimeMs = millis();
+  liveBreadcrumb.screen = currentScreen;
+  liveBreadcrumb.state = (int32_t)currentState;
+  liveBreadcrumb.settingsSaveInProgress = settingsSaveInProgress;
+
+  // The heap figures are NOT cheap: getMaxAllocHeap() walks the allocator's free
+  // lists under the heap mutex. Calling that on every loop() iteration would put
+  // real contention on the same lock the display, WiFi and TLS allocate against
+  // - which is precisely the problem this breadcrumb exists to diagnose. Twice a
+  // second is ample resolution for a slow heap squeeze.
+  static uint32_t lastHeapSampleMs = 0;
+  const uint32_t now = millis();
+  if (lastHeapSampleMs != 0 && now - lastHeapSampleMs < 500) return;
+  lastHeapSampleMs = now;
+  liveBreadcrumb.freeHeap = ESP.getFreeHeap();
+  liveBreadcrumb.maxAllocHeap = ESP.getMaxAllocHeap();
+  liveBreadcrumb.minFreeHeap = ESP.getMinFreeHeap();
+}
+
 volatile bool needWeatherUpdate = false; // Already volatile if added earlier
 volatile uint32_t weatherConfigRevision = 0; // Invalidates an in-flight request when its provider/key changes
 
@@ -721,6 +954,76 @@ static WiFiUDP keepAliveUdp;
 static uint32_t lastKeepAliveMs = 0;
 
 // ---------------------------------------------------------------------------
+// WiFi event log (diagnostic only - changes no behaviour)
+//
+// Three separate attempts have now been made to fix "the clock goes unreachable"
+// from the firmware side, and all three were reverted for making it worse. The
+// reason each time was the same: nobody knew what the radio was actually doing
+// at the moment it wedged, because the clock has no serial console where it
+// lives. This records the last few ARDUINO_EVENT_WIFI_* events - including the
+// 802.11 reason code on a disconnect - into a small ring buffer that /debug
+// serves. A disconnect reason of 200/201/205 (BEACON_TIMEOUT / NO_AP_FOUND /
+// ASSOC_LEAVE) points at the AP or RF; no events at all during an outage proves
+// the radio stayed associated and the problem is above it.
+//
+// Registered with WiFi.onEvent(), so it runs on the event task, not in loop().
+// It only writes to a fixed array - no allocation, no network calls, nothing
+// that could block. That constraint is deliberate: see the notes below about
+// esp_ping and WiFi.hostByName() both freezing things when called from loop().
+// ---------------------------------------------------------------------------
+struct WiFiEventRecord {
+  uint32_t atMs;
+  uint16_t event;
+  uint16_t reason; // only meaningful for STA_DISCONNECTED
+  int8_t   rssi;
+};
+static const uint8_t WIFI_EVENT_LOG_SIZE = 12;
+static WiFiEventRecord wifiEventLog[WIFI_EVENT_LOG_SIZE];
+static volatile uint8_t wifiEventLogNext = 0;
+static volatile uint32_t wifiEventLogTotal = 0;
+static volatile uint16_t lastWifiDisconnectReason = 0;
+static volatile uint32_t wifiDisconnectCount = 0;
+
+static void recordWifiEvent(arduino_event_id_t event, uint16_t reason, int8_t rssi) {
+  WiFiEventRecord& slot = wifiEventLog[wifiEventLogNext];
+  slot.atMs = millis();
+  slot.event = (uint16_t)event;
+  slot.reason = reason;
+  slot.rssi = rssi;
+  wifiEventLogNext = (wifiEventLogNext + 1) % WIFI_EVENT_LOG_SIZE;
+  ++wifiEventLogTotal;
+}
+
+static void onWiFiEvent(arduino_event_id_t event, arduino_event_info_t info) {
+  switch (event) {
+    case ARDUINO_EVENT_WIFI_STA_DISCONNECTED: {
+      const uint16_t reason = info.wifi_sta_disconnected.reason;
+      lastWifiDisconnectReason = reason;
+      ++wifiDisconnectCount;
+      recordWifiEvent(event, reason, 0);
+      Serial.printf("[WiFiEvt] STA_DISCONNECTED reason=%u (total=%lu)\n",
+                    (unsigned)reason, (unsigned long)wifiDisconnectCount);
+      break;
+    }
+    case ARDUINO_EVENT_WIFI_STA_CONNECTED:
+      recordWifiEvent(event, 0, (int8_t)WiFi.RSSI());
+      Serial.println("[WiFiEvt] STA_CONNECTED");
+      break;
+    case ARDUINO_EVENT_WIFI_STA_GOT_IP:
+      recordWifiEvent(event, 0, (int8_t)WiFi.RSSI());
+      Serial.printf("[WiFiEvt] STA_GOT_IP %s rssi=%d\n",
+                    WiFi.localIP().toString().c_str(), (int)WiFi.RSSI());
+      break;
+    case ARDUINO_EVENT_WIFI_STA_LOST_IP:
+      recordWifiEvent(event, 0, (int8_t)WiFi.RSSI());
+      Serial.println("[WiFiEvt] STA_LOST_IP");
+      break;
+    default:
+      break;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Connectivity watchdog (passive, last-resort auto-recovery)
 //
 // Observed failure, reproduced repeatedly with a serial capture attached: the
@@ -743,33 +1046,26 @@ static uint32_t lastKeepAliveMs = 0;
 // ---------------------------------------------------------------------------
 static volatile uint32_t lastNetSuccessMs = 0; // updated by weather / NTP / web hits
 static const uint32_t NET_DEAD_REBOOT_MS = 30UL * 60UL * 1000UL; // 30 minutes
-static volatile uint32_t lastWebRequestMs = 0;
-static volatile bool webRecoveryArmed = false;
-static const uint32_t WEB_SESSION_DEAD_MS = 45UL * 1000UL;
-
 // Called from the places that prove the network is genuinely working.
 static inline void noteNetworkSuccess() { lastNetSuccessMs = millis(); }
 static inline void noteWebRequest() {
-  lastWebRequestMs = millis();
-  webRecoveryArmed = true;
   noteNetworkSuccess();
 }
 
-// /settings is the browser's heartbeat while a page is open. If three 15s
-// heartbeats vanish while WiFi still claims to be connected, the mesh path or
-// listening PCB is stale. Force one reconnect, then disarm until a request is
-// actually received again; closing a tab therefore cannot cause a loop.
-static void serviceWebSessionRecovery() {
-  if (!webRecoveryArmed || currentState != STATE_RUNNING ||
-      WiFi.status() != WL_CONNECTED) return;
-  if (millis() - lastWebRequestMs < WEB_SESSION_DEAD_MS) return;
+static void releaseBrowserOtaSession(bool abortUpdate) {
+  if (abortUpdate && Update.isRunning()) Update.abort();
+  if (otaBrowserChunk) {
+    free(otaBrowserChunk);
+    otaBrowserChunk = nullptr;
+  }
+  otaBrowserActive = false;
+  otaBrowserReady = false;
+}
 
-  webRecoveryArmed = false;
-  networkServicesStarted = false; // pauses webServerTask before socket rebuild
-  Serial.println("[WebWatch] active page stopped reaching the clock - recycling WiFi.");
-  WiFi.disconnect(false, false);
-  currentState = STATE_WIFI_DISCONNECTED;
-  stateStartTime = millis();
+static void serviceBrowserOtaTimeout() {
+  if (!otaBrowserActive || millis() - otaBrowserLastActivity < 120000UL) return;
+  Serial.println("[OTA] Browser upload timed out; abandoning the inactive session.");
+  releaseBrowserOtaSession(true);
 }
 
 static void serviceConnectivityWatchdog() {
@@ -869,6 +1165,12 @@ void handleSeconds();
 void handle24Hour();
 void handleIcons();
 void handleTemperature();
+void handleInternalTemperature();
+void handleChartLine();
+void handleInfographicModule();
+void handleInfographicColor();
+void handleInfographicTransition();
+void handleInfographicHold();
 void handleMinMaxTemps();
 void handleDay();
 void handleDate();
@@ -914,8 +1216,11 @@ void getInternalAHT10();
 void handleScreenshot();
 void handleUnits();
 void handleTempType();
-void displayWeatherIcon(const String& weatherIcon);
-void displayLargeWeatherIcon(const String& weatherIcon);
+void displayWeatherIcon(const char* weatherIcon);
+void displayWeatherIconAt(const char* weatherIcon, int x, int y);
+void displayLargeWeatherIcon(const char* weatherIcon);
+static void formatHourMinuteNoLeadingZero(char* output, size_t outputSize,
+                                          const struct tm& value, bool twentyFourHour);
 void WIFI_SETUP();
 bool dma_display_is_valid();
 bool dma_canvas_is_valid();
@@ -933,6 +1238,10 @@ void Screen7();
 void drawHourMarker(int hour, const String& mode, uint16_t num_color, uint16_t star_color);
 void Screen8();
 void Screen9();
+void Screen10();
+void Screen11();
+void Screen12();
+void Screen13();
 void Screen90();
 void dayOfYearToDate(int dayOfYear, int year, int &month, int &day);
 void handleSerialInput();
@@ -1086,11 +1395,80 @@ void saveSettings() {
 
 // FNV-1a over the serialized settings, so a save that would write byte-identical
 // content can skip the flash write entirely. See persistSettingsNow().
-static uint32_t settingsFingerprint(const String& s) {
-  uint32_t h = 2166136261u;
-  for (size_t i = 0; i < s.length(); ++i) { h ^= (uint8_t)s[i]; h *= 16777619u; }
-  return h;
-}
+//
+// This is a Print sink rather than a function over a String on purpose. The old
+// path did `serializeJson(doc, payload)` into a String, which built the entire
+// ~28 KB document as ONE contiguous heap block (and, while String grew itself by
+// repeated realloc, briefly needed close to double that). It was by far the
+// largest allocation the firmware ever attempted, it happened on every settings
+// write, and it had to succeed while the display buffers, the WiFi stack and any
+// in-flight TLS session were already holding internal DRAM. Hashing and writing
+// as a stream keeps the peak at a few bytes.
+class SettingsHashWriter : public Print {
+ public:
+  size_t write(uint8_t c) override {
+    hash_ ^= c;
+    hash_ *= 16777619u;
+    ++length_;
+    return 1;
+  }
+  size_t write(const uint8_t* data, size_t size) override {
+    for (size_t i = 0; i < size; ++i) write(data[i]);
+    return size;
+  }
+  uint32_t hash() const { return hash_; }
+  size_t length() const { return length_; }
+
+ private:
+  uint32_t hash_ = 2166136261u;
+  size_t length_ = 0;
+};
+
+// ArduinoJson's Print writer is unbuffered: it forwards every brace, comma and
+// quote as an individual write(). Handing it a File directly would push ~28,000
+// single-byte calls through the VFS/SPIFFS layer instead of one bulk write, so
+// this batches them into a small fixed buffer first. 512 bytes on the stack in
+// place of the ~28 KB heap String this replaced.
+class BufferedFileWriter : public Print {
+ public:
+  explicit BufferedFileWriter(File& file) : file_(file) {}
+
+  size_t write(uint8_t c) override {
+    if (used_ == sizeof(buffer_) && !flushBuffer()) return 0;
+    buffer_[used_++] = c;
+    return 1;
+  }
+
+  size_t write(const uint8_t* data, size_t size) override {
+    size_t written = 0;
+    while (written < size) {
+      if (used_ == sizeof(buffer_) && !flushBuffer()) break;
+      const size_t chunk = min(sizeof(buffer_) - used_, size - written);
+      memcpy(buffer_ + used_, data + written, chunk);
+      used_ += chunk;
+      written += chunk;
+    }
+    return written;
+  }
+
+  // Must be called before closing the file; returns false on a short write.
+  // Not named flush(): Print already declares a virtual void flush().
+  bool flushBuffer() {
+    if (used_ == 0) return true;
+    const size_t pending = used_;
+    used_ = 0;
+    if (file_.write(buffer_, pending) != pending) { failed_ = true; return false; }
+    return true;
+  }
+
+  bool failed() const { return failed_; }
+
+ private:
+  File& file_;
+  uint8_t buffer_[512];
+  size_t used_ = 0;
+  bool failed_ = false;
+};
 static uint32_t lastSavedSettingsHash = 0;
 
 bool persistSettingsNow() {
@@ -1099,7 +1477,7 @@ bool persistSettingsNow() {
     return false;
   }
 
-  DynamicJsonDocument doc(8192);
+  DynamicJsonDocument doc(20480);
 
   JsonArray screensArray = doc.createNestedArray("screens");
 
@@ -1149,6 +1527,12 @@ bool persistSettingsNow() {
     screenObj["twentyFourHourSwitch"] = settings.twentyFourHourSwitch;
     screenObj["iconsSwitch"] = settings.iconsSwitch;
     screenObj["temperatureSwitch"] = settings.temperatureSwitch;
+    screenObj["internalTemperatureSwitch"] = settings.internalTemperatureSwitch;
+    screenObj["chartLineSwitch"] = settings.chartLineSwitch;
+    screenObj["infographicSunpathSwitch"] = settings.infographicSunpathSwitch;
+    screenObj["infographicRainSwitch"] = settings.infographicRainSwitch;
+    screenObj["infographicWindSwitch"] = settings.infographicWindSwitch;
+    screenObj["infographicForecastSwitch"] = settings.infographicForecastSwitch;
     screenObj["minMaxTempsSwitch"] = settings.minMaxTempsSwitch;
     screenObj["daySwitch"] = settings.daySwitch;
     screenObj["dateSwitch"] = settings.dateSwitch;
@@ -1165,6 +1549,8 @@ bool persistSettingsNow() {
     screenObj["pageSlider"] = settings.pageSlider;
     screenObj["pageSlider2"] = settings.pageSlider2;
     screenObj["pageSlider3"] = settings.pageSlider3;
+    screenObj["infographicTransition"] = settings.infographicTransition;
+    screenObj["infographicHoldSeconds"] = settings.infographicHoldSeconds;
     screenObj["land_use_image"] = settings.land_use_image;
     screenObj["water_use_image"] = settings.water_use_image;
     screenObj["ice_use_image"] = settings.ice_use_image;
@@ -1186,6 +1572,27 @@ bool persistSettingsNow() {
     screenObj["hourHandSwitch"] = settings.hourHandSwitch;
     screenObj["minuteHandSwitch"] = settings.minuteHandSwitch;
     screenObj["secondHandSwitch"] = settings.secondHandSwitch;
+    if (&settings == &allScreenSettings[12]) {
+      screenObj["infographicRainIconSwitch"] = settings.infographicRainIconSwitch;
+      screenObj["infographicWindCompassSwitch"] = settings.infographicWindCompassSwitch;
+#define SAVE_INFOGRAPHIC_COLOR(name) \
+      screenObj[#name "_r"] = settings.name.r; \
+      screenObj[#name "_g"] = settings.name.g; \
+      screenObj[#name "_b"] = settings.name.b
+      SAVE_INFOGRAPHIC_COLOR(infographicSunHoursColor);
+      SAVE_INFOGRAPHIC_COLOR(infographicSunGraphColor);
+      SAVE_INFOGRAPHIC_COLOR(infographicRainHoursColor);
+      SAVE_INFOGRAPHIC_COLOR(infographicRainGraphColor);
+      SAVE_INFOGRAPHIC_COLOR(infographicCompassColor);
+      SAVE_INFOGRAPHIC_COLOR(infographicArrowColor);
+      SAVE_INFOGRAPHIC_COLOR(infographicSpeedColor);
+      SAVE_INFOGRAPHIC_COLOR(infographicUnitsColor);
+      SAVE_INFOGRAPHIC_COLOR(infographicForecastDayColor);
+      SAVE_INFOGRAPHIC_COLOR(infographicForecastMinColor);
+      SAVE_INFOGRAPHIC_COLOR(infographicForecastMaxColor);
+      SAVE_INFOGRAPHIC_COLOR(infographicForecastDividerColor);
+#undef SAVE_INFOGRAPHIC_COLOR
+    }
   }
 
   doc["auto_brightness"] = autoBrightnessEnabled;
@@ -1215,6 +1622,28 @@ bool persistSettingsNow() {
   doc["weather_icon"] = weatherIcon;
   doc["moon_Phase"] = moonPhase;
   doc["moon_Percentage"] = moonPercentage;
+  doc["wind_speed_kph"] = currentWindSpeedKph;
+  doc["wind_gust_kph"] = currentWindGustKph;
+  doc["wind_bearing"] = currentWindBearing;
+  doc["sunrise_minute"] = sunriseMinuteOfDay;
+  doc["sunset_minute"] = sunsetMinuteOfDay;
+  doc["solar_times_valid"] = solarTimesValid;
+  JsonArray rainChanceJson = doc.createNestedArray("hourly_rain_chance");
+  JsonArray rainHourJson = doc.createNestedArray("hourly_forecast_hour");
+  for (uint8_t i = 0; i < hourlyForecastCount; ++i) {
+    rainChanceJson.add(hourlyRainChance[i]);
+    rainHourJson.add(hourlyForecastHour[i]);
+  }
+  JsonArray dailyIconJson = doc.createNestedArray("daily_forecast_icon");
+  JsonArray dailyMinJson = doc.createNestedArray("daily_forecast_min");
+  JsonArray dailyMaxJson = doc.createNestedArray("daily_forecast_max");
+  JsonArray dailyWeekdayJson = doc.createNestedArray("daily_forecast_weekday");
+  for (uint8_t i = 0; i < dailyForecastCount; ++i) {
+    dailyIconJson.add(dailyForecastIcon[i]);
+    dailyMinJson.add(dailyForecastMin[i]);
+    dailyMaxJson.add(dailyForecastMax[i]);
+    dailyWeekdayJson.add(dailyForecastWeekday[i]);
+  }
   doc["language"] = currentLanguage; 
   doc["schedulesEnabled"] = schedulesEnabled;
   doc["defaultScreen"] = defaultScreen;
@@ -1230,10 +1659,11 @@ bool persistSettingsNow() {
   doc["panel_type"] = panelType;
   //Serial.println("[Save Settings] Saving panel_type as: " + panelType); 
 
-  // Serialize once into RAM so we can tell whether anything actually changed.
-  String payload;
-  serializeJson(doc, payload);
-  if (payload.length() == 0) {
+  // Serialize once through the hash sink (allocating nothing) so we can tell
+  // whether anything actually changed before touching flash at all.
+  SettingsHashWriter fingerprint;
+  serializeJson(doc, fingerprint);
+  if (fingerprint.length() == 0) {
     Serial.println("Failed to serialize settings");
     if (settingsMutex) xSemaphoreGiveRecursive(settingsMutex);
     return false;
@@ -1242,7 +1672,8 @@ bool persistSettingsNow() {
   // Skip the flash write when the content is byte-identical to what is already
   // stored. saveSettings() now defers and coalesces calls, while this fingerprint
   // also avoids a write when a client re-sends the value already on disk.
-  uint32_t hash = settingsFingerprint(payload);
+  const uint32_t hash = fingerprint.hash();
+  const size_t expectedLength = fingerprint.length();
   if (hash == lastSavedSettingsHash) {
     if (settingsMutex) xSemaphoreGiveRecursive(settingsMutex);
     return true; // nothing changed - already safely persisted
@@ -1251,16 +1682,26 @@ bool persistSettingsNow() {
   const char* finalPath = "/settings.json";
   const char* tmpPath   = "/settings.json.tmp";
   const char* backupPath = "/settings.json.bak";
+  // Flagged in the crash breadcrumb: a reboot that lands inside this window is
+  // the settings write, not the renderer. Cleared on every exit path below.
+  settingsSaveInProgress = 1;
   File file = SPIFFS.open(tmpPath, "w");
   if (!file) {
     Serial.println("Failed to open settings tmp file for writing");
+    settingsSaveInProgress = 0;
     if (settingsMutex) xSemaphoreGiveRecursive(settingsMutex);
     return false;
   }
-  if (file.print(payload) != payload.length()) {
+  // Stream straight into SPIFFS - no intermediate buffer. The byte count is
+  // checked against the hash pass so a short write (full partition, I/O error)
+  // is still caught before the file is renamed into place.
+  BufferedFileWriter writer(file);
+  const size_t written = serializeJson(doc, writer);
+  if (!writer.flushBuffer() || writer.failed() || written != expectedLength) {
     Serial.println("Failed to write to settings tmp file");
     file.close();
     SPIFFS.remove(tmpPath);
+    settingsSaveInProgress = 0;
     if (settingsMutex) xSemaphoreGiveRecursive(settingsMutex);
     return false;
   }
@@ -1273,6 +1714,7 @@ bool persistSettingsNow() {
   if (SPIFFS.exists(finalPath) && !SPIFFS.rename(finalPath, backupPath)) {
     Serial.println("CRITICAL: failed to preserve settings backup; current settings left untouched.");
     SPIFFS.remove(tmpPath);
+    settingsSaveInProgress = 0;
     if (settingsMutex) xSemaphoreGiveRecursive(settingsMutex);
     return false;
   }
@@ -1281,12 +1723,14 @@ bool persistSettingsNow() {
     if (!SPIFFS.exists(finalPath) && SPIFFS.exists(backupPath)) {
       SPIFFS.rename(backupPath, finalPath);
     }
+    settingsSaveInProgress = 0;
     if (settingsMutex) xSemaphoreGiveRecursive(settingsMutex);
     return false;
   } else {
     lastSavedSettingsHash = hash;
     Serial.println("Settings saved to SPIFFS (atomic + backup)");
   }
+  settingsSaveInProgress = 0;
   if (settingsMutex) xSemaphoreGiveRecursive(settingsMutex);
   return true;
 }
@@ -1295,16 +1739,48 @@ bool settingsFileIsValid(const char* path) {
   if (!SPIFFS.exists(path)) return false;
   File file = SPIFFS.open(path, "r");
   if (!file) return false;
-  DynamicJsonDocument probe(8192);
+  DynamicJsonDocument probe(20480);
   const DeserializationError error = deserializeJson(probe, file);
   file.close();
   return !error && probe.is<JsonObject>() && probe.size() > 0;
+}
+
+bool copySettingsFile(const char* sourcePath, const char* destinationPath) {
+  File source = SPIFFS.open(sourcePath, "r");
+  if (!source) return false;
+
+  SPIFFS.remove(destinationPath);
+  File destination = SPIFFS.open(destinationPath, "w");
+  if (!destination) {
+    source.close();
+    return false;
+  }
+
+  uint8_t buffer[256];
+  bool copied = true;
+  while (source.available()) {
+    const size_t bytesRead = source.read(buffer, sizeof(buffer));
+    if (bytesRead == 0 || destination.write(buffer, bytesRead) != bytesRead) {
+      copied = false;
+      break;
+    }
+  }
+  destination.flush();
+  destination.close();
+  source.close();
+
+  if (!copied || !settingsFileIsValid(destinationPath)) {
+    SPIFFS.remove(destinationPath);
+    return false;
+  }
+  return true;
 }
 
 bool recoverSettingsFile() {
   const char* finalPath = "/settings.json";
   const char* tmpPath = "/settings.json.tmp";
   const char* backupPath = "/settings.json.bak";
+  const char* otaCheckpointPath = "/settings.json.ota";
 
   // A valid .tmp is a completely-written newer snapshot left just before the
   // final rename. Prefer it, while preserving the previous final as backup.
@@ -1326,14 +1802,45 @@ bool recoverSettingsFile() {
 
   if (settingsFileIsValid(finalPath)) return true;
 
+  // The OTA checkpoint is deliberately copied rather than renamed so it
+  // remains available if the first boot of new firmware is interrupted too.
+  // It is newer than the rolling .bak, so prefer it after an OTA failure.
+  if (settingsFileIsValid(otaCheckpointPath)) {
+    Serial.println("[Settings] Main file missing/corrupt; restoring OTA checkpoint.");
+    SPIFFS.remove(finalPath);
+    if (copySettingsFile(otaCheckpointPath, finalPath)) return true;
+  }
+
   if (settingsFileIsValid(backupPath)) {
-    Serial.println("[Settings] Main file missing/corrupt; restoring backup.");
+    Serial.println("[Settings] Main and OTA checkpoint invalid; restoring backup.");
     SPIFFS.remove(finalPath);
     if (SPIFFS.rename(backupPath, finalPath)) return true;
   }
 
-  Serial.println("[Settings] No valid main, pending, or backup settings file found.");
+  Serial.println("[Settings] No valid main, pending, backup, or OTA checkpoint found.");
   return false;
+}
+
+bool prepareSettingsForOta() {
+  if (settingsMutex && xSemaphoreTakeRecursive(settingsMutex, pdMS_TO_TICKS(5000)) != pdTRUE) {
+    Serial.println("[OTA] Settings storage is busy; refusing firmware update.");
+    return false;
+  }
+
+  bool ready = true;
+  if (settingsChanged) {
+    const uint32_t revisionBeingSaved = settingsRevision;
+    ready = persistSettingsNow();
+    if (ready && settingsRevision == revisionBeingSaved) settingsChanged = false;
+  }
+  if (ready) ready = settingsFileIsValid("/settings.json");
+  if (ready) ready = copySettingsFile("/settings.json", "/settings.json.ota");
+
+  if (settingsMutex) xSemaphoreGiveRecursive(settingsMutex);
+  Serial.println(ready
+    ? "[OTA] Validated settings checkpoint saved before firmware update."
+    : "[OTA] Could not create a validated settings checkpoint; update refused.");
+  return ready;
 }
 
 void loadSettings() {
@@ -1348,7 +1855,7 @@ void loadSettings() {
     return;
   }
 
-  DynamicJsonDocument doc(8192);
+  DynamicJsonDocument doc(20480);
   DeserializationError error = deserializeJson(doc, file);
   if (error) {
     Serial.println("Failed to parse settings file: " + String(error.c_str()));
@@ -1411,6 +1918,14 @@ void loadSettings() {
         allScreenSettings[i].twentyFourHourSwitch = screenObj["twentyFourHourSwitch"] | false;
         allScreenSettings[i].iconsSwitch = screenObj["iconsSwitch"] | true;
         allScreenSettings[i].temperatureSwitch = screenObj["temperatureSwitch"] | true;
+        // Absent in pre-3.84 settings: preserve the former behaviour where
+        // indoor temperature was visible whenever the screen was enabled.
+        allScreenSettings[i].internalTemperatureSwitch = screenObj["internalTemperatureSwitch"] | true;
+        allScreenSettings[i].chartLineSwitch = screenObj["chartLineSwitch"] | true;
+        allScreenSettings[i].infographicSunpathSwitch = screenObj["infographicSunpathSwitch"] | true;
+        allScreenSettings[i].infographicRainSwitch = screenObj["infographicRainSwitch"] | true;
+        allScreenSettings[i].infographicWindSwitch = screenObj["infographicWindSwitch"] | true;
+        allScreenSettings[i].infographicForecastSwitch = screenObj["infographicForecastSwitch"] | true;
         allScreenSettings[i].minMaxTempsSwitch = screenObj["minMaxTempsSwitch"] | true;
         allScreenSettings[i].daySwitch = screenObj["daySwitch"] | true;
         allScreenSettings[i].dateSwitch = screenObj["dateSwitch"] | true;
@@ -1427,6 +1942,8 @@ void loadSettings() {
         allScreenSettings[i].pageSlider = screenObj["pageSlider"] | 128;
         allScreenSettings[i].pageSlider2 = screenObj["pageSlider2"] | 128;
         allScreenSettings[i].pageSlider3 = screenObj["pageSlider3"] | 128;
+        allScreenSettings[i].infographicTransition = constrain((int)(screenObj["infographicTransition"] | 0), 0, 4);
+        allScreenSettings[i].infographicHoldSeconds = constrain((int)(screenObj["infographicHoldSeconds"] | 8), 2, 60);
         allScreenSettings[i].land_use_image = screenObj["land_use_image"] | false;
         allScreenSettings[i].water_use_image = screenObj["water_use_image"] | false;
         allScreenSettings[i].ice_use_image = screenObj["ice_use_image"] | false;
@@ -1448,6 +1965,28 @@ void loadSettings() {
         allScreenSettings[i].hourHandSwitch = screenObj["hourHandSwitch"] | true;
         allScreenSettings[i].minuteHandSwitch = screenObj["minuteHandSwitch"] | true;
         allScreenSettings[i].secondHandSwitch = screenObj["secondHandSwitch"] | true;
+        if (i == 12) {
+          ScreenSettings& infographic = allScreenSettings[i];
+          infographic.infographicRainIconSwitch = screenObj["infographicRainIconSwitch"] | true;
+          infographic.infographicWindCompassSwitch = screenObj["infographicWindCompassSwitch"] | true;
+#define LOAD_INFOGRAPHIC_COLOR(name) \
+          infographic.name.r = screenObj[#name "_r"] | infographic.name.r; \
+          infographic.name.g = screenObj[#name "_g"] | infographic.name.g; \
+          infographic.name.b = screenObj[#name "_b"] | infographic.name.b
+          LOAD_INFOGRAPHIC_COLOR(infographicSunHoursColor);
+          LOAD_INFOGRAPHIC_COLOR(infographicSunGraphColor);
+          LOAD_INFOGRAPHIC_COLOR(infographicRainHoursColor);
+          LOAD_INFOGRAPHIC_COLOR(infographicRainGraphColor);
+          LOAD_INFOGRAPHIC_COLOR(infographicCompassColor);
+          LOAD_INFOGRAPHIC_COLOR(infographicArrowColor);
+          LOAD_INFOGRAPHIC_COLOR(infographicSpeedColor);
+          LOAD_INFOGRAPHIC_COLOR(infographicUnitsColor);
+          LOAD_INFOGRAPHIC_COLOR(infographicForecastDayColor);
+          LOAD_INFOGRAPHIC_COLOR(infographicForecastMinColor);
+          LOAD_INFOGRAPHIC_COLOR(infographicForecastMaxColor);
+          LOAD_INFOGRAPHIC_COLOR(infographicForecastDividerColor);
+#undef LOAD_INFOGRAPHIC_COLOR
+        }
       }
     }
   }
@@ -1494,9 +2033,42 @@ void loadSettings() {
   currentConditions = doc["conditions"] | String("Unknown");
   todayMinTemp = doc["min_temp"] | 0;
   todayMaxTemp = doc["max_temp"] | 0;
-  weatherIcon = doc["weather_icon"] | String("none");
+  setIconName(weatherIcon, doc["weather_icon"] | "none");
   moonPhase = doc["moon_Phase"] | 0.125;
   moonPercentage = doc["moon_Percentage"] | 25.0;
+  currentWindSpeedKph = doc["wind_speed_kph"] | 0.0f;
+  currentWindGustKph = doc["wind_gust_kph"] | 0.0f;
+  currentWindBearing = constrain((int)(doc["wind_bearing"] | 0), 0, 359);
+  sunriseMinuteOfDay = constrain((int)(doc["sunrise_minute"] | (6 * 60)), 0, 1439);
+  sunsetMinuteOfDay = constrain((int)(doc["sunset_minute"] | (18 * 60)), 0, 1439);
+  solarTimesValid = doc["solar_times_valid"] | false;
+  hourlyForecastCount = 0;
+  JsonArray savedRainChance = doc["hourly_rain_chance"];
+  JsonArray savedRainHour = doc["hourly_forecast_hour"];
+  const uint8_t savedForecastCount = min(
+    (uint8_t)WEATHER_TIMELINE_POINTS,
+    (uint8_t)min(savedRainChance.size(), savedRainHour.size()));
+  for (uint8_t i = 0; i < savedForecastCount; ++i) {
+    hourlyRainChance[i] = constrain((int)savedRainChance[i], 0, 100);
+    hourlyForecastHour[i] = constrain((int)savedRainHour[i], 0, 23);
+    ++hourlyForecastCount;
+  }
+  dailyForecastCount = 0;
+  JsonArray savedDailyIcon = doc["daily_forecast_icon"];
+  JsonArray savedDailyMin = doc["daily_forecast_min"];
+  JsonArray savedDailyMax = doc["daily_forecast_max"];
+  JsonArray savedDailyWeekday = doc["daily_forecast_weekday"];
+  const uint8_t savedDailyCount = min(
+    (uint8_t)DAILY_FORECAST_DAYS,
+    (uint8_t)min(min(savedDailyIcon.size(), savedDailyMin.size()),
+                 min(savedDailyMax.size(), savedDailyWeekday.size())));
+  for (uint8_t i = 0; i < savedDailyCount; ++i) {
+    setIconName(dailyForecastIcon[i], savedDailyIcon[i] | "none");
+    dailyForecastMin[i] = constrain(savedDailyMin[i].as<float>(), -99.0f, 99.0f);
+    dailyForecastMax[i] = constrain(savedDailyMax[i].as<float>(), -99.0f, 99.0f);
+    dailyForecastWeekday[i] = constrain((int)savedDailyWeekday[i], 0, 6);
+    ++dailyForecastCount;
+  }
 
   currentTemp = String(currentTemperature, 1);
   currentApparentTemp = String(currentApparentTemperature, 1);
@@ -1525,7 +2097,7 @@ void handleSettings() {
     return;
   }
 
-  DynamicJsonDocument doc(4096);
+  DynamicJsonDocument doc(6144);
   
   int screenIndex = responseScreen - 1;
 
@@ -1542,6 +2114,16 @@ void handleSettings() {
   doc["24hour_switch"] = settings.twentyFourHourSwitch;
   doc["icons_switch"] = settings.iconsSwitch;
   doc["temperature_switch"] = settings.temperatureSwitch;
+  doc["internal_temperature_switch"] = settings.internalTemperatureSwitch;
+  doc["chart_line_switch"] = settings.chartLineSwitch;
+  doc["infographic_sunpath_switch"] = settings.infographicSunpathSwitch;
+  doc["infographic_rain_switch"] = settings.infographicRainSwitch;
+  doc["infographic_wind_switch"] = settings.infographicWindSwitch;
+  doc["infographic_forecast_switch"] = settings.infographicForecastSwitch;
+  doc["infographic_rain_icon_switch"] = settings.infographicRainIconSwitch;
+  doc["infographic_wind_compass_switch"] = settings.infographicWindCompassSwitch;
+  doc["infographic_transition"] = settings.infographicTransition;
+  doc["infographic_hold_seconds"] = settings.infographicHoldSeconds;
   doc["minmax_temps_switch"] = settings.minMaxTempsSwitch;
   doc["day_switch"] = settings.daySwitch;
   doc["date_switch"] = settings.dateSwitch;
@@ -1604,6 +2186,22 @@ void handleSettings() {
   numberCol["r"] = settings.number_color.r; numberCol["g"] = settings.number_color.g; numberCol["b"] = settings.number_color.b;
   JsonObject starCol = doc.createNestedObject("star_color");
   starCol["r"] = settings.star_color.r; starCol["g"] = settings.star_color.g; starCol["b"] = settings.star_color.b;
+  const auto addInfographicColor = [&](const char* name, const RGBColor& color) {
+    JsonObject object = doc.createNestedObject(name);
+    object["r"] = color.r; object["g"] = color.g; object["b"] = color.b;
+  };
+  addInfographicColor("infographic_sun_hours_color", settings.infographicSunHoursColor);
+  addInfographicColor("infographic_sun_graph_color", settings.infographicSunGraphColor);
+  addInfographicColor("infographic_rain_hours_color", settings.infographicRainHoursColor);
+  addInfographicColor("infographic_rain_graph_color", settings.infographicRainGraphColor);
+  addInfographicColor("infographic_compass_color", settings.infographicCompassColor);
+  addInfographicColor("infographic_arrow_color", settings.infographicArrowColor);
+  addInfographicColor("infographic_speed_color", settings.infographicSpeedColor);
+  addInfographicColor("infographic_units_color", settings.infographicUnitsColor);
+  addInfographicColor("infographic_forecast_day_color", settings.infographicForecastDayColor);
+  addInfographicColor("infographic_forecast_min_color", settings.infographicForecastMinColor);
+  addInfographicColor("infographic_forecast_max_color", settings.infographicForecastMaxColor);
+  addInfographicColor("infographic_forecast_divider_color", settings.infographicForecastDividerColor);
 
   doc["auto_brightness"] = autoBrightnessEnabled;
   doc["timezone"] = selectedTimezone;
@@ -1640,7 +2238,7 @@ void handleSettings() {
   //Serial.println("[Load Settings] Loaded panel_type from file: " + panelType);
 
   cachedSettingsResponse = "";
-  cachedSettingsResponse.reserve(3072);
+  cachedSettingsResponse.reserve(5120);
   serializeJson(doc, cachedSettingsResponse);
   cachedSettingsRevision = revision;
   cachedSettingsScreen = responseScreen;
@@ -1650,6 +2248,10 @@ void handleSettings() {
 }
 
 void handleStatus() {
+  // Any request that reaches the clock proves the browser-to-clock path is
+  // alive. Previously only /settings refreshed the web-session watchdog, so
+  // a working live preview could still cause an unnecessary WiFi disconnect.
+  noteWebRequest();
   StaticJsonDocument<1024> doc;
   const uint32_t now = millis();
   doc["safe_mode"] = safeModeActive;
@@ -2178,6 +2780,47 @@ float mapWeatherApiMoonPhase(String phase) {
     return 0.0; // Default
 }
 
+static uint16_t localMinuteFromEpoch(time_t epoch) {
+  struct tm localValue;
+  localtime_r(&epoch, &localValue);
+  return (uint16_t)(localValue.tm_hour * 60 + localValue.tm_min);
+}
+
+static uint8_t localHourFromEpoch(time_t epoch) {
+  struct tm localValue;
+  localtime_r(&epoch, &localValue);
+  return (uint8_t)localValue.tm_hour;
+}
+
+static int parseWeatherApiClockMinutes(const String& value) {
+  int hour = 0;
+  int minute = 0;
+  char suffix[3] = {0};
+  if (sscanf(value.c_str(), "%d:%d %2s", &hour, &minute, suffix) != 3) return -1;
+  if (hour < 1 || hour > 12 || minute < 0 || minute > 59) return -1;
+  const bool pm = suffix[0] == 'P' || suffix[0] == 'p';
+  if (hour == 12) hour = 0;
+  if (pm) hour += 12;
+  return hour * 60 + minute;
+}
+
+static void clearExtendedWeatherData() {
+  hourlyForecastCount = 0;
+  memset(hourlyRainChance, 0, sizeof(hourlyRainChance));
+  memset(hourlyForecastHour, 0, sizeof(hourlyForecastHour));
+  currentWindSpeedKph = 0.0f;
+  currentWindGustKph = 0.0f;
+  currentWindBearing = 0;
+  solarTimesValid = false;
+  dailyForecastCount = 0;
+  for (uint8_t i = 0; i < DAILY_FORECAST_DAYS; ++i) {
+    setIconName(dailyForecastIcon[i], "none");
+    dailyForecastMin[i] = 0.0f;
+    dailyForecastMax[i] = 0.0f;
+    dailyForecastWeekday[i] = 0;
+  }
+}
+
 void fetchWeather() {
   const uint32_t requestConfigRevision = weatherConfigRevision;
   const String requestWeatherService = selectedWeatherService;
@@ -2196,12 +2839,13 @@ void fetchWeather() {
     currentHumidity = "";
     currentConditions = "N/A";
     dailyMinMaxTemps = "";
-    weatherIcon = "none";
+    setIconName(weatherIcon, "none");
     currentTemperature = 0.0;
     currentApparentTemperature = 0.0;
     currentHumidityFloat = 0.0;
     todayMinTemp = 0;
     todayMaxTemp = 0;
+    clearExtendedWeatherData();
     moonPhase = 0.125f; // This value correctly represents a 25% illuminated waxing crescent
     moonPercentage = 25.0f; // Set the default percentage to match
     saveSettings(); // Save the cleared values (re-takes the same recursive mutex internally — safe)
@@ -2249,7 +2893,7 @@ void fetchWeather() {
     // forecast can be tens of kilobytes; buffering all of it previously
     // exhausted the largest contiguous heap block and appeared as a 0-byte
     // response even after HTTP 200.
-    url = "https://api.pirateweather.net/forecast/" + pirateWeatherAPI + "/" + String(gpsLat, 6) + "," + String(gpsLon, 6) + "?units=" + apiUnits + "&exclude=minutely,hourly,alerts,flags,day_night";
+    url = "https://api.pirateweather.net/forecast/" + pirateWeatherAPI + "/" + String(gpsLat, 6) + "," + String(gpsLon, 6) + "?units=" + apiUnits + "&exclude=minutely,alerts,flags,day_night";
   } 
   else if (requestWeatherService == "openweathermap") {
     if (openWeatherMapAPI.isEmpty()) { Serial.println("Missing OpenWeatherMap API key."); lastHttpCode = -1; weatherLastDurationMs = millis() - attemptStartedAt; setWeatherFetchStage(WEATHER_ERROR, WEATHER_ERROR_MISSING_API_KEY); return; }
@@ -2259,7 +2903,9 @@ void fetchWeather() {
   else if (requestWeatherService == "weatherapi") {
     if (weatherAPI_API.isEmpty()) { Serial.println("Missing WeatherAPI.com API key."); lastHttpCode = -1; weatherLastDurationMs = millis() - attemptStartedAt; setWeatherFetchStage(WEATHER_ERROR, WEATHER_ERROR_MISSING_API_KEY); return; }
     // WeatherAPI provides both C and F, so no unit parameter is needed in the URL. We will parse the Celsius fields.
-    url = "http://api.weatherapi.com/v1/forecast.json?key=" + weatherAPI_API + "&q=" + String(gpsLat, 6) + "," + String(gpsLon, 6) + "&days=1&aqi=no&alerts=no";
+    // Two days are needed to build a true next-24-hours timeline late in the
+    // day; WeatherAPI starts each forecastday's hourly array at midnight.
+    url = "http://api.weatherapi.com/v1/forecast.json?key=" + weatherAPI_API + "&q=" + String(gpsLat, 6) + "," + String(gpsLon, 6) + "&days=3&aqi=no&alerts=no";
   }
   else {
     Serial.println("Unknown weather service selected: " + requestWeatherService);
@@ -2335,33 +2981,84 @@ void fetchWeather() {
     const int responseLength = http.getSize();
     weatherLastBytes = responseLength > 0 ? (uint32_t)responseLength : 0;
     setWeatherFetchStage(WEATHER_PARSING);
-    DynamicJsonDocument doc(2048);
+    DynamicJsonDocument doc(12288);
     DeserializationError error;
 
     if (requestWeatherService == "pirateweather") {
-      StaticJsonDocument<512> filter;
+      StaticJsonDocument<1024> filter;
       filter["currently"]["temperature"] = true;
       filter["currently"]["humidity"] = true;
       filter["currently"]["summary"] = true;
       filter["currently"]["icon"] = true;
       filter["currently"]["apparentTemperature"] = true;
+      filter["currently"]["windSpeed"] = true;
+      filter["currently"]["windGust"] = true;
+      filter["currently"]["windBearing"] = true;
       filter["daily"]["data"][0]["temperatureMin"] = true;
       filter["daily"]["data"][0]["temperatureMax"] = true;
       filter["daily"]["data"][0]["moonPhase"] = true;
+      filter["daily"]["data"][0]["sunriseTime"] = true;
+      filter["daily"]["data"][0]["sunsetTime"] = true;
+      filter["daily"]["data"][0]["time"] = true;
+      filter["daily"]["data"][0]["icon"] = true;
+      filter["hourly"]["data"][0]["time"] = true;
+      filter["hourly"]["data"][0]["precipProbability"] = true;
       error = deserializeJson(doc, http.getStream(), DeserializationOption::Filter(filter));
       if (!error && requestConfigRevision == weatherConfigRevision) {
+        clearExtendedWeatherData();
         currentTemperature = clampValue(doc["currently"]["temperature"], -99.0, 99.0);
         currentApparentTemperature = clampValue(doc["currently"]["apparentTemperature"], -99.0, 99.0);
         todayMinTemp = clampValue(doc["daily"]["data"][0]["temperatureMin"], -99.0, 99.0);
         todayMaxTemp = clampValue(doc["daily"]["data"][0]["temperatureMax"], -99.0, 99.0);
         currentHumidityFloat = clampValue(doc["currently"]["humidity"].as<float>() * 100, 0.0, 100.0);
         currentConditions = doc["currently"]["summary"].as<String>();
-        weatherIcon = doc["currently"]["icon"].as<String>();
+        setIconName(weatherIcon, doc["currently"]["icon"] | "none");
         moonPhase = doc["daily"]["data"][0]["moonPhase"].as<float>();
+        currentWindSpeedKph = max(0.0f, doc["currently"]["windSpeed"].as<float>() * 3.6f);
+        currentWindGustKph = max(currentWindSpeedKph, doc["currently"]["windGust"].as<float>() * 3.6f);
+        currentWindBearing = constrain((int)lroundf(doc["currently"]["windBearing"].as<float>()), 0, 359);
+
+        for (JsonObject daily : doc["daily"]["data"].as<JsonArray>()) {
+          if (dailyForecastCount >= DAILY_FORECAST_DAYS) break;
+          const uint8_t i = dailyForecastCount;
+          const time_t dayEpoch = daily["time"] | (time_t)0;
+          struct tm dayTm = timeinfo;
+          if (dayEpoch > 0) localtime_r(&dayEpoch, &dayTm);
+          // Clamped: this indexes a 7-entry name table in Screen13, where an
+          // out-of-range value would be a wild pointer, not a wrong label.
+          dailyForecastWeekday[i] = (uint8_t)constrain(dayTm.tm_wday, 0, 6);
+          dailyForecastMin[i] = clampValue(daily["temperatureMin"], -99.0, 99.0);
+          dailyForecastMax[i] = clampValue(daily["temperatureMax"], -99.0, 99.0);
+          setIconName(dailyForecastIcon[i], i == 0 ? weatherIcon : (daily["icon"] | "none"));
+          ++dailyForecastCount;
+        }
+
+        const time_t sunriseEpoch = doc["daily"]["data"][0]["sunriseTime"] | (time_t)0;
+        const time_t sunsetEpoch = doc["daily"]["data"][0]["sunsetTime"] | (time_t)0;
+        if (sunriseEpoch > 0 && sunsetEpoch > sunriseEpoch) {
+          sunriseMinuteOfDay = localMinuteFromEpoch(sunriseEpoch);
+          sunsetMinuteOfDay = localMinuteFromEpoch(sunsetEpoch);
+          solarTimesValid = true;
+        }
+
+        uint8_t sourceIndex = 0;
+        for (JsonObject hourly : doc["hourly"]["data"].as<JsonArray>()) {
+          if (hourlyForecastCount < WEATHER_TIMELINE_POINTS) {
+            const time_t forecastEpoch = hourly["time"] | (time_t)0;
+            hourlyForecastHour[hourlyForecastCount] = forecastEpoch > 0
+              ? localHourFromEpoch(forecastEpoch)
+              : (uint8_t)((timeinfo.tm_hour + sourceIndex) % 24);
+            hourlyRainChance[hourlyForecastCount] = constrain(
+              (int)lroundf(hourly["precipProbability"].as<float>() * 100.0f), 0, 100);
+            ++hourlyForecastCount;
+          }
+          ++sourceIndex;
+          if (hourlyForecastCount >= WEATHER_TIMELINE_POINTS) break;
+        }
       }
     } 
     else if (requestWeatherService == "openweathermap") {
-      StaticJsonDocument<512> filter;
+      StaticJsonDocument<1024> filter;
       filter["current"]["temp"] = true;
       filter["current"]["feels_like"] = true;
       filter["current"]["humidity"] = true;
@@ -2370,11 +3067,19 @@ void fetchWeather() {
       filter["current"]["sunrise"] = true;
       filter["current"]["sunset"] = true;
       filter["current"]["dt"] = true;
+      filter["current"]["wind_speed"] = true;
+      filter["current"]["wind_gust"] = true;
+      filter["current"]["wind_deg"] = true;
       filter["daily"][0]["temp"]["min"] = true;
       filter["daily"][0]["temp"]["max"] = true;
       filter["daily"][0]["moon_phase"] = true;
+      filter["daily"][0]["dt"] = true;
+      filter["daily"][0]["weather"][0]["icon"] = true;
+      filter["hourly"][0]["dt"] = true;
+      filter["hourly"][0]["pop"] = true;
       error = deserializeJson(doc, http.getStream(), DeserializationOption::Filter(filter));
       if (!error && requestConfigRevision == weatherConfigRevision) {
+        clearExtendedWeatherData();
         currentTemperature = clampValue(doc["current"]["temp"], -99.0, 99.0);
         currentApparentTemperature = clampValue(doc["current"]["feels_like"], -99.0, 99.0);
         todayMinTemp = clampValue(doc["daily"][0]["temp"]["min"], -99.0, 99.0);
@@ -2382,12 +3087,55 @@ void fetchWeather() {
         currentHumidityFloat = clampValue(doc["current"]["humidity"].as<float>(), 0.0, 100.0);
         currentConditions = doc["current"]["weather"][0]["description"].as<String>();
         bool isDay = (doc["current"]["dt"] > doc["current"]["sunrise"] && doc["current"]["dt"] < doc["current"]["sunset"]);
-        weatherIcon = mapOwmIconToStandard(doc["current"]["weather"][0]["icon"].as<String>(), isDay);
+        setIconName(weatherIcon, mapOwmIconToStandard(doc["current"]["weather"][0]["icon"].as<String>(), isDay).c_str());
         moonPhase = doc["daily"][0]["moon_phase"].as<float>();
+        currentWindSpeedKph = max(0.0f, doc["current"]["wind_speed"].as<float>() * 3.6f);
+        currentWindGustKph = max(currentWindSpeedKph, doc["current"]["wind_gust"].as<float>() * 3.6f);
+        currentWindBearing = constrain((int)lroundf(doc["current"]["wind_deg"].as<float>()), 0, 359);
+
+        for (JsonObject daily : doc["daily"].as<JsonArray>()) {
+          if (dailyForecastCount >= DAILY_FORECAST_DAYS) break;
+          const uint8_t i = dailyForecastCount;
+          const time_t dayEpoch = daily["dt"] | (time_t)0;
+          struct tm dayTm = timeinfo;
+          if (dayEpoch > 0) localtime_r(&dayEpoch, &dayTm);
+          // Clamped: this indexes a 7-entry name table in Screen13, where an
+          // out-of-range value would be a wild pointer, not a wrong label.
+          dailyForecastWeekday[i] = (uint8_t)constrain(dayTm.tm_wday, 0, 6);
+          dailyForecastMin[i] = clampValue(daily["temp"]["min"], -99.0, 99.0);
+          dailyForecastMax[i] = clampValue(daily["temp"]["max"], -99.0, 99.0);
+          if (i == 0) setIconName(dailyForecastIcon[i], weatherIcon);
+          else setIconName(dailyForecastIcon[i],
+            mapOwmIconToStandard(daily["weather"][0]["icon"].as<String>(), true).c_str());
+          ++dailyForecastCount;
+        }
+
+        const time_t sunriseEpoch = doc["current"]["sunrise"] | (time_t)0;
+        const time_t sunsetEpoch = doc["current"]["sunset"] | (time_t)0;
+        if (sunriseEpoch > 0 && sunsetEpoch > sunriseEpoch) {
+          sunriseMinuteOfDay = localMinuteFromEpoch(sunriseEpoch);
+          sunsetMinuteOfDay = localMinuteFromEpoch(sunsetEpoch);
+          solarTimesValid = true;
+        }
+
+        uint8_t sourceIndex = 0;
+        for (JsonObject hourly : doc["hourly"].as<JsonArray>()) {
+          if (hourlyForecastCount < WEATHER_TIMELINE_POINTS) {
+            const time_t forecastEpoch = hourly["dt"] | (time_t)0;
+            hourlyForecastHour[hourlyForecastCount] = forecastEpoch > 0
+              ? localHourFromEpoch(forecastEpoch)
+              : (uint8_t)((timeinfo.tm_hour + sourceIndex) % 24);
+            hourlyRainChance[hourlyForecastCount] = constrain(
+              (int)lroundf(hourly["pop"].as<float>() * 100.0f), 0, 100);
+            ++hourlyForecastCount;
+          }
+          ++sourceIndex;
+          if (hourlyForecastCount >= WEATHER_TIMELINE_POINTS) break;
+        }
       }
     } 
     else if (requestWeatherService == "weatherapi") {
-      StaticJsonDocument<512> filter;
+      StaticJsonDocument<1024> filter;
       // Request Celsius fields specifically
       filter["current"]["temp_c"] = true;
       filter["current"]["feelslike_c"] = true;
@@ -2395,11 +3143,21 @@ void fetchWeather() {
       filter["current"]["condition"]["text"] = true;
       filter["current"]["condition"]["code"] = true;
       filter["current"]["is_day"] = true;
+      filter["current"]["wind_kph"] = true;
+      filter["current"]["gust_kph"] = true;
+      filter["current"]["wind_degree"] = true;
       filter["forecast"]["forecastday"][0]["day"]["mintemp_c"] = true;
       filter["forecast"]["forecastday"][0]["day"]["maxtemp_c"] = true;
+      filter["forecast"]["forecastday"][0]["day"]["condition"]["code"] = true;
+      filter["forecast"]["forecastday"][0]["date_epoch"] = true;
       filter["forecast"]["forecastday"][0]["astro"]["moon_phase"] = true;
+      filter["forecast"]["forecastday"][0]["astro"]["sunrise"] = true;
+      filter["forecast"]["forecastday"][0]["astro"]["sunset"] = true;
+      filter["forecast"]["forecastday"][0]["hour"][0]["time_epoch"] = true;
+      filter["forecast"]["forecastday"][0]["hour"][0]["chance_of_rain"] = true;
       error = deserializeJson(doc, http.getStream(), DeserializationOption::Filter(filter));
       if (!error && requestConfigRevision == weatherConfigRevision) {
+        clearExtendedWeatherData();
         // Always parse the Celsius fields. The conversion to Fahrenheit will happen in the display functions.
         currentTemperature = clampValue(doc["current"]["temp_c"], -99.0, 99.0);
         currentApparentTemperature = clampValue(doc["current"]["feelslike_c"], -99.0, 99.0);
@@ -2409,8 +3167,60 @@ void fetchWeather() {
         currentHumidityFloat = clampValue(doc["current"]["humidity"].as<float>(), 0.0, 100.0);
         currentConditions = doc["current"]["condition"]["text"].as<String>();
         bool isDay = doc["current"]["is_day"] == 1;
-        weatherIcon = mapWeatherApiCodeToStandard(doc["current"]["condition"]["code"], isDay);
+        setIconName(weatherIcon, mapWeatherApiCodeToStandard(doc["current"]["condition"]["code"], isDay).c_str());
         moonPhase = mapWeatherApiMoonPhase(doc["forecast"]["forecastday"][0]["astro"]["moon_phase"].as<String>());
+        currentWindSpeedKph = max(0.0f, doc["current"]["wind_kph"].as<float>());
+        currentWindGustKph = max(currentWindSpeedKph, doc["current"]["gust_kph"].as<float>());
+        currentWindBearing = constrain((int)lroundf(doc["current"]["wind_degree"].as<float>()), 0, 359);
+
+        for (JsonObject daily : doc["forecast"]["forecastday"].as<JsonArray>()) {
+          if (dailyForecastCount >= DAILY_FORECAST_DAYS) break;
+          const uint8_t i = dailyForecastCount;
+          const time_t dayEpoch = daily["date_epoch"] | (time_t)0;
+          struct tm dayTm = timeinfo;
+          if (dayEpoch > 0) localtime_r(&dayEpoch, &dayTm);
+          // Clamped: this indexes a 7-entry name table in Screen13, where an
+          // out-of-range value would be a wild pointer, not a wrong label.
+          dailyForecastWeekday[i] = (uint8_t)constrain(dayTm.tm_wday, 0, 6);
+          dailyForecastMin[i] = clampValue(daily["day"]["mintemp_c"], -99.0, 99.0);
+          dailyForecastMax[i] = clampValue(daily["day"]["maxtemp_c"], -99.0, 99.0);
+          if (i == 0) setIconName(dailyForecastIcon[i], weatherIcon);
+          else setIconName(dailyForecastIcon[i],
+            mapWeatherApiCodeToStandard(daily["day"]["condition"]["code"], true).c_str());
+          ++dailyForecastCount;
+        }
+
+        const int parsedSunrise = parseWeatherApiClockMinutes(
+          doc["forecast"]["forecastday"][0]["astro"]["sunrise"].as<String>());
+        const int parsedSunset = parseWeatherApiClockMinutes(
+          doc["forecast"]["forecastday"][0]["astro"]["sunset"].as<String>());
+        if (parsedSunrise >= 0 && parsedSunset > parsedSunrise) {
+          sunriseMinuteOfDay = (uint16_t)parsedSunrise;
+          sunsetMinuteOfDay = (uint16_t)parsedSunset;
+          solarTimesValid = true;
+        }
+
+        uint8_t futureIndex = 0;
+        const time_t nowEpoch = time(nullptr);
+        for (JsonObject forecastDay : doc["forecast"]["forecastday"].as<JsonArray>()) {
+          for (JsonObject hourly : forecastDay["hour"].as<JsonArray>()) {
+            const time_t forecastEpoch = hourly["time_epoch"] | (time_t)0;
+            // Retain the current hour, but discard hours that have completely
+            // elapsed. Keep five consecutive hours for Rainline.
+            if (forecastEpoch <= 0 || forecastEpoch + 3600 <= nowEpoch) continue;
+            if (hourlyForecastCount < WEATHER_TIMELINE_POINTS) {
+              hourlyForecastHour[hourlyForecastCount] = forecastEpoch > 0
+                ? localHourFromEpoch(forecastEpoch)
+                : (uint8_t)((timeinfo.tm_hour + futureIndex) % 24);
+              hourlyRainChance[hourlyForecastCount] = constrain(
+                (int)(hourly["chance_of_rain"] | 0), 0, 100);
+              ++hourlyForecastCount;
+            }
+            ++futureIndex;
+            if (hourlyForecastCount >= WEATHER_TIMELINE_POINTS) break;
+          }
+          if (hourlyForecastCount >= WEATHER_TIMELINE_POINTS) break;
+        }
       }
     }
 
@@ -2447,7 +3257,7 @@ void fetchWeather() {
       Serial.println("Fetched Apparent Temp (Celsius): " + currentApparentTemp + "°C");
       Serial.println("Fetched Humidity: " + currentHumidity + "%");
       Serial.println("Fetched Min/Max Temp (Celsius): " + String(todayMinTemp) + "°C / " + String(todayMaxTemp) + "°C");
-      Serial.println("Fetched Weather Icon: " + weatherIcon);
+      Serial.printf("Fetched Weather Icon: %s\n", weatherIcon);
       Serial.println("Fetched Moon Phase: " + String(moonPhase, 2) + " (" + String(moonPercentage, 1) + "%)");
       weatherLastSuccessAt = millis();
       setWeatherFetchStage(WEATHER_SUCCESS);
@@ -2476,6 +3286,7 @@ void printSettings(){
 
 
 void handleRoot() {
+  noteWebRequest();
   // The page is stored gzip-compressed in flash (src/WebPage_gz.h, generated
   // from web/index.html by scripts/build_web.py at build time). We hand the
   // compressed bytes straight to the browser and let it inflate them.
@@ -2594,6 +3405,134 @@ void handleTemperature() {
   } else {
     server.send(400, "text/plain", "Missing parameters");
   }
+}
+
+void handleInternalTemperature() {
+  if (server.hasArg("state") && server.hasArg("screen")) {
+    const bool enabled = server.arg("state") == "true";
+    const int screenIndex = server.arg("screen").toInt() - 1;
+    if (screenIndex >= 0 && screenIndex < allScreenSettings.size()) {
+      allScreenSettings[screenIndex].internalTemperatureSwitch = enabled;
+      saveSettings();
+      server.send(200, "text/plain", "OK");
+    } else {
+      server.send(400, "text/plain", "Invalid screen");
+    }
+  } else {
+    server.send(400, "text/plain", "Missing parameters");
+  }
+}
+
+void handleChartLine() {
+  if (server.hasArg("state") && server.hasArg("screen")) {
+    const bool enabled = server.arg("state") == "true";
+    const int screenIndex = server.arg("screen").toInt() - 1;
+    if (screenIndex >= 0 && screenIndex < allScreenSettings.size()) {
+      allScreenSettings[screenIndex].chartLineSwitch = enabled;
+      saveSettings();
+      server.send(200, "text/plain", "OK");
+    } else {
+      server.send(400, "text/plain", "Invalid screen");
+    }
+  } else {
+    server.send(400, "text/plain", "Missing parameters");
+  }
+}
+
+void handleInfographicModule() {
+  if (!server.hasArg("state") || !server.hasArg("screen") || !server.hasArg("module")) {
+    server.send(400, "text/plain", "Missing parameters");
+    return;
+  }
+  const int screenIndex = server.arg("screen").toInt() - 1;
+  if (screenIndex < 0 || screenIndex >= allScreenSettings.size()) {
+    server.send(400, "text/plain", "Invalid screen");
+    return;
+  }
+  const bool enabled = server.arg("state") == "true";
+  const String module = server.arg("module");
+  ScreenSettings& settings = allScreenSettings[screenIndex];
+  if (module == "sunpath") settings.infographicSunpathSwitch = enabled;
+  else if (module == "rain") settings.infographicRainSwitch = enabled;
+  else if (module == "wind") settings.infographicWindSwitch = enabled;
+  else if (module == "forecast") settings.infographicForecastSwitch = enabled;
+  else if (module == "rainicon") settings.infographicRainIconSwitch = enabled;
+  else if (module == "windcompass") settings.infographicWindCompassSwitch = enabled;
+  else {
+    server.send(400, "text/plain", "Invalid module");
+    return;
+  }
+  saveSettings();
+  server.send(200, "text/plain", "OK");
+}
+
+void handleInfographicColor() {
+  if (!server.hasArg("value") || !server.hasArg("screen") || !server.hasArg("part")) {
+    server.send(400, "text/plain", "Missing parameters");
+    return;
+  }
+  const int screenIndex = server.arg("screen").toInt() - 1;
+  if (screenIndex < 0 || screenIndex >= allScreenSettings.size()) {
+    server.send(400, "text/plain", "Invalid screen");
+    return;
+  }
+  ScreenSettings& settings = allScreenSettings[screenIndex];
+  RGBColor* target = nullptr;
+  const String part = server.arg("part");
+  if (part == "sunhours") target = &settings.infographicSunHoursColor;
+  else if (part == "sungraph") target = &settings.infographicSunGraphColor;
+  else if (part == "rainhours") target = &settings.infographicRainHoursColor;
+  else if (part == "raingraph") target = &settings.infographicRainGraphColor;
+  else if (part == "compass") target = &settings.infographicCompassColor;
+  else if (part == "arrow") target = &settings.infographicArrowColor;
+  else if (part == "speed") target = &settings.infographicSpeedColor;
+  else if (part == "units") target = &settings.infographicUnitsColor;
+  else if (part == "forecastday") target = &settings.infographicForecastDayColor;
+  else if (part == "forecastmin") target = &settings.infographicForecastMinColor;
+  else if (part == "forecastmax") target = &settings.infographicForecastMaxColor;
+  else if (part == "forecastdivider") target = &settings.infographicForecastDividerColor;
+  if (!target) {
+    server.send(400, "text/plain", "Invalid infographic part");
+    return;
+  }
+  const unsigned long color = strtoul(server.arg("value").c_str(), nullptr, 16);
+  target->r = (color >> 16) & 0xFF;
+  target->g = (color >> 8) & 0xFF;
+  target->b = color & 0xFF;
+  saveSettings();
+  server.send(200, "text/plain", "OK");
+}
+
+void handleInfographicTransition() {
+  if (!server.hasArg("value") || !server.hasArg("screen")) {
+    server.send(400, "text/plain", "Missing parameters");
+    return;
+  }
+  const int screenIndex = server.arg("screen").toInt() - 1;
+  const int value = server.arg("value").toInt();
+  if (screenIndex < 0 || screenIndex >= allScreenSettings.size() || value < 0 || value > 4) {
+    server.send(400, "text/plain", "Invalid transition");
+    return;
+  }
+  allScreenSettings[screenIndex].infographicTransition = value;
+  saveSettings();
+  server.send(200, "text/plain", "OK");
+}
+
+void handleInfographicHold() {
+  if (!server.hasArg("value") || !server.hasArg("screen")) {
+    server.send(400, "text/plain", "Missing parameters");
+    return;
+  }
+  const int screenIndex = server.arg("screen").toInt() - 1;
+  const int value = server.arg("value").toInt();
+  if (screenIndex < 0 || screenIndex >= allScreenSettings.size() || value < 2 || value > 60) {
+    server.send(400, "text/plain", "Invalid hold time");
+    return;
+  }
+  allScreenSettings[screenIndex].infographicHoldSeconds = value;
+  saveSettings();
+  server.send(200, "text/plain", "OK");
 }
 
 void handleMinMaxTemps() {
@@ -3479,7 +4418,7 @@ void fetchWeatherTask(void *pvParameters) {
 
   for (;;) { // Infinite loop for the task
     // Only attempt fetch if in RUNNING state and WiFi is connected
-    if (currentState == STATE_RUNNING) {
+    if (currentState == STATE_RUNNING && !otaBrowserActive) {
       unsigned long currentTime = millis();
 
       // User changes always win over a scheduled sync or retry. Clear the flag
@@ -3571,6 +4510,7 @@ void getInternalAHT10() {
 
 
 void handleScreenshot() {
+  noteWebRequest();
   if (!dma_display || !dma_canvas_is_valid()) {
     server.send(500, "text/plain", "Display not initialized");
     return;
@@ -3741,13 +4681,35 @@ void serviceAmbientBrightnessTarget() {
 }
 
 void applyDisplayBrightness(uint8_t desiredBrightness, bool initializeBothBuffers) {
-  // OE pulse widths become coarse and panel-dependent below about 15%. Keep
-  // OE at a steady floor there and obtain the remaining range by scaling the
-  // already-linearised RGB bitplanes instead.
-  const uint8_t oeBrightness = max(desiredBrightness, HYBRID_OE_FLOOR);
-  const uint8_t colorBrightness = desiredBrightness < HYBRID_OE_FLOOR
-    ? (uint8_t)(((uint16_t)desiredBrightness * 255U + HYBRID_OE_FLOOR / 2) / HYBRID_OE_FLOOR)
-    : 255;
+  uint8_t oeBrightness = 0;
+  uint8_t colorBrightness = 255;
+
+  if (desiredBrightness > 0) {
+    // The DMA engine can alter OE only in whole HUB75 clock periods. Select
+    // the first stable OE width at or above the requested energy, then trim
+    // the remainder with post-CIE RGB scaling. This prevents every OE clock
+    // boundary (including the former raw 40/41 boundary) becoming a jump.
+    const uint8_t requiredOeClocks = (uint8_t)(
+      ((uint16_t)desiredBrightness * FULL_SCALE_OE_CLOCKS + 254U) / 255U);
+    oeBrightness = MIN_STABLE_OE_BRIGHTNESS;
+
+    auto enabledOeClocks = [](uint8_t brightnessValue) -> uint8_t {
+      uint8_t clocks = (uint8_t)(
+        ((uint16_t)(FULL_SCALE_OE_CLOCKS + 1U) * brightnessValue) >> 8);
+      if (brightnessValue > 0 && clocks == 0) clocks = 1;
+      return min(clocks, FULL_SCALE_OE_CLOCKS);
+    };
+
+    while (oeBrightness < 255 && enabledOeClocks(oeBrightness) < requiredOeClocks) {
+      ++oeBrightness;
+    }
+
+    const uint8_t actualOeClocks = enabledOeClocks(oeBrightness);
+    colorBrightness = (uint8_t)min(
+      255U,
+      ((uint16_t)desiredBrightness * FULL_SCALE_OE_CLOCKS + actualOeClocks / 2U) /
+        actualOeClocks);
+  }
 
   appliedOeBrightness = oeBrightness;
   appliedColorBrightness = colorBrightness;
@@ -3766,9 +4728,19 @@ void setup() {
   Wire.begin(SDA_PIN, SCL_PIN);
   Serial.println("\n\n--- Booting Up ---");
 
-  esp_reset_reason_t resetReason = esp_reset_reason();
+  bootResetReason = esp_reset_reason();
+  ++retainedResetSequence;
+
+  // Snapshot the breadcrumb the previous run left behind BEFORE loop() starts
+  // overwriting it. RTC_NOINIT RAM is uninitialised after a power cycle, so the
+  // magic value is what separates a real breadcrumb from garbage.
+  previousBootBreadcrumb = liveBreadcrumb;
+  previousBootBreadcrumbValid = (previousBootBreadcrumb.magic == CRASH_BREADCRUMB_MAGIC) &&
+                                (bootResetReason != ESP_RST_POWERON);
+  memset(&liveBreadcrumb, 0, sizeof(liveBreadcrumb));
+
   Serial.print("[Boot] Reset reason: ");
-  switch (resetReason) {
+  switch (bootResetReason) {
     case ESP_RST_POWERON:   Serial.println("Power-on"); break;
     case ESP_RST_SW:        Serial.println("Software (esp_restart)"); break;
     case ESP_RST_PANIC:     Serial.println("PANIC / exception"); break;
@@ -3777,7 +4749,21 @@ void setup() {
     case ESP_RST_WDT:       Serial.println("Other watchdog"); break;
     case ESP_RST_BROWNOUT:  Serial.println("Brownout"); break;
     case ESP_RST_DEEPSLEEP: Serial.println("Deep sleep wake"); break;
-    default:                Serial.printf("Other (%d)\n", (int)resetReason); break;
+    default:                Serial.printf("Other (%d)\n", (int)bootResetReason); break;
+  }
+
+  if (previousBootBreadcrumbValid) {
+    Serial.printf("[Boot] Previous run died at uptime %lus on screen %ld (state %ld), "
+                  "heap free=%lu largestBlock=%lu minEver=%lu%s\n",
+                  (unsigned long)(previousBootBreadcrumb.uptimeMs / 1000UL),
+                  (long)previousBootBreadcrumb.screen,
+                  (long)previousBootBreadcrumb.state,
+                  (unsigned long)previousBootBreadcrumb.freeHeap,
+                  (unsigned long)previousBootBreadcrumb.maxAllocHeap,
+                  (unsigned long)previousBootBreadcrumb.minFreeHeap,
+                  previousBootBreadcrumb.settingsSaveInProgress ? " DURING A SETTINGS WRITE" : "");
+  } else {
+    Serial.println("[Boot] No usable crash breadcrumb from the previous run (cold boot).");
   }
 
   settingsMutex = xSemaphoreCreateRecursiveMutex();
@@ -3873,6 +4859,7 @@ void setup() {
 
   // Load settings from the main settings file
   allScreenSettings.resize(NUM_CLOCK_SCREENS);
+  applyNewWeatherScreenDefaults();
   if (spiffsOk) loadSettings();
   
   // If the guard was triggered, OVERWRITE the loaded settings with safe ones and SAVE them.
@@ -3895,7 +4882,12 @@ void setup() {
   mxconfig.clkphase = false;
   mxconfig.driver = HUB75_I2S_CFG::FM6047;
   mxconfig.double_buff = true;       // compose complete frames away from the active scan buffer
-  mxconfig.min_refresh_rate = 200;   // resolves to ~287 Hz on this 64x32/10 MHz configuration
+  mxconfig.latch_blanking = 2;       // suppress one-pixel colour leakage around the row latch
+  // 10 MHz gives the panel twice the setup/hold margin of 20 MHz. At 20 MHz
+  // this clock's B1 lane intermittently sampled the adjacent pixel, producing
+  // a blue one-pixel shadow only on rows 0-15. The library default is 10 MHz.
+  mxconfig.i2sspeed = HUB75_I2S_CFG::HZ_10M;
+  mxconfig.min_refresh_rate = 200;   // library selects a safe colour depth while staying above 200 Hz
 
   if (panelType == "P2.5") {
     Serial.println("Configuring pins for P2.5 panel.");
@@ -3981,6 +4973,12 @@ void setup() {
     d["free_heap"] = ESP.getFreeHeap();
     d["min_free_heap"] = ESP.getMinFreeHeap();
     d["max_alloc"] = ESP.getMaxAllocHeap();
+    d["reset_reason"] = (int)bootResetReason;
+    d["reset_sequence"] = retainedResetSequence;
+    d["web_stack_free_words"] = webServerTaskHandle ? uxTaskGetStackHighWaterMark(webServerTaskHandle) : 0;
+    d["weather_stack_free_words"] = fetchWeatherTaskHandle ? uxTaskGetStackHighWaterMark(fetchWeatherTaskHandle) : 0;
+    d["ota_active"] = otaBrowserActive;
+    d["screen13_module_mask"] = diagnosticScreen13Mask;
     d["wifi_status"] = (int)WiFi.status();
     d["state"] = (int)currentState;
     d["rssi"] = (WiFi.status() == WL_CONNECTED) ? (long)WiFi.RSSI() : 0;
@@ -3993,6 +4991,36 @@ void setup() {
     d["ldr_raw"] = ldrRawValue;
     d["ldr_filtered"] = (uint16_t)lroundf(ldrFilteredValue);
     d["display_refresh_hz"] = dma_display ? dma_display->calculated_refresh_rate : 0;
+
+    // What the radio has actually been doing (see the WiFi event log notes).
+    d["wifi_disconnects"] = (uint32_t)wifiDisconnectCount;
+    d["wifi_last_disconnect_reason"] = (uint16_t)lastWifiDisconnectReason;
+    JsonArray events = d.createNestedArray("wifi_events");
+    const uint8_t logged = wifiEventLogTotal < WIFI_EVENT_LOG_SIZE
+      ? (uint8_t)wifiEventLogTotal : WIFI_EVENT_LOG_SIZE;
+    for (uint8_t i = 0; i < logged; ++i) {
+      // Walk oldest -> newest through the ring.
+      const uint8_t index = (uint8_t)((wifiEventLogNext + WIFI_EVENT_LOG_SIZE - logged + i) % WIFI_EVENT_LOG_SIZE);
+      JsonObject e = events.createNestedObject();
+      e["ago_s"] = (millis() - wifiEventLog[index].atMs) / 1000UL;
+      e["event"] = wifiEventLog[index].event;
+      e["reason"] = wifiEventLog[index].reason;
+      e["rssi"] = wifiEventLog[index].rssi;
+    }
+
+    // What the clock was doing microseconds before the last unexpected reboot.
+    JsonObject crash = d.createNestedObject("last_crash");
+    crash["valid"] = previousBootBreadcrumbValid;
+    if (previousBootBreadcrumbValid) {
+      crash["uptime_s"] = previousBootBreadcrumb.uptimeMs / 1000UL;
+      crash["screen"] = previousBootBreadcrumb.screen;
+      crash["state"] = previousBootBreadcrumb.state;
+      crash["free_heap"] = previousBootBreadcrumb.freeHeap;
+      crash["max_alloc"] = previousBootBreadcrumb.maxAllocHeap;
+      crash["min_free_heap"] = previousBootBreadcrumb.minFreeHeap;
+      crash["during_settings_write"] = previousBootBreadcrumb.settingsSaveInProgress != 0;
+    }
+
     String resp; serializeJson(d, resp);
     server.send(200, "application/json", resp);
   });
@@ -4002,6 +5030,12 @@ void setup() {
   server.on("/24hour", handle24Hour);
   server.on("/icons", handleIcons);
   server.on("/temperature", handleTemperature);
+  server.on("/internaltemperature", handleInternalTemperature);
+  server.on("/chartline", handleChartLine);
+  server.on("/infographicmodule", handleInfographicModule);
+  server.on("/infographiccolor", handleInfographicColor);
+  server.on("/infographictransition", handleInfographicTransition);
+  server.on("/infographichold", handleInfographicHold);
   server.on("/units", handleUnits);
   server.on("/temp_type", handleTempType);
   server.on("/minmaxtemps", handleMinMaxTemps);
@@ -4112,44 +5146,166 @@ void setup() {
   // (OTA_MERGED_APP_OFFSET) is discarded and only the app part is flashed -
   // which is byte-identical to firmware.bin. The bootloader and partition
   // table cannot be updated over OTA at all; those still need USB. SPIFFS is a
-  // separate partition and is never touched, so settings survive either way.
+  // separate partition and is never part of this write. Even so, the updater
+  // now requires a validated settings checkpoint before Update.begin(), giving
+  // boot recovery an independent copy if the filesystem or reset is disturbed.
   //
-  // The page posts the file in sequential chunks so it can show real progress
-  // (a single POST just fills the browser's send buffer and reports 100%
-  // instantly) and so a chunk lost to a WiFi dip can be retried on its own
-  // instead of restarting the whole ~1.6MB transfer. Each chunk carries its
-  // file offset and the total size in the upload filename:
-  //     ota_<startOffset>_<totalBytes>.bin
+  // Browser OTA is a two-stage protocol. /update/start checkpoints settings
+  // and opens the OTA partition before any firmware bytes are posted. Each
+  // /update request is then buffered completely before it is committed. That
+  // makes retries idempotent: if the clock wrote a chunk but its small OK
+  // response was lost, reposting the same offset is acknowledged without
+  // writing those bytes a second time.
+  server.on("/update/start", HTTP_POST, []() {
+    noteWebRequest();
+    if (!server.hasArg("total") || !server.hasArg("merged")) {
+      server.send(400, "text/plain", "FAIL: missing image size or type");
+      return;
+    }
+
+    const size_t total = (size_t)strtoul(server.arg("total").c_str(), nullptr, 10);
+    const bool merged = server.arg("merged") == "1";
+    if (total == 0 || (merged && total <= OTA_MERGED_APP_OFFSET)) {
+      server.send(400, "text/plain", "FAIL: invalid firmware size");
+      return;
+    }
+    const size_t appSize = merged ? total - OTA_MERGED_APP_OFFSET : total;
+
+    releaseBrowserOtaSession(true);
+    Update.clearError();
+    otaBrowserActive = true;       // also pauses weather/TLS work
+    otaBrowserReady = false;
+    otaBrowserLastActivity = millis();
+    const uint32_t weatherWaitStarted = millis();
+    while ((weatherFetchStage == WEATHER_VALIDATING || weatherFetchStage == WEATHER_CONNECTING ||
+            weatherFetchStage == WEATHER_DOWNLOADING || weatherFetchStage == WEATHER_PARSING) &&
+           millis() - weatherWaitStarted < 15000UL) {
+      delay(50); // let an already-running HTTPS request release its TLS memory
+    }
+    if (weatherFetchStage == WEATHER_VALIDATING || weatherFetchStage == WEATHER_CONNECTING ||
+        weatherFetchStage == WEATHER_DOWNLOADING || weatherFetchStage == WEATHER_PARSING) {
+      releaseBrowserOtaSession(false);
+      server.send(503, "text/plain", "FAIL: weather request is still busy; please retry");
+      return;
+    }
+    if (!prepareSettingsForOta()) {
+      releaseBrowserOtaSession(false);
+      server.send(503, "text/plain", "FAIL: settings could not be safely checkpointed; firmware was not changed");
+      return;
+    }
+    otaBrowserChunk = (uint8_t*)malloc(OTA_BROWSER_CHUNK_SIZE);
+    if (!otaBrowserChunk) {
+      releaseBrowserOtaSession(false);
+      server.send(503, "text/plain", "FAIL: not enough free memory to start firmware upload");
+      return;
+    }
+    if (!Update.begin(appSize)) {
+      const String error = String("FAIL: ") + Update.errorString();
+      Serial.printf("[OTA] Could not start update: %s\n", Update.errorString());
+      releaseBrowserOtaSession(false);
+      server.send(500, "text/plain", error);
+      return;
+    }
+
+    otaBrowserMerged = merged;
+    otaBrowserTotal = total;
+    otaBrowserExpectedOffset = 0;
+    otaBrowserChunkStart = 0;
+    otaBrowserChunkBytes = 0;
+    otaBrowserChunkDuplicate = false;
+    otaBrowserChunkRejected = false;
+    otaBrowserReady = true;
+    Serial.printf("[OTA] Browser session ready: %s image, %u source bytes, %u app bytes.\n",
+                  merged ? "merged" : "app-only", (unsigned)total, (unsigned)appSize);
+    server.sendHeader("Cache-Control", "no-store");
+    server.send(200, "text/plain", "READY:0");
+  });
+
+  server.on("/update/cancel", HTTP_POST, []() {
+    noteWebRequest();
+    releaseBrowserOtaSession(true);
+    Update.clearError();
+    server.send(200, "text/plain", "CANCELLED");
+  });
+
   server.on("/update", HTTP_POST,
-    []() { // one chunk fully received
-      if (Update.hasError()) {
-        server.sendHeader("Connection", "close");
-        server.send(500, "text/plain", String("FAIL: ") + Update.errorString());
-        Serial.printf("[OTA] REJECTED: %s\n", Update.errorString());
+    []() { // one complete, buffered chunk is now safe to commit
+      noteWebRequest();
+      otaBrowserLastActivity = millis();
+      server.sendHeader("Cache-Control", "no-store");
+
+      if (!otaBrowserActive || !otaBrowserReady || !Update.isRunning()) {
+        server.send(409, "text/plain", "FAIL: upload session is not ready; start the upload again");
         return;
       }
-      bool done = Update.isFinished();
-      server.sendHeader("Connection", "close");
-      server.send(200, "text/plain", done ? "DONE" : "OK");
-      if (done) {
-        Serial.println("[OTA] Update accepted - rebooting into new firmware.");
-        delay(400);
-        ESP.restart();
+      if (otaBrowserChunkRejected) {
+        server.send(409, "text/plain", "FAIL: unexpected chunk offset or size");
+        return;
       }
+      if (otaBrowserChunkDuplicate) {
+        if (otaBrowserChunkStart + otaBrowserChunkBytes > otaBrowserExpectedOffset) {
+          server.send(409, "text/plain", "FAIL: retry overlaps unwritten data; expected " + String(otaBrowserExpectedOffset));
+          return;
+        }
+        server.send(200, "text/plain", "OK:" + String(otaBrowserExpectedOffset));
+        return;
+      }
+
+      const size_t remaining = otaBrowserTotal - otaBrowserChunkStart;
+      const size_t expectedChunkBytes = min(OTA_BROWSER_CHUNK_SIZE, remaining);
+      if (otaBrowserChunkStart != otaBrowserExpectedOffset ||
+          otaBrowserChunkBytes != expectedChunkBytes) {
+        server.send(409, "text/plain", "FAIL: incomplete or out-of-order chunk; expected " + String(otaBrowserExpectedOffset));
+        return;
+      }
+
+      uint8_t* data = otaBrowserChunk;
+      size_t writeLength = otaBrowserChunkBytes;
+      if (otaBrowserMerged) {
+        if (otaBrowserChunkStart + writeLength <= OTA_MERGED_APP_OFFSET) {
+          writeLength = 0; // bootloader/partition portion: never written by OTA
+        } else if (otaBrowserChunkStart < OTA_MERGED_APP_OFFSET) {
+          const size_t skip = OTA_MERGED_APP_OFFSET - otaBrowserChunkStart;
+          data += skip;
+          writeLength -= skip;
+        }
+      }
+      if (writeLength > 0 && Update.write(data, writeLength) != writeLength) {
+        const String error = String("FAIL: ") + Update.errorString();
+        Serial.printf("[OTA] Chunk write failed at %u: %s\n",
+                      (unsigned)otaBrowserChunkStart, Update.errorString());
+        releaseBrowserOtaSession(true);
+        server.send(500, "text/plain", error);
+        return;
+      }
+
+      otaBrowserExpectedOffset += otaBrowserChunkBytes;
+      const bool complete = otaBrowserExpectedOffset >= otaBrowserTotal;
+      if (!complete) {
+        server.send(200, "text/plain", "OK:" + String(otaBrowserExpectedOffset));
+        return;
+      }
+
+      if (!Update.end(false)) {
+        const String error = String("FAIL: ") + Update.errorString();
+        Serial.printf("[OTA] Final validation failed: %s\n", Update.errorString());
+        releaseBrowserOtaSession(true);
+        server.send(500, "text/plain", error);
+        return;
+      }
+
+      Serial.printf("[OTA] Success: %u bytes received (%s image).\n",
+                    (unsigned)otaBrowserTotal, otaBrowserMerged ? "merged" : "app-only");
+      releaseBrowserOtaSession(false);
+      server.send(200, "text/plain", "DONE");
+      delay(500);
+      ESP.restart();
     },
-    []() { // streamed while a chunk is arriving
+    []() { // buffer the multipart body without touching flash
+      noteWebRequest();
+      otaBrowserLastActivity = millis();
       HTTPUpload& upload = server.upload();
-
-      static const size_t   OTA_MERGED_APP_OFFSET = 0x10000;
-      static const uint32_t ESP_APP_DESC_MAGIC    = 0xABCD5432UL;
-      // These persist across the separate chunk POSTs.
-      static size_t otaOffset  = 0;   // file offset of the next byte to arrive
-      static size_t otaTotal   = 0;   // total file size, from the filename
-      static bool   otaMerged  = false;
-      static bool   otaSniffed = false;
-
       if (upload.status == UPLOAD_FILE_START) {
-        // filename: ota_<start>_<total>.bin
         size_t start = 0, total = 0;
         int u1 = upload.filename.indexOf('_');
         int u2 = upload.filename.indexOf('_', u1 + 1);
@@ -4158,69 +5314,26 @@ void setup() {
           start = (size_t)upload.filename.substring(u1 + 1, u2).toInt();
           total = (size_t)upload.filename.substring(u2 + 1, dot).toInt();
         }
-        otaOffset = start;
-        otaTotal  = total;
-
-        if (start == 0) { // first chunk of a new image
-          otaMerged = false; otaSniffed = false;
-          Serial.printf("[OTA] Starting upload, %u bytes total\n", (unsigned)total);
-          // Update.begin() is deliberately NOT called here. With an unknown
-          // size esp_ota_begin() erases the whole 1.9MB app partition up front,
-          // which stalls this first request long enough to time the client out.
-          // We wait until the first bytes let us tell merged from app-only, then
-          // begin with the exact app size so only those sectors are erased.
-          if (Update.isRunning()) Update.abort(); // tidy up an abandoned attempt
-        }
+        otaBrowserChunkStart = start;
+        otaBrowserChunkBytes = 0;
+        otaBrowserChunkDuplicate = start < otaBrowserExpectedOffset;
+        otaBrowserChunkRejected = !otaBrowserActive || !otaBrowserReady ||
+          total != otaBrowserTotal || start > otaBrowserExpectedOffset;
       } else if (upload.status == UPLOAD_FILE_WRITE) {
-        uint8_t *data = upload.buf;
-        size_t   len  = upload.currentSize;
-
-        // Distinguish the two image types from the very first bytes: an
-        // ESP-IDF app image carries esp_app_desc_t's magic word at offset 0x20.
-        // Present => app-only. Absent => merged (that offset is bootloader).
-        if (!otaSniffed && otaOffset == 0 && len >= 0x24) {
-          otaSniffed = true;
-          uint32_t magic;
-          memcpy(&magic, data + 0x20, sizeof(magic));
-          otaMerged = (magic != ESP_APP_DESC_MAGIC);
-          size_t appSize = otaMerged ? (otaTotal - OTA_MERGED_APP_OFFSET) : otaTotal;
-          Serial.printf("[OTA] Detected %s image%s; app payload %u bytes\n",
-                        otaMerged ? "MERGED" : "app-only",
-                        otaMerged ? " - skipping the first 64KB (bootloader/partitions)" : "",
-                        (unsigned)appSize);
-          // Exact size => only the needed sectors are erased, so this returns
-          // fast enough that the client doesn't time out on the first chunk.
-          if (!Update.begin(appSize)) Update.printError(Serial);
-        }
-
-        size_t consumed = len;
-        if (otaMerged) {
-          if (otaOffset + len <= OTA_MERGED_APP_OFFSET) {
-            otaOffset += len;      // entirely inside the discarded region
-            return;
+        if (!otaBrowserChunk || otaBrowserChunkBytes + upload.currentSize > OTA_BROWSER_CHUNK_SIZE) {
+          otaBrowserChunkRejected = true;
+        } else {
+          if (!otaBrowserChunkDuplicate && !otaBrowserChunkRejected) {
+            memcpy(otaBrowserChunk + otaBrowserChunkBytes, upload.buf, upload.currentSize);
           }
-          if (otaOffset < OTA_MERGED_APP_OFFSET) {
-            size_t skip = OTA_MERGED_APP_OFFSET - otaOffset; // straddles the boundary
-            data += skip;
-            len  -= skip;
-          }
-        }
-
-        if (Update.write(data, len) != len) Update.printError(Serial);
-        otaOffset += consumed;
-      } else if (upload.status == UPLOAD_FILE_END) {
-        // Only finalise once the last chunk of the file has landed.
-        if (otaTotal > 0 && otaOffset >= otaTotal) {
-          if (Update.end(true)) {
-            Serial.printf("[OTA] Success: %u bytes received (%s image).\n",
-                          (unsigned)otaTotal, otaMerged ? "merged" : "app-only");
-          } else {
-            Update.printError(Serial);
-          }
+          otaBrowserChunkBytes += upload.currentSize;
         }
       } else if (upload.status == UPLOAD_FILE_ABORTED) {
-        Update.abort();
-        Serial.println("[OTA] Upload aborted.");
+        // Leave the OTA session and expected offset intact: the browser can
+        // safely retry this uncommitted chunk without restarting from zero.
+        otaBrowserChunkRejected = true;
+        Serial.printf("[OTA] HTTP chunk at %u aborted; waiting for retry.\n",
+                      (unsigned)otaBrowserChunkStart);
       }
     });
 
@@ -4253,112 +5366,115 @@ void setup() {
 
 
 
-void displayWeatherIcon(const String& weatherIcon) {
-  // Define the position and size for the icon
-  int x = 27;  // Same x position as your original example
-  int y = 0;  // Same y position as your original example
+static void drawWeatherIconOn(GFXcanvas16& canvas, const char* weatherIcon, int x, int y) {
+  // Screen 1's original 10/11-pixel bitmap set, at a caller-selected position.
   int width = 10;  // Same width as your original example
   int height = 10;  // Same height as your original example
 
   // Map the weatherIcon string to the corresponding bitmap and draw it
-  if (weatherIcon == "clear-day") {
-    dma_canvas.drawRGBBitmap(x, y, (const uint16_t *)Sunny, 11, 11);  //  ClearDay later
+  if (strcmp(weatherIcon, "clear-day") == 0) {
+    canvas.drawRGBBitmap(x, y, (const uint16_t *)Sunny, 11, 11);  //  ClearDay later
   }
-  else if (weatherIcon == "clear-night") {
-    dma_canvas.drawRGBBitmap(x, y, (const uint16_t *)ClearNight, width, height);  //  ClearNight later
+  else if (strcmp(weatherIcon, "clear-night") == 0) {
+    canvas.drawRGBBitmap(x, y, (const uint16_t *)ClearNight, width, height);  //  ClearNight later
   }
-  else if (weatherIcon == "rain") {
-    dma_canvas.drawRGBBitmap(x, y, (const uint16_t *)CloudyRain, width, height);  //  Rain later
+  else if (strcmp(weatherIcon, "rain") == 0) {
+    canvas.drawRGBBitmap(x, y, (const uint16_t *)CloudyRain, width, height);  //  Rain later
   }
-  else if (weatherIcon == "snow") {
-    dma_canvas.drawRGBBitmap(x, y, (const uint16_t *)CloudyRain, width, height);  //  Snow later
+  else if (strcmp(weatherIcon, "snow") == 0) {
+    canvas.drawRGBBitmap(x, y, (const uint16_t *)CloudyRain, width, height);  //  Snow later
   }
-  else if (weatherIcon == "sleet") {
-    dma_canvas.drawRGBBitmap(x, y, (const uint16_t *)CloudyRain, width, height);  //  Sleet later
+  else if (strcmp(weatherIcon, "sleet") == 0) {
+    canvas.drawRGBBitmap(x, y, (const uint16_t *)CloudyRain, width, height);  //  Sleet later
   }
-  else if (weatherIcon == "wind") {
-    dma_canvas.drawRGBBitmap(x, y, (const uint16_t *)Sunny, 11, 11);  //  Wind later
+  else if (strcmp(weatherIcon, "wind") == 0) {
+    canvas.drawRGBBitmap(x, y, (const uint16_t *)Sunny, 11, 11);  //  Wind later
   }
-  else if (weatherIcon == "fog") {
-    dma_canvas.drawRGBBitmap(x, y, (const uint16_t *)CloudyRain, width, height);  //  Fog later
+  else if (strcmp(weatherIcon, "fog") == 0) {
+    canvas.drawRGBBitmap(x, y, (const uint16_t *)CloudyRain, width, height);  //  Fog later
   }
-  else if (weatherIcon == "cloudy") {
-    dma_canvas.drawRGBBitmap(x, y, (const uint16_t *)Cloudy, width, height);  //  Cloudy later
+  else if (strcmp(weatherIcon, "cloudy") == 0) {
+    canvas.drawRGBBitmap(x, y, (const uint16_t *)Cloudy, width, height);  //  Cloudy later
   }
-  else if (weatherIcon == "partly-cloudy-day") {
-    dma_canvas.drawRGBBitmap(x, y, (const uint16_t *)PartlyCloudyDay, width, height);  //  PartlyCloudyDay later
+  else if (strcmp(weatherIcon, "partly-cloudy-day") == 0) {
+    canvas.drawRGBBitmap(x, y, (const uint16_t *)PartlyCloudyDay, width, height);  //  PartlyCloudyDay later
   }
-  else if (weatherIcon == "partly-cloudy-night") {
-    dma_canvas.drawRGBBitmap(x, y, (const uint16_t *)PartlyCloudyNight, width, height);  //  PartlyCloudyNight later
+  else if (strcmp(weatherIcon, "partly-cloudy-night") == 0) {
+    canvas.drawRGBBitmap(x, y, (const uint16_t *)PartlyCloudyNight, width, height);  //  PartlyCloudyNight later
   }
-  else if (weatherIcon == "thunderstorm") {
-    dma_canvas.drawRGBBitmap(x, y, (const uint16_t *)Stormy, width, height);  //  Thunderstorm later (future)
+  else if (strcmp(weatherIcon, "thunderstorm") == 0) {
+    canvas.drawRGBBitmap(x, y, (const uint16_t *)Stormy, width, height);  //  Thunderstorm later (future)
   }
-  else if (weatherIcon == "hail") {
-    dma_canvas.drawRGBBitmap(x, y, (const uint16_t *)Stormy, width, height);  // Hail later (future)
+  else if (strcmp(weatherIcon, "hail") == 0) {
+    canvas.drawRGBBitmap(x, y, (const uint16_t *)Stormy, width, height);  // Hail later (future)
   }
-  else if (weatherIcon == "none" || weatherIcon == "N/A") {
-    dma_canvas.drawRGBBitmap(x, y, (const uint16_t *)Crossmark, 12, 12);  // None or a default icon later
+  else if (strcmp(weatherIcon, "none") == 0 || strcmp(weatherIcon, "N/A") == 0) {
+    canvas.drawRGBBitmap(x, y, (const uint16_t *)Crossmark, 12, 12);  // None or a default icon later
   }
   else {
     // Fallback for unrecognized icons
-    dma_canvas.drawRGBBitmap(x, y, (const uint16_t *)Crossmark, 12, 12);  //  default icon later
+    canvas.drawRGBBitmap(x, y, (const uint16_t *)Crossmark, 12, 12);  //  default icon later
     //Serial.println("Unrecognized weather icon: " + weatherIcon);
   }
 }
 
-void displayLargeWeatherIcon(const String& weatherIcon) {
-  // Define the position and size for the icon
-  int x = 34;  // Same x position as your original example
-  int y = 0;  // Same y position as your original example
-  int Largewidth = 29;  // Same width as your original example
-  int Largeheight = 21;  // Same height as your original example
+void displayWeatherIconAt(const char* weatherIcon, int x, int y) {
+  drawWeatherIconOn(dma_canvas, weatherIcon, x, y);
+}
 
-  // Map the weatherIcon string to the corresponding bitmap and draw it
-  if (weatherIcon == "clear-day") {
-    dma_canvas.drawRGBBitmap(x, y, (const uint16_t *)SunnyLarge, Largewidth, Largeheight);  //  ClearDay later
+void displayWeatherIcon(const char* weatherIcon) {
+  displayWeatherIconAt(weatherIcon, 27, 0);
+}
+
+static void drawLargeWeatherIconOn(GFXcanvas16& canvas, const char* weatherIcon, int x, int y) {
+  const int Largewidth = 29;
+  const int Largeheight = 21;
+  if (strcmp(weatherIcon, "clear-day") == 0) {
+    canvas.drawRGBBitmap(x, y, (const uint16_t *)SunnyLarge, Largewidth, Largeheight);
   }
-  else if (weatherIcon == "clear-night") {
-    dma_canvas.drawRGBBitmap(x, y, (const uint16_t *)ClearNightLarge, Largewidth, Largeheight);  //  ClearNight later
+  else if (strcmp(weatherIcon, "clear-night") == 0) {
+    canvas.drawRGBBitmap(x, y, (const uint16_t *)ClearNightLarge, Largewidth, Largeheight);
   }
-  else if (weatherIcon == "rain") {
-    dma_canvas.drawRGBBitmap(x, y, (const uint16_t *)CloudyRainLarge, Largewidth, Largeheight);  //  Rain later
+  else if (strcmp(weatherIcon, "rain") == 0) {
+    canvas.drawRGBBitmap(x, y, (const uint16_t *)CloudyRainLarge, Largewidth, Largeheight);
   }
-  else if (weatherIcon == "snow") {
-    dma_canvas.drawRGBBitmap(x, y, (const uint16_t *)CloudyRainLarge, Largewidth, Largeheight);  //  Snow later
+  else if (strcmp(weatherIcon, "snow") == 0) {
+    canvas.drawRGBBitmap(x, y, (const uint16_t *)CloudyRainLarge, Largewidth, Largeheight);
   }
-  else if (weatherIcon == "sleet") {
-    dma_canvas.drawRGBBitmap(x, y, (const uint16_t *)CloudyRainLarge, Largewidth, Largeheight);  //  Sleet later
+  else if (strcmp(weatherIcon, "sleet") == 0) {
+    canvas.drawRGBBitmap(x, y, (const uint16_t *)CloudyRainLarge, Largewidth, Largeheight);
   }
-  else if (weatherIcon == "wind") {
-    dma_canvas.drawRGBBitmap(x, y, (const uint16_t *)SunnyLarge, Largewidth, Largeheight);  //  Wind later
+  else if (strcmp(weatherIcon, "wind") == 0) {
+    canvas.drawRGBBitmap(x, y, (const uint16_t *)SunnyLarge, Largewidth, Largeheight);
   }
-  else if (weatherIcon == "fog") {
-    dma_canvas.drawRGBBitmap(x, y, (const uint16_t *)CloudyRainLarge, Largewidth, Largeheight);  //  Fog later
+  else if (strcmp(weatherIcon, "fog") == 0) {
+    canvas.drawRGBBitmap(x, y, (const uint16_t *)CloudyRainLarge, Largewidth, Largeheight);
   }
-  else if (weatherIcon == "cloudy") {
-    dma_canvas.drawRGBBitmap(x, y, (const uint16_t *)CloudyLarge, Largewidth, Largeheight);  //  Cloudy later
+  else if (strcmp(weatherIcon, "cloudy") == 0) {
+    canvas.drawRGBBitmap(x, y, (const uint16_t *)CloudyLarge, Largewidth, Largeheight);
   }
-  else if (weatherIcon == "partly-cloudy-day") {
-    dma_canvas.drawRGBBitmap(x, y, (const uint16_t *)PartlyCloudyDayLarge, Largewidth, Largeheight);  //  PartlyCloudyDay later
+  else if (strcmp(weatherIcon, "partly-cloudy-day") == 0) {
+    canvas.drawRGBBitmap(x, y, (const uint16_t *)PartlyCloudyDayLarge, Largewidth, Largeheight);
   }
-  else if (weatherIcon == "partly-cloudy-night") {
-    dma_canvas.drawRGBBitmap(x, y, (const uint16_t *)PartlyCloudyNightLarge, Largewidth, Largeheight);  //  PartlyCloudyNight later
+  else if (strcmp(weatherIcon, "partly-cloudy-night") == 0) {
+    canvas.drawRGBBitmap(x, y, (const uint16_t *)PartlyCloudyNightLarge, Largewidth, Largeheight);
   }
-  else if (weatherIcon == "thunderstorm") {
-    dma_canvas.drawRGBBitmap(x, y, (const uint16_t *)StormyLarge, Largewidth, Largeheight);  //  Thunderstorm later (future)
+  else if (strcmp(weatherIcon, "thunderstorm") == 0) {
+    canvas.drawRGBBitmap(x, y, (const uint16_t *)StormyLarge, Largewidth, Largeheight);
   }
-  else if (weatherIcon == "hail") {
-    dma_canvas.drawRGBBitmap(x, y, (const uint16_t *)StormyLarge, Largewidth, Largeheight);  // Hail later (future)
+  else if (strcmp(weatherIcon, "hail") == 0) {
+    canvas.drawRGBBitmap(x, y, (const uint16_t *)StormyLarge, Largewidth, Largeheight);
   }
-  else if (weatherIcon == "none" || weatherIcon == "N/A") {
-    dma_canvas.drawRGBBitmap(x, y, (const uint16_t *)Crossmark, 12, 12);  // None or a default icon later
+  else if (strcmp(weatherIcon, "none") == 0 || strcmp(weatherIcon, "N/A") == 0) {
+    canvas.drawRGBBitmap(x, y, (const uint16_t *)Crossmark, 12, 12);
   }
   else {
-    // Fallback for unrecognized icons
-    dma_canvas.drawRGBBitmap(x, y, (const uint16_t *)Crossmark, 12, 12);  //  default icon later
-    //Serial.println("Unrecognized weather icon: " + weatherIcon);
+    canvas.drawRGBBitmap(x, y, (const uint16_t *)Crossmark, 12, 12);
   }
+}
+
+void displayLargeWeatherIcon(const char* weatherIcon) {
+  drawLargeWeatherIconOn(dma_canvas, weatherIcon, 34, 0);
 }
 
 void WIFI_SETUP() {
@@ -4366,6 +5482,10 @@ void WIFI_SETUP() {
   // Connection attempts and state transitions are handled in loop()
 
   WiFi.mode(WIFI_STA); // Start in station mode; WiFiManager will switch to AP if needed
+
+  // Purely observational - see the WiFi event log notes above. Registered before
+  // any connection attempt so the very first association is captured too.
+  WiFi.onEvent(onWiFiEvent);
 
   // Disable WiFi modem power save. By default the ESP32 parks the radio between
   // DTIM beacons; anything that arrives while it is asleep can be dropped by the
@@ -4413,7 +5533,8 @@ void loop() {
   button.read();  // Check button state
 
   serviceLinkKeepAlive();        // keep our MAC fresh in the AP/mesh forwarding tables
-  serviceWebSessionRecovery();   // recover an active page from a false-connected link
+  serviceBrowserOtaTimeout();    // release an abandoned browser OTA session safely
+  updateCrashBreadcrumb();      // cheap; survives a panic so the next boot can report it
   serviceConnectivityWatchdog(); // last-resort: reboot if the network stays dead
 
   // Low-rate health line: enough to spot a heap leak or a signal collapse after
@@ -4606,17 +5727,44 @@ switch (currentState) {
 
     case STATE_RUNNING: { // State 3
       displayClockFace = true;
+
+      // Do NOT tear down on a single not-connected sample. WiFi.status() dips
+      // out of WL_CONNECTED for a second or two during an ordinary roam between
+      // Orbi satellites, a missed beacon, or a brief deauth - and this clock's
+      // RSSI has been measured swinging 30 dB while stationary, so that happens
+      // often. Reacting instantly meant every blip dropped networkServicesStarted,
+      // which made STATE_WIFI_CONNECTING rebuild the listening socket, mDNS and
+      // ArduinoOTA from scratch. The radio was fine; the clock was disconnecting
+      // itself from the LAN for several seconds at a time and calling it a
+      // dropout. Require the loss to persist before believing it.
+      static uint32_t wifiLossFirstSeen = 0;
+      const uint32_t WIFI_LOSS_CONFIRM_MS = 5000;
+
       if (WiFi.status() != WL_CONNECTED) {
-          Serial.println("WiFi disconnected during STATE_RUNNING. Transitioning to STATE_WIFI_DISCONNECTED.");
-          // Pause the web task immediately. STATE_WIFI_CONNECTING will rebuild
-          // the now-stale listening socket after the station reconnects.
+          if (wifiLossFirstSeen == 0) {
+            wifiLossFirstSeen = max(1UL, (unsigned long)millis()); // 0 is the "not seen" sentinel
+            Serial.println("STATE_RUNNING: WiFi reported not-connected; confirming before tearing down services...");
+            break;
+          }
+          if (millis() - wifiLossFirstSeen < WIFI_LOSS_CONFIRM_MS) break; // still riding it out
+
+          Serial.printf("WiFi still disconnected after %lums during STATE_RUNNING. Transitioning to STATE_WIFI_DISCONNECTED.\n",
+                        (unsigned long)(millis() - wifiLossFirstSeen));
+          wifiLossFirstSeen = 0;
+          // Pause the web task. STATE_WIFI_CONNECTING will rebuild the
+          // now-stale listening socket after the station reconnects.
           networkServicesStarted = false;
           currentState = STATE_WIFI_DISCONNECTED;
           stateStartTime = millis();
           // Consider if OTA handle should be paused
       } else {
-          if (networkServicesStarted) ArduinoOTA.handle(); 
-          checkNTPSync(); 
+          if (wifiLossFirstSeen != 0) {
+            Serial.printf("STATE_RUNNING: WiFi recovered on its own after %lums - services left untouched.\n",
+                          (unsigned long)(millis() - wifiLossFirstSeen));
+            wifiLossFirstSeen = 0;
+          }
+          if (networkServicesStarted) ArduinoOTA.handle();
+          checkNTPSync();
       }
       break;
     }
@@ -4872,7 +6020,7 @@ void Screen1() { // Info Clock
   if (isFahrenheit && effectiveInternalTemp > -99.0) {
       internalTempToDisplay = (effectiveInternalTemp * 9.0 / 5.0) + 32.0;
   }
-  float webTempInCelsius = (tempType == "feels_like") ? currentApparentTemp.toFloat() : currentTemp.toFloat();
+  float webTempInCelsius = (tempType == "feels_like") ? currentApparentTemperature : currentTemperature;
   float webTempToDisplay = webTempInCelsius;
   if (isFahrenheit) {
       webTempToDisplay = (webTempInCelsius * 9.0 / 5.0) + 32.0;
@@ -5033,7 +6181,7 @@ void Screen1() { // Info Clock
       renderAnimatedValue_Left_Right(dma_canvas, current_millis_for_anim,
           settings.humiditySwitch,
           internalHumid, "#", "%",
-          currentHumidity.toFloat(), "$", "%",
+          currentHumidityFloat, "$", "%",
           0, 10, humidity_col,
           humidityAnimationTextWidthCache, 0
       );
@@ -5106,7 +6254,7 @@ void Screen2() { // Large Weather Clock
   if (isFahrenheit && effectiveInternalTemp > -99.0) {
       internalTempToDisplay = (effectiveInternalTemp * 9.0 / 5.0) + 32.0;
   }
-  float webTempInCelsius = (tempType == "feels_like") ? currentApparentTemp.toFloat() : currentTemp.toFloat();
+  float webTempInCelsius = (tempType == "feels_like") ? currentApparentTemperature : currentTemperature;
   float webTempToDisplay = webTempInCelsius;
   if (isFahrenheit) {
       webTempToDisplay = (webTempInCelsius * 9.0 / 5.0) + 32.0;
@@ -5134,10 +6282,8 @@ void Screen2() { // Large Weather Clock
   // --- TIME & DATE DISPLAY ---
   char timeBuf[32];
   char ampmBuf[2] = "";
-  if (settings.twentyFourHourSwitch) {
-    strftime(timeBuf, sizeof(timeBuf), "%H:%M", &timeinfo);
-  } else {
-    strftime(timeBuf, sizeof(timeBuf), "%l:%M", &timeinfo);
+  formatHourMinuteNoLeadingZero(timeBuf, sizeof(timeBuf), timeinfo, settings.twentyFourHourSwitch);
+  if (!settings.twentyFourHourSwitch) {
     if (settings.ampmSwitch && timeinfo.tm_hour >= 12) {
       strcpy(ampmBuf, "'");
     }
@@ -5245,7 +6391,7 @@ void Screen2() { // Large Weather Clock
       renderAnimatedValue_Down_Up(dma_canvas, current_millis_for_anim,
           settings.humiditySwitch,
           internalHumid, "", "%",
-          currentHumidity.toFloat(), "", "%",
+          currentHumidityFloat, "", "%",
           34, 30, humidity_col, humidity_col,
           humidityAnimationTextHeightCache, 0);
       
@@ -6165,7 +7311,7 @@ void Screen5() {    // Moon Phase
   if (isFahrenheit && effectiveInternalTemp > -99.0) {
       internalTempToDisplay = (effectiveInternalTemp * 9.0 / 5.0) + 32.0;
   }
-  float webTempInCelsius = (tempType == "feels_like") ? currentApparentTemp.toFloat() : currentTemp.toFloat();
+  float webTempInCelsius = (tempType == "feels_like") ? currentApparentTemperature : currentTemperature;
   float webTempToDisplay = webTempInCelsius;
   if (isFahrenheit) {
       webTempToDisplay = (webTempInCelsius * 9.0 / 5.0) + 32.0;
@@ -6242,9 +7388,8 @@ void Screen5() {    // Moon Phase
 
   // --- Time & Date Logic ---
   char timeBuf[32]; char ampmBuf[2] = "";
-  if (settings.twentyFourHourSwitch) strftime(timeBuf, sizeof(timeBuf), "%H:%M", &timeinfo);
-  else {
-    strftime(timeBuf, sizeof(timeBuf), "%l:%M", &timeinfo);
+  formatHourMinuteNoLeadingZero(timeBuf, sizeof(timeBuf), timeinfo, settings.twentyFourHourSwitch);
+  if (!settings.twentyFourHourSwitch) {
     if (settings.ampmSwitch && timeinfo.tm_hour >= 12) strcpy(ampmBuf, "'");
   }
   dma_canvas.setFont(&Tidbyt_Numbers1);
@@ -6326,10 +7471,10 @@ void Screen5() {    // Moon Phase
           settings.temperatureSwitch, internalTempToDisplay, "", unitSuffix, webTempToDisplay, "", unitSuffix,
           cfg_tempX, cfg_tempY, temp_col, temperatureAnimationTextWidthCache, 1);
       renderAnimatedValue_Left_Right(dma_canvas, current_millis_for_anim,
-          settings.humiditySwitch, internalHumid, "", "%", currentHumidity.toFloat(), "", "%",
+          settings.humiditySwitch, internalHumid, "", "%", currentHumidityFloat, "", "%",
           cfg_humidX + 1, cfg_humidY + 1, cc_blk, humidityAnimationTextWidthCache, 0);
       renderAnimatedValue_Left_Right(dma_canvas, current_millis_for_anim,
-          settings.humiditySwitch, internalHumid, "", "%", currentHumidity.toFloat(), "", "%",
+          settings.humiditySwitch, internalHumid, "", "%", currentHumidityFloat, "", "%",
           cfg_humidX, cfg_humidY, humidity_col, humidityAnimationTextWidthCache, 0);
       String indicatorSymbolToShow;
       int currentCycleTimeForIndicator = (current_millis_for_anim / 1000) % 20;
@@ -6469,11 +7614,7 @@ void Screen6() { // Gradient Clock
 
   // --- 4. THE TIME DISPLAY (No changes) ---
   char timeBuf[16];
-  if (settings.twentyFourHourSwitch) {
-    strftime(timeBuf, sizeof(timeBuf), "%H:%M", &timeinfo);
-  } else {
-    strftime(timeBuf, sizeof(timeBuf), "%l:%M", &timeinfo);
-  }
+  formatHourMinuteNoLeadingZero(timeBuf, sizeof(timeBuf), timeinfo, settings.twentyFourHourSwitch);
   String timeStr = String(timeBuf);
   timeStr.trim();
 
@@ -6565,9 +7706,9 @@ void Screen7() { // Digital watch
   int time_y = 17;
 
   if (settings.twentyFourHourSwitch) {
-    strftime(hourBuf, sizeof(hourBuf), "%H", &timeinfo);
+    snprintf(hourBuf, sizeof(hourBuf), "%d", timeinfo.tm_hour);
   } else {
-    strftime(hourBuf, sizeof(hourBuf), "%l", &timeinfo);
+    snprintf(hourBuf, sizeof(hourBuf), "%d", (timeinfo.tm_hour % 12) == 0 ? 12 : timeinfo.tm_hour % 12);
     String(hourBuf).trim();
   }
   strftime(minBuf, sizeof(minBuf), "%M", &timeinfo);
@@ -6820,7 +7961,7 @@ void Screen9() { // Nixie Tube Clock
   if (hour_12 == 0) hour_12 = 12;
 
   if (settings.twentyFourHourSwitch) {
-    strftime(hourBuf, sizeof(hourBuf), "%H", &timeinfo);
+    snprintf(hourBuf, sizeof(hourBuf), "%d", timeinfo.tm_hour);
   } else {
     sprintf(hourBuf, "%d", hour_12);
   }
@@ -6899,22 +8040,773 @@ void Screen9() { // Nixie Tube Clock
 }
 
 
+static const uint8_t WEATHER_BLOCK_DIGITS[10][5] PROGMEM = {
+  {0b111, 0b101, 0b101, 0b101, 0b111}, {0b010, 0b110, 0b010, 0b010, 0b111},
+  {0b111, 0b001, 0b111, 0b100, 0b111}, {0b111, 0b001, 0b111, 0b001, 0b111},
+  {0b101, 0b101, 0b111, 0b001, 0b001}, {0b111, 0b100, 0b111, 0b001, 0b111},
+  {0b111, 0b100, 0b111, 0b101, 0b111}, {0b111, 0b001, 0b010, 0b010, 0b010},
+  {0b111, 0b101, 0b111, 0b101, 0b111}, {0b111, 0b101, 0b111, 0b001, 0b111}
+};
+
+static void drawWeatherBlockDigit(uint8_t digit, int x, int y, uint8_t scale, uint16_t color) {
+  if (digit > 9) return;
+  for (uint8_t row = 0; row < 5; ++row) {
+    const uint8_t bits = pgm_read_byte(&WEATHER_BLOCK_DIGITS[digit][row]);
+    for (uint8_t col = 0; col < 3; ++col) {
+      if (bits & (1U << (2 - col))) dma_canvas.fillRect(x + col * scale, y + row * scale, scale, scale, color);
+    }
+  }
+}
+
+static int drawWeatherBlockTime(int x, int y, uint8_t scale, uint16_t digitColor, uint16_t colonColor) {
+  int hour = timeinfo.tm_hour;
+  if (!allScreenSettings[currentScreen - 1].twentyFourHourSwitch) {
+    hour %= 12;
+    if (hour == 0) hour = 12;
+  }
+  const uint8_t values[4] = {(uint8_t)(hour / 10), (uint8_t)(hour % 10),
+                             (uint8_t)(timeinfo.tm_min / 10), (uint8_t)(timeinfo.tm_min % 10)};
+  const int digitAdvance = 3 * scale + 2;
+  if (values[0] != 0) {
+    drawWeatherBlockDigit(values[0], x, y, scale, digitColor);
+    x += digitAdvance;
+  }
+  drawWeatherBlockDigit(values[1], x, y, scale, digitColor); x += digitAdvance;
+  dma_canvas.fillRect(x, y + scale, scale, scale, colonColor);
+  dma_canvas.fillRect(x, y + 3 * scale, scale, scale, colonColor);
+  x += scale + 3;
+  drawWeatherBlockDigit(values[2], x, y, scale, digitColor); x += digitAdvance;
+  drawWeatherBlockDigit(values[3], x, y, scale, digitColor);
+  return x + 3 * scale;
+}
+
+static void drawWeatherSecondsLine(int startX, int endX, int y,
+                                   const ScreenSettings& settings) {
+  if (!settings.SpareSwitch || endX <= startX) return;
+  const uint16_t color = dma_display->color565(
+    settings.land_col.r, settings.land_col.g, settings.land_col.b);
+  const int width = endX - startX;
+  const int elapsedWidth = (int)((uint32_t)timeinfo.tm_sec * width / 60U);
+  dma_canvas.drawFastHLine(startX, y, constrain(elapsedWidth, 0, width), color);
+}
+
+static int displayedTemperature(float celsius) {
+  return (int)lroundf(tempUnits == "fahrenheit" ? celsius * 1.8f + 32.0f : celsius);
+}
+
+static void drawTinyTemperature(int x, int baseline, float celsius, uint16_t color, char marker = '\0') {
+  char value[8];
+  if (marker) snprintf(value, sizeof(value), "%c%d", marker, displayedTemperature(celsius));
+  else snprintf(value, sizeof(value), "%d", displayedTemperature(celsius));
+  dma_canvas.setFont(&TomThumb);
+  dma_canvas.setTextColor(color);
+  dma_canvas.setCursor(x, baseline);
+  dma_canvas.print(value);
+  int16_t x1, y1; uint16_t w, h;
+  dma_canvas.getTextBounds(value, x, baseline, &x1, &y1, &w, &h);
+  dma_canvas.drawRect(x + w + 1, baseline - 5, 2, 2, color);
+}
+
+static void drawTinyTemperatureRight(int rightX, int baseline, float celsius,
+                                     uint16_t color, char marker) {
+  char value[8];
+  // Tiny_Phil contains the clock's custom indoor (#) and outdoor ($) glyphs;
+  // keep this identical to Screen 2 rather than rendering literal symbols.
+  snprintf(value, sizeof(value), "%c%d", marker, displayedTemperature(celsius));
+  dma_canvas.setFont(&Tiny_Phil);
+  int16_t x1, y1; uint16_t w, h;
+  dma_canvas.getTextBounds(value, 0, baseline, &x1, &y1, &w, &h);
+  const int x = rightX - (int)w - 2;
+  dma_canvas.setTextColor(color);
+  dma_canvas.setCursor(x, baseline);
+  dma_canvas.print(value);
+  // The same compact two-pixel apostrophe used for PM on Sunpath doubles as
+  // the degree mark, saving the width previously occupied by the unit letter.
+  dma_canvas.drawPixel(x + w + 1, baseline - 4, color);
+  dma_canvas.drawPixel(x + w + 1, baseline - 3, color);
+}
+
+static void drawRainlineHourLabel(int pointX, uint8_t hour24,
+                                  bool twentyFourHour, uint16_t color) {
+  const bool showPmMark = !twentyFourHour && hour24 >= 12;
+  char label[3];
+  if (twentyFourHour) snprintf(label, sizeof(label), "%02u", hour24);
+  else {
+    uint8_t hour12 = hour24 % 12;
+    if (hour12 == 0) hour12 = 12;
+    snprintf(label, sizeof(label), "%u", hour12);
+  }
+  dma_canvas.setFont(&TomThumb);
+  int16_t x1, y1; uint16_t w, h;
+  dma_canvas.getTextBounds(label, 0, 0, &x1, &y1, &w, &h);
+  const int totalWidth = w + (showPmMark ? 2 : 0);
+  const int x = constrain(pointX - totalWidth / 2, 0, 64 - totalWidth);
+  dma_canvas.setTextColor(color);
+  dma_canvas.setCursor(x, 32);
+  dma_canvas.print(label);
+  if (showPmMark) {
+    dma_canvas.drawPixel(x + w + 1, 27, color);
+    dma_canvas.drawPixel(x + w + 1, 28, color);
+  }
+}
+
+void Screen10() { // Rainline
+  const ScreenSettings& settings = allScreenSettings[currentScreen - 1];
+  getLocalTime(&timeinfo);
+  dma_canvas.fillScreen(cc_blk);
+  const uint16_t timeColor = dma_display->color565(settings.time_col.r, settings.time_col.g, settings.time_col.b);
+  const uint16_t tempColor = dma_display->color565(settings.temp_col.r, settings.temp_col.g, settings.temp_col.b);
+  const uint16_t rainColor = dma_display->color565(settings.humidity_col.r, settings.humidity_col.g, settings.humidity_col.b);
+  const uint16_t baselineColor = dma_display->color565(settings.dateBG_col.r, settings.dateBG_col.g, settings.dateBG_col.b);
+  const uint16_t internalTempColor = dma_display->color565(settings.ampm_col.r, settings.ampm_col.g, settings.ampm_col.b);
+  const int timeEndX = drawWeatherBlockTime(1, 0, 3, timeColor, rainColor);
+  drawWeatherSecondsLine(1, timeEndX, 16, settings);
+  if (settings.temperatureSwitch) {
+    drawTinyTemperatureRight(64, 5, currentTemperature, tempColor, '$');
+  }
+  if (settings.internalTemperatureSwitch) {
+    const float adjustedInternalTemp = internalTemp + indoorTempOffset;
+    drawTinyTemperatureRight(64, 11, adjustedInternalTemp, internalTempColor, '#');
+  }
+
+  const int baselineY = 26;
+  const int chartStartX = settings.iconsSwitch ? 15 : 3;
+  const int chartEndX = 60;
+  const int baselineStartX = settings.iconsSwitch ? 14 : 1;
+  if (settings.chartLineSwitch) {
+    dma_canvas.drawFastHLine(baselineStartX, baselineY, 63 - baselineStartX, baselineColor);
+  }
+  const int count = hourlyForecastCount > 0 ? hourlyForecastCount : WEATHER_TIMELINE_POINTS;
+  const int pointStep = count > 1 ? (chartEndX - chartStartX) / (count - 1) : 0;
+  uint8_t peakChance = 0;
+  int previousX = chartStartX;
+  int previousY = baselineY - 1;
+  for (int i = 0; i < count; ++i) {
+    const uint8_t chance = hourlyForecastCount > 0 ? hourlyRainChance[i] : 0;
+    peakChance = max(peakChance, chance);
+    const int x = chartStartX + i * pointStep;
+    const int y = chance == 0 ? baselineY - 1 : map(chance, 1, 100, baselineY - 2, 16);
+    if (i > 0) dma_canvas.drawLine(previousX, previousY, x, y, rainColor);
+    dma_canvas.fillRect(x, y - 1, 2, 2, rainColor);
+    previousX = x;
+    previousY = y;
+  }
+  if (settings.iconsSwitch) displayWeatherIconAt(weatherIcon, 1, 20);
+
+  dma_canvas.setFont(&TomThumb);
+  dma_canvas.setTextColor(rainColor);
+  if (hourlyForecastCount > 0) {
+    for (uint8_t i = 0; i < hourlyForecastCount; ++i) {
+      drawRainlineHourLabel(chartStartX + i * pointStep, hourlyForecastHour[i],
+                            settings.twentyFourHourSwitch, rainColor);
+    }
+  } else {
+    dma_canvas.setCursor(17, 32); dma_canvas.print("WAITING");
+  }
+  if (peakChance > 0) {
+    char peakLabel[5]; snprintf(peakLabel, sizeof(peakLabel), "%u%%", peakChance);
+    int16_t x1, y1; uint16_t w, h; dma_canvas.getTextBounds(peakLabel, 0, 0, &x1, &y1, &w, &h);
+    dma_canvas.setCursor(63 - w, 20); dma_canvas.print(peakLabel);
+  }
+}
+
+static void drawSunpathMarker(int x, int y, bool daylight, uint16_t sunColor, uint16_t moonColor) {
+  if (daylight) {
+    dma_canvas.fillRect(x - 1, y - 1, 3, 3, sunColor);
+    dma_canvas.drawPixel(x, y - 3, sunColor); dma_canvas.drawPixel(x, y + 3, sunColor);
+    dma_canvas.drawPixel(x - 3, y, sunColor); dma_canvas.drawPixel(x + 3, y, sunColor);
+  } else {
+    dma_canvas.fillCircle(x, y, 3, moonColor); dma_canvas.fillCircle(x + 2, y - 1, 3, cc_blk);
+  }
+}
+
+static void drawSunpathSolarTime(uint16_t minuteOfDay, bool rightAligned,
+                                 bool twentyFourHour, uint16_t color) {
+  const uint8_t hour24 = minuteOfDay / 60;
+  const uint8_t minute = minuteOfDay % 60;
+  const bool showPmMark = !twentyFourHour && hour24 >= 12;
+  char label[6];
+  if (twentyFourHour) {
+    snprintf(label, sizeof(label), "%u:%02u", hour24, minute);
+  } else {
+    uint8_t hour12 = hour24 % 12;
+    if (hour12 == 0) hour12 = 12;
+    snprintf(label, sizeof(label), "%u:%02u", hour12, minute);
+  }
+
+  dma_canvas.setFont(&TomThumb);
+  int16_t x1, y1; uint16_t w, h;
+  dma_canvas.getTextBounds(label, 0, 0, &x1, &y1, &w, &h);
+  const int totalWidth = w + (showPmMark ? 2 : 0);
+  const int x = rightAligned ? 64 - totalWidth : 0;
+  dma_canvas.setTextColor(color);
+  dma_canvas.setCursor(x, 31);
+  dma_canvas.print(label);
+  if (showPmMark) {
+    // Same compact PM convention as Alt Digital: a tiny two-pixel apostrophe.
+    dma_canvas.drawPixel(x + w + 1, 26, color);
+    dma_canvas.drawPixel(x + w + 1, 27, color);
+  }
+}
+
+void Screen11() { // Sunpath
+  const ScreenSettings& settings = allScreenSettings[currentScreen - 1];
+  getLocalTime(&timeinfo);
+  dma_canvas.fillScreen(cc_blk);
+  const uint16_t timeColor = dma_display->color565(settings.time_col.r, settings.time_col.g, settings.time_col.b);
+  const uint16_t dayColor = dma_display->color565(settings.day_col.r, settings.day_col.g, settings.day_col.b);
+  const uint16_t dateColor = dma_display->color565(settings.date_col.r, settings.date_col.g, settings.date_col.b);
+  const uint16_t arcColor = dma_display->color565(settings.dateBG_col.r, settings.dateBG_col.g, settings.dateBG_col.b);
+  const uint16_t tempColor = dma_display->color565(settings.temp_col.r, settings.temp_col.g, settings.temp_col.b);
+  const uint16_t internalTempColor = dma_display->color565(settings.ampm_col.r, settings.ampm_col.g, settings.ampm_col.b);
+  const uint16_t weatherColor = dma_display->color565(settings.humidity_col.r, settings.humidity_col.g, settings.humidity_col.b);
+
+  if (settings.daySwitch) {
+    char dayLabel[4]; strftime(dayLabel, sizeof(dayLabel), "%a", &timeinfo);
+    for (char* p = dayLabel; *p; ++p) *p = toupper(*p);
+    dma_canvas.setFont(&TomThumb); dma_canvas.setTextColor(dayColor); dma_canvas.setCursor(0, 5); dma_canvas.print(dayLabel);
+    if (settings.dateSwitch) {
+      char dateLabel[3]; strftime(dateLabel, sizeof(dateLabel), "%d", &timeinfo);
+      dma_canvas.setTextColor(dateColor); dma_canvas.setCursor(2, 11); dma_canvas.print(dateLabel);
+    }
+  }
+  const int timeEndX = drawWeatherBlockTime(14, 0, 2, timeColor, arcColor);
+  drawWeatherSecondsLine(14, timeEndX, 11, settings);
+  if (settings.temperatureSwitch) {
+    drawTinyTemperatureRight(64, 5, currentTemperature, tempColor, '$');
+  }
+  if (settings.internalTemperatureSwitch) {
+    const float adjustedInternalTemp = internalTemp + indoorTempOffset;
+    drawTinyTemperatureRight(64, 11, adjustedInternalTemp, internalTempColor, '#');
+  }
+
+  const int startX = 4, endX = 59, baseY = 22, arcHeight = 8;
+  for (int x = startX; x <= endX; ++x) {
+    const float t = (x - startX) / (float)(endX - startX);
+    dma_canvas.drawPixel(x, baseY - (int)lroundf(4.0f * arcHeight * t * (1.0f - t)), arcColor);
+  }
+  const int nowMinute = timeinfo.tm_hour * 60 + timeinfo.tm_min;
+  const int sunrise = solarTimesValid ? sunriseMinuteOfDay : 6 * 60;
+  const int sunset = solarTimesValid ? sunsetMinuteOfDay : 18 * 60;
+  const bool daylight = nowMinute >= sunrise && nowMinute <= sunset;
+  float progress;
+  if (daylight) progress = (nowMinute - sunrise) / (float)max(1, sunset - sunrise);
+  else {
+    const int nightLength = (24 * 60 - sunset) + sunrise;
+    const int elapsed = nowMinute > sunset ? nowMinute - sunset : (24 * 60 - sunset) + nowMinute;
+    progress = elapsed / (float)max(1, nightLength);
+  }
+  progress = constrain(progress, 0.0f, 1.0f);
+  const int markerX = startX + (int)lroundf(progress * (endX - startX));
+  const int markerY = baseY - (int)lroundf(4.0f * arcHeight * progress * (1.0f - progress));
+  drawSunpathMarker(markerX, markerY, daylight, tempColor, weatherColor);
+
+  drawSunpathSolarTime(sunrise, false, settings.twentyFourHourSwitch, arcColor);
+  drawSunpathSolarTime(sunset, true, settings.twentyFourHourSwitch, arcColor);
+  int16_t x1, y1; uint16_t w, h;
+  if (settings.iconsSwitch) displayWeatherIconAt(weatherIcon, 27, 21);
+  else if (settings.minMaxTempsSwitch) {
+    char rangeLabel[12];
+    snprintf(rangeLabel, sizeof(rangeLabel), "%d/%d", displayedTemperature(todayMinTemp), displayedTemperature(todayMaxTemp));
+    dma_canvas.getTextBounds(rangeLabel, 0, 0, &x1, &y1, &w, &h);
+    dma_canvas.setTextColor(weatherColor); dma_canvas.setCursor((64 - w) / 2, 31); dma_canvas.print(rangeLabel);
+  }
+}
+
+void Screen12() { // Wind Dial
+  const ScreenSettings& settings = allScreenSettings[currentScreen - 1];
+  getLocalTime(&timeinfo);
+  dma_canvas.fillScreen(cc_blk);
+  const uint16_t timeColor = dma_display->color565(settings.time_col.r, settings.time_col.g, settings.time_col.b);
+  const uint16_t compassColor = dma_display->color565(settings.dateBG_col.r, settings.dateBG_col.g, settings.dateBG_col.b);
+  const uint16_t arrowColor = dma_display->color565(settings.humidity_col.r, settings.humidity_col.g, settings.humidity_col.b);
+  const uint16_t tempColor = dma_display->color565(settings.temp_col.r, settings.temp_col.g, settings.temp_col.b);
+  const uint16_t feelsColor = dma_display->color565(settings.ampm_col.r, settings.ampm_col.g, settings.ampm_col.b);
+  const uint16_t gustColor = dma_display->color565(settings.seconds_col.r, settings.seconds_col.g, settings.seconds_col.b);
+
+  // The compass ring is optional; wind direction and speed are the primary
+  // readings and remain visible independently of it.
+  const int cx = 13, cy = 12, radius = 10;
+  if (settings.iconsSwitch) {
+    dma_canvas.drawCircle(cx, cy, radius, compassColor);
+    dma_canvas.drawFastVLine(cx, cy - radius, 3, compassColor);
+    dma_canvas.drawFastVLine(cx, cy + radius - 2, 3, compassColor);
+    dma_canvas.drawFastHLine(cx - radius, cy, 3, compassColor);
+    dma_canvas.drawFastHLine(cx + radius - 2, cy, 3, compassColor);
+  }
+  const float angle = (currentWindBearing - 90.0f) * PI / 180.0f;
+  const float tipX = cx + 8.0f * cosf(angle), tipY = cy + 8.0f * sinf(angle);
+  dma_canvas.drawLine(cx, cy, lroundf(tipX), lroundf(tipY), arrowColor);
+  dma_canvas.drawLine(cx + 1, cy, lroundf(tipX), lroundf(tipY), arrowColor);
+  const float leftAngle = angle + 2.55f, rightAngle = angle - 2.55f;
+  dma_canvas.drawLine(lroundf(tipX), lroundf(tipY), lroundf(tipX + 4.0f * cosf(leftAngle)), lroundf(tipY + 4.0f * sinf(leftAngle)), arrowColor);
+  dma_canvas.drawLine(lroundf(tipX), lroundf(tipY), lroundf(tipX + 4.0f * cosf(rightAngle)), lroundf(tipY + 4.0f * sinf(rightAngle)), arrowColor);
+  dma_canvas.fillRect(cx, cy, 2, 2, arrowColor);
+
+  const float windDisplay = tempUnits == "fahrenheit" ? currentWindSpeedKph * 0.621371f : currentWindSpeedKph;
+  char speedLabel[10];
+  snprintf(speedLabel, sizeof(speedLabel), "%d%s", (int)lroundf(windDisplay),
+           tempUnits == "fahrenheit" ? "mph" : "km/h");
+  dma_canvas.setFont(&TomThumb); dma_canvas.setTextColor(arrowColor);
+  int16_t x1, y1; uint16_t w, h; dma_canvas.getTextBounds(speedLabel, 0, 0, &x1, &y1, &w, &h);
+  dma_canvas.setCursor(13 - w / 2, 31); dma_canvas.print(speedLabel);
+
+  const int timeEndX = drawWeatherBlockTime(29, 0, 2, timeColor, compassColor);
+  drawWeatherSecondsLine(29, timeEndX, 11, settings);
+  dma_canvas.setFont(&TomThumb);
+  if (settings.temperatureSwitch) {
+    dma_canvas.setTextColor(compassColor); dma_canvas.setCursor(31, 18); dma_canvas.print("TEMP");
+    drawTinyTemperature(48, 18, currentTemperature, tempColor);
+  }
+  if (settings.humiditySwitch) {
+    dma_canvas.setFont(&TomThumb); dma_canvas.setTextColor(compassColor); dma_canvas.setCursor(31, 24); dma_canvas.print("FEEL");
+    drawTinyTemperature(48, 24, currentApparentTemperature, feelsColor);
+  }
+  if (settings.secondsSwitch) {
+    const float gustDisplay = tempUnits == "fahrenheit" ? currentWindGustKph * 0.621371f : currentWindGustKph;
+    char gustLabel[5]; snprintf(gustLabel, sizeof(gustLabel), "%d", (int)lroundf(gustDisplay));
+    dma_canvas.setFont(&TomThumb); dma_canvas.setTextColor(compassColor); dma_canvas.setCursor(31, 31); dma_canvas.print("GUST");
+    dma_canvas.setTextColor(gustColor); dma_canvas.setCursor(48, 31); dma_canvas.print(gustLabel);
+  }
+}
+
+static void drawInfographicCenteredText(GFXcanvas16& canvas, const char* text,
+                                        int centerX, int baseline, uint16_t color) {
+  int16_t x1, y1; uint16_t w, h;
+  canvas.getTextBounds(text, 0, baseline, &x1, &y1, &w, &h);
+  canvas.setTextColor(color);
+  canvas.setCursor(centerX - (int)w / 2, baseline);
+  canvas.print(text);
+}
+
+static void renderInfographicModule(GFXcanvas16& canvas, uint8_t module,
+                                    const ScreenSettings& settings) {
+  canvas.fillScreen(0);
+  const uint16_t temperature = dma_display->color565(settings.temp_col.r, settings.temp_col.g, settings.temp_col.b);
+  const uint16_t humidity = dma_display->color565(settings.humidity_col.r, settings.humidity_col.g, settings.humidity_col.b);
+  const auto colour565 = [](const RGBColor& colour) {
+    return dma_display->color565(colour.r, colour.g, colour.b);
+  };
+
+  if (module == 0) { // Sunrise / sunset
+    const uint16_t hoursColor = colour565(settings.infographicSunHoursColor);
+    const uint16_t graphColor = colour565(settings.infographicSunGraphColor);
+    const int startX = 3, endX = 60, baseY = 12, arcHeight = 7;
+    for (int x = startX; x <= endX; ++x) {
+      const float t = (x - startX) / (float)(endX - startX);
+      canvas.drawPixel(x, baseY - (int)lroundf(4.0f * arcHeight * t * (1.0f - t)), graphColor);
+    }
+    const int nowMinute = timeinfo.tm_hour * 60 + timeinfo.tm_min;
+    const int sunrise = solarTimesValid ? sunriseMinuteOfDay : 6 * 60;
+    const int sunset = solarTimesValid ? sunsetMinuteOfDay : 18 * 60;
+    const bool daylight = nowMinute >= sunrise && nowMinute <= sunset;
+    float progress = daylight
+      ? (nowMinute - sunrise) / (float)max(1, sunset - sunrise)
+      : ((nowMinute > sunset ? nowMinute - sunset : 24 * 60 - sunset + nowMinute) /
+         (float)max(1, 24 * 60 - sunset + sunrise));
+    progress = constrain(progress, 0.0f, 1.0f);
+    const int markerX = startX + (int)lroundf(progress * (endX - startX));
+    const int markerY = baseY - (int)lroundf(4.0f * arcHeight * progress * (1.0f - progress));
+    if (daylight) {
+      canvas.fillRect(markerX - 1, markerY - 1, 3, 3, temperature);
+      canvas.drawPixel(markerX, markerY - 3, temperature);
+      canvas.drawPixel(markerX, markerY + 3, temperature);
+    } else {
+      canvas.fillCircle(markerX, markerY, 3, humidity);
+      canvas.fillCircle(markerX + 2, markerY - 1, 3, 0);
+    }
+    drawWeatherIconOn(canvas, weatherIcon, 27, 9);
+    char sunriseLabel[6], sunsetLabel[6];
+    const auto formatSolar = [&](int minutes, char* out) {
+      int hour = minutes / 60;
+      if (!settings.twentyFourHourSwitch) { hour %= 12; if (hour == 0) hour = 12; }
+      snprintf(out, 6, "%d:%02d", hour, minutes % 60);
+    };
+    formatSolar(sunrise, sunriseLabel); formatSolar(sunset, sunsetLabel);
+    canvas.setFont(&TomThumb); canvas.setTextColor(hoursColor);
+    canvas.setCursor(0, 20); canvas.print(sunriseLabel);
+    int16_t x1, y1; uint16_t w, h; canvas.getTextBounds(sunsetLabel, 0, 20, &x1, &y1, &w, &h);
+    const bool sunsetPm = !settings.twentyFourHourSwitch && (sunset / 60) >= 12;
+    const int sunsetX = 64 - (int)w - (sunsetPm ? 2 : 0);
+    canvas.setCursor(sunsetX, 20); canvas.print(sunsetLabel);
+    if (sunsetPm) {
+      canvas.drawPixel(sunsetX + w + 1, 15, hoursColor);
+      canvas.drawPixel(sunsetX + w + 1, 16, hoursColor);
+    }
+  } else if (module == 1) { // Five-hour rain forecast
+    const uint16_t hoursColor = colour565(settings.infographicRainHoursColor);
+    const uint16_t graphColor = colour565(settings.infographicRainGraphColor);
+    const int baselineY = 15;
+    const int chartStartX = settings.infographicRainIconSwitch ? 15 : 0;
+    const int chartEndX = 63;
+    const int count = hourlyForecastCount > 0 ? hourlyForecastCount : WEATHER_TIMELINE_POINTS;
+    const auto pointX = [&](int index) {
+      if (count <= 1) return chartStartX;
+      return chartStartX + (int)lroundf(index * (chartEndX - chartStartX) / (float)(count - 1));
+    };
+    int previousX = chartStartX, previousY = baselineY - 1;
+    for (int i = 0; i < count; ++i) {
+      const int chance = hourlyForecastCount > 0 ? hourlyRainChance[i] : 0;
+      const int x = pointX(i);
+      const int y = chance == 0 ? baselineY - 1 : map(chance, 1, 100, baselineY - 2, 1);
+      if (i) canvas.drawLine(previousX, previousY, x, y, graphColor);
+      canvas.drawPixel(x, y, graphColor);
+      previousX = x; previousY = y;
+    }
+    if (settings.infographicRainIconSwitch) drawWeatherIconOn(canvas, weatherIcon, 1, 9);
+    canvas.setFont(&TomThumb);
+    for (int i = 0; i < count; ++i) {
+      const uint8_t hour24 = hourlyForecastCount > 0 ? hourlyForecastHour[i] : (timeinfo.tm_hour + i) % 24;
+      uint8_t shownHour = hour24;
+      const bool pm = !settings.twentyFourHourSwitch && hour24 >= 12;
+      if (!settings.twentyFourHourSwitch) { shownHour %= 12; if (shownHour == 0) shownHour = 12; }
+      char label[3];
+      snprintf(label, sizeof(label), "%u", shownHour);
+      int16_t x1, y1; uint16_t w, h;
+      canvas.getTextBounds(label, 0, 21, &x1, &y1, &w, &h);
+      const int labelWidth = (int)w + (pm ? 2 : 0);
+      const int labelX = constrain(pointX(i) - labelWidth / 2, 0, 64 - labelWidth);
+      canvas.setTextColor(hoursColor); canvas.setCursor(labelX, 21); canvas.print(label);
+      if (pm) {
+        canvas.drawPixel(labelX + w + 1, 16, hoursColor);
+        canvas.drawPixel(labelX + w + 1, 17, hoursColor);
+      }
+    }
+  } else if (module == 2) { // Wind dial
+    const uint16_t compassColor = colour565(settings.infographicCompassColor);
+    const uint16_t arrowColor = colour565(settings.infographicArrowColor);
+    const uint16_t speedColor = colour565(settings.infographicSpeedColor);
+    const uint16_t unitsColor = colour565(settings.infographicUnitsColor);
+    drawLargeWeatherIconOn(canvas, weatherIcon, 0, 1);
+    const int cx = 39, cy = 10, radius = 8;
+    if (settings.infographicWindCompassSwitch) {
+      canvas.drawCircle(cx, cy, radius, compassColor);
+      canvas.drawFastVLine(cx, cy - radius, 2, compassColor);
+      canvas.drawFastHLine(cx - radius, cy, 2, compassColor);
+    }
+    const float angle = (currentWindBearing - 90.0f) * PI / 180.0f;
+    const int tipX = lroundf(cx + 7.0f * cosf(angle));
+    const int tipY = lroundf(cy + 7.0f * sinf(angle));
+    canvas.drawLine(cx, cy, tipX, tipY, arrowColor);
+    canvas.drawLine(cx + 1, cy, tipX, tipY, arrowColor);
+    canvas.fillRect(cx, cy, 2, 2, arrowColor);
+    const float speed = tempUnits == "fahrenheit" ? currentWindSpeedKph * 0.621371f : currentWindSpeedKph;
+    canvas.setFont(&TomThumb);
+    char speedLabel[6];
+    snprintf(speedLabel, sizeof(speedLabel), "%d", (int)lroundf(speed));
+    drawInfographicCenteredText(canvas, speedLabel, 56, 9, speedColor);
+    drawInfographicCenteredText(canvas, tempUnits == "fahrenheit" ? "MPH" : "KMH", 56, 15, unitsColor);
+  } else { // Today + two-day outlook
+    const uint16_t dayColor = colour565(settings.infographicForecastDayColor);
+    const uint16_t minColor = colour565(settings.infographicForecastMinColor);
+    const uint16_t maxColor = colour565(settings.infographicForecastMaxColor);
+    const uint16_t dividerColor = colour565(settings.infographicForecastDividerColor);
+    static const char* dayNames[7] = {"Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"};
+    for (uint8_t i = 0; i < DAILY_FORECAST_DAYS; ++i) {
+      const int centerX = 10 + i * 22;
+      const uint8_t weekday = (uint8_t)constrain(
+        (int)(i < dailyForecastCount ? dailyForecastWeekday[i] : (timeinfo.tm_wday + i) % 7),
+        0, 6); // dayNames[] has 7 entries; never index it with unvalidated data
+
+      const char* icon = i == 0 ? weatherIcon
+        : (i < dailyForecastCount ? dailyForecastIcon[i] : "none");
+      const float high = i < dailyForecastCount ? dailyForecastMax[i] : (i == 0 ? todayMaxTemp : 0.0f);
+      const float low = i < dailyForecastCount ? dailyForecastMin[i] : (i == 0 ? todayMinTemp : 0.0f);
+      canvas.setFont(&TomThumb);
+      drawInfographicCenteredText(canvas, dayNames[weekday], centerX, 6, dayColor);
+      drawWeatherIconOn(canvas, icon, centerX - 5, 6);
+      char minLabel[5], maxLabel[5];
+      snprintf(minLabel, sizeof(minLabel), "%d", displayedTemperature(low));
+      snprintf(maxLabel, sizeof(maxLabel), "%d", displayedTemperature(high));
+      int16_t x1, y1; uint16_t minW, maxW, slashW, h;
+      canvas.getTextBounds(minLabel, 0, 21, &x1, &y1, &minW, &h);
+      canvas.getTextBounds(maxLabel, 0, 21, &x1, &y1, &maxW, &h);
+      canvas.getTextBounds("/", 0, 21, &x1, &y1, &slashW, &h);
+      const int rangeWidth = (int)minW + 1 + (int)slashW + 1 + (int)maxW;
+      int rangeX = centerX - rangeWidth / 2;
+      canvas.setTextColor(minColor); canvas.setCursor(rangeX, 21); canvas.print(minLabel); rangeX += minW + 1;
+      canvas.setTextColor(dividerColor); canvas.setCursor(rangeX, 21); canvas.print('/'); rangeX += slashW + 1;
+      canvas.setTextColor(maxColor); canvas.setCursor(rangeX, 21); canvas.print(maxLabel);
+      if (i < 2) canvas.drawFastVLine(21 + i * 22, 1, 19, dividerColor);
+    }
+  }
+}
+
+static void renderInfographicAnimatedText(
+    GFXcanvas16& canvas, uint32_t now, bool enabled,
+    const char* textA, const char* textB, bool degreeMark,
+    int baseX, int baseline, uint16_t color, int& widthCache) {
+  if (!enabled) return;
+
+  int16_t x1, y1; uint16_t widthA, widthB, textHeight;
+  canvas.getTextBounds(textA, 0, baseline, &x1, &y1, &widthA, &textHeight);
+  canvas.getTextBounds(textB, 0, baseline, &x1, &y1, &widthB, &textHeight);
+  widthCache = max((int)widthA, (int)widthB) + (degreeMark ? 2 : 0);
+
+  const auto drawValue = [&](const char* text, int x) {
+    uint16_t textWidth, h;
+    canvas.getTextBounds(text, 0, baseline, &x1, &y1, &textWidth, &h);
+    canvas.setCursor(x, baseline);
+    canvas.print(text);
+    if (degreeMark) {
+      canvas.drawPixel(x + textWidth + 1, baseline - 4, color);
+      canvas.drawPixel(x + textWidth + 1, baseline - 3, color);
+    }
+  };
+
+  canvas.setTextColor(color);
+  if (strcmp(textA, textB) == 0) {
+    drawValue(textA, baseX);
+    return;
+  }
+  const int cycleSecond = (now / 1000U) % 20U;
+  if ((now % 10000U) < 9800U) {
+    drawValue(cycleSecond < 10 ? textA : textB, baseX);
+    return;
+  }
+
+  const float progress = ((now % 10000U) - 9800U) / 200.0f;
+  const char* outgoing = cycleSecond < 10 ? textA : textB;
+  const char* incoming = cycleSecond < 10 ? textB : textA;
+  drawValue(outgoing, baseX - (int)(progress * widthCache));
+  drawValue(incoming, baseX - widthCache + (int)(progress * widthCache));
+}
+
+static void drawInfographicDateHeader(const ScreenSettings& settings) {
+  char dayLabel[4];
+  char dateLabel[3];
+  strftime(dayLabel, sizeof(dayLabel), "%a", &timeinfo);
+  strftime(dateLabel, sizeof(dateLabel), "%d", &timeinfo);
+  for (char* p = dayLabel; *p; ++p) *p = toupper(*p);
+
+  dma_canvas.setFont(&TomThumb);
+  int16_t x1, y1; uint16_t dayWidth, dateWidth, h;
+  dma_canvas.getTextBounds(dayLabel, 0, 0, &x1, &y1, &dayWidth, &h);
+  dma_canvas.getTextBounds(dateLabel, 0, 0, &x1, &y1, &dateWidth, &h);
+  const int blockWidth = max(settings.daySwitch ? (int)dayWidth : 0,
+                             settings.dateSwitch ? (int)dateWidth : 0);
+  const int blockX = 64 - blockWidth;
+
+  if (settings.daySwitch) {
+    const uint16_t dayColor = dma_display->color565(settings.day_col.r, settings.day_col.g, settings.day_col.b);
+    dma_canvas.setTextColor(dayColor);
+    dma_canvas.setCursor(blockX + (blockWidth - (int)dayWidth) / 2, 5);
+    dma_canvas.print(dayLabel);
+  }
+  if (settings.dateSwitch) {
+    const uint16_t dateColor = dma_display->color565(settings.date_col.r, settings.date_col.g, settings.date_col.b);
+    dma_canvas.setTextColor(dateColor);
+    dma_canvas.setCursor(blockX + (blockWidth - (int)dateWidth) / 2, 11);
+    dma_canvas.print(dateLabel);
+  }
+}
+
+static int drawInfographicCornerWeather(const ScreenSettings& settings) {
+  const bool fahrenheit = tempUnits == "fahrenheit";
+  float indoor = internalTemp + indoorTempOffset;
+  if (fahrenheit && indoor > -99.0f) indoor = indoor * 9.0f / 5.0f + 32.0f;
+  float outdoorC = tempType == "feels_like" ? currentApparentTemperature : currentTemperature;
+  float outdoor = fahrenheit ? outdoorC * 9.0f / 5.0f + 32.0f : outdoorC;
+  const uint16_t tempColor = dma_display->color565(settings.temp_col.r, settings.temp_col.g, settings.temp_col.b);
+  const uint16_t humidityColor = dma_display->color565(settings.humidity_col.r, settings.humidity_col.g, settings.humidity_col.b);
+  static int temperatureWidthCache = 0;
+  static int humidityWidthCache = 0;
+  dma_canvas.setFont(&Tiny_Phil);
+
+  char indoorTemperature[14], outdoorTemperature[14];
+  char indoorHumidity[12], outdoorHumidity[12];
+  snprintf(indoorTemperature, sizeof(indoorTemperature), "#%.1f", indoor);
+  snprintf(outdoorTemperature, sizeof(outdoorTemperature), "$%.1f", outdoor);
+  snprintf(indoorHumidity, sizeof(indoorHumidity), "#%.0f%%", internalHumid);
+  snprintf(outdoorHumidity, sizeof(outdoorHumidity), "$%.0f%%", currentHumidityFloat);
+
+  // Reserve against the widest value that can rotate through the left-hand
+  // telemetry, rather than only the value visible during this animation frame.
+  // This keeps a centered time centred whenever it fits, and gives Screen13 a
+  // stable boundary when (for example) an internal 29.1-degree value is wider
+  // than an external 7.4-degree value.
+  int widestLeftValue = 0;
+  const auto includeLeftWidth = [&](const char* value, int trailingWidth) {
+    int16_t textX, textY; uint16_t textW, textH;
+    dma_canvas.getTextBounds(value, 0, 0, &textX, &textY, &textW, &textH);
+    widestLeftValue = max(widestLeftValue, (int)textX + (int)textW + trailingWidth);
+  };
+  if (settings.temperatureSwitch) {
+    // Include the blank column and two-pixel degree mark after the text.
+    includeLeftWidth(indoorTemperature, 2);
+    if (selectedWeatherService != "none") {
+      includeLeftWidth(outdoorTemperature, 2);
+    }
+  }
+  if (settings.humiditySwitch) {
+    includeLeftWidth(indoorHumidity, 0);
+    if (selectedWeatherService != "none") {
+      includeLeftWidth(outdoorHumidity, 0);
+    }
+  }
+
+  const bool externalWeather = selectedWeatherService != "none";
+  const uint32_t now = millis();
+  renderInfographicAnimatedText(dma_canvas, now, settings.temperatureSwitch,
+    indoorTemperature, externalWeather ? outdoorTemperature : indoorTemperature,
+    true, 0, 4, tempColor, temperatureWidthCache);
+  renderInfographicAnimatedText(dma_canvas, now, settings.humiditySwitch,
+    indoorHumidity, externalWeather ? outdoorHumidity : indoorHumidity,
+    false, 0, 10, humidityColor, humidityWidthCache);
+  drawInfographicDateHeader(settings);
+  return widestLeftValue;
+}
+
+void Screen13() { // Infographic
+  static uint8_t activeModule = 0, targetModule = 0, previousMask = 0;
+  static uint32_t lastChange = 0, transitionStarted = 0;
+  static bool transitioning = false;
+
+  // Static content needs only five refreshes per second. Switch to 30 FPS just
+  // before a corner-value slide or while a module transition is active. This
+  // preserves smooth animation without continuously competing with WiFi and
+  // the web task for CPU and heap on an otherwise unchanged frame.
+  static uint32_t lastRenderAt = 0;
+  const uint32_t renderNow = millis();
+  const bool cornerValueAnimationApproaching = (renderNow % 10000U) >= 9600U;
+  const uint32_t frameInterval = (transitioning || cornerValueAnimationApproaching) ? 33U : 200U;
+  if (lastRenderAt && renderNow - lastRenderAt < frameInterval) return;
+  lastRenderAt = renderNow;
+
+  const ScreenSettings& settings = allScreenSettings[currentScreen - 1];
+  getLocalTime(&timeinfo);
+  dma_canvas.fillScreen(0);
+
+  const uint16_t timeColor = dma_display->color565(settings.time_col.r, settings.time_col.g, settings.time_col.b);
+  int hour = timeinfo.tm_hour;
+  if (!settings.twentyFourHourSwitch) { hour %= 12; if (hour == 0) hour = 12; }
+  char timeLabel[7]; snprintf(timeLabel, sizeof(timeLabel), "%d:%02d", hour, timeinfo.tm_min);
+  dma_canvas.setFont(&Tidbyt_Numbers1);
+  int16_t x1, y1; uint16_t w, h;
+  dma_canvas.getTextBounds(timeLabel, 0, 0, &x1, &y1, &w, &h);
+  const int widestLeftValue = drawInfographicCornerWeather(settings);
+  const bool showPm = !settings.twentyFourHourSwitch && settings.ampmSwitch && timeinfo.tm_hour >= 12;
+  int timeX = max((64 - (int)w) / 2, widestLeftValue > 0 ? widestLeftValue + 1 : 0);
+  timeX = min(timeX, max(0, 64 - (int)w - (showPm ? 2 : 0)));
+
+  dma_canvas.setFont(&Tidbyt_Numbers1);
+  dma_canvas.setTextColor(timeColor);
+  dma_canvas.setCursor(timeX, 9);
+  dma_canvas.print(timeLabel);
+  if (showPm) {
+    const uint16_t pmColor = dma_display->color565(settings.ampm_col.r, settings.ampm_col.g, settings.ampm_col.b);
+    dma_canvas.drawPixel(timeX + w + 1, 0, pmColor);
+    dma_canvas.drawPixel(timeX + w + 1, 1, pmColor);
+  }
+  const auto drawSecondsLine = [&]() {
+    if (!settings.SpareSwitch) return;
+    const uint16_t secondsColor = dma_display->color565(settings.land_col.r, settings.land_col.g, settings.land_col.b);
+    const int elapsedWidth = (int)lroundf((timeinfo.tm_sec / 59.0f) * max(0, (int)w - 1));
+    dma_canvas.drawFastHLine(timeX, 10, elapsedWidth + 1, secondsColor);
+  };
+
+  uint8_t enabled[4]; uint8_t count = 0; uint8_t mask = 0;
+  const bool choices[4] = {settings.infographicSunpathSwitch, settings.infographicRainSwitch,
+                           settings.infographicWindSwitch, settings.infographicForecastSwitch};
+  for (uint8_t i = 0; i < 4; ++i) if (choices[i]) { enabled[count++] = i; mask |= (1U << i); }
+
+  if (!infographicFromCanvas.getBuffer() || !infographicToCanvas.getBuffer()) {
+    dma_canvas.setFont(&TomThumb);
+    dma_canvas.setTextColor(dma_display->color565(255, 64, 64));
+    drawCentreString("LOW MEMORY", 0, 23);
+    drawSecondsLine();
+    return;
+  }
+  const uint32_t now = millis();
+  diagnosticScreen13Mask = mask;
+
+  if (count == 0) {
+    dma_canvas.setFont(&TomThumb);
+    dma_canvas.setTextColor(timeColor);
+    drawCentreString("SELECT INFO", 0, 23);
+    previousMask = 0;
+    drawSecondsLine();
+    return;
+  }
+  if (mask != previousMask || !(mask & (1U << activeModule))) {
+    activeModule = enabled[0]; targetModule = activeModule;
+    previousMask = mask; transitioning = false; lastChange = now;
+  }
+  if (count > 1 && !transitioning && now - lastChange >= (uint32_t)settings.infographicHoldSeconds * 1000UL) {
+    uint8_t position = 0;
+    while (position < count && enabled[position] != activeModule) ++position;
+    targetModule = enabled[(position + 1) % count];
+    transitionStarted = now;
+    transitioning = true;
+  }
+
+  renderInfographicModule(infographicFromCanvas, activeModule, settings);
+  if (!transitioning) {
+    dma_canvas.drawRGBBitmap(0, 11, infographicFromCanvas.getBuffer(), 64, 21);
+    drawSecondsLine();
+    return;
+  }
+  renderInfographicModule(infographicToCanvas, targetModule, settings);
+  const uint32_t transitionDuration = 900;
+  const float progress = constrain((now - transitionStarted) / (float)transitionDuration, 0.0f, 1.0f);
+  const uint16_t* from = infographicFromCanvas.getBuffer();
+  const uint16_t* to = infographicToCanvas.getBuffer();
+  const int shiftX = (int)lroundf(progress * 64.0f);
+  const int shiftY = (int)lroundf(progress * 21.0f);
+  for (int y = 0; y < 21; ++y) {
+    for (int x = 0; x < 64; ++x) {
+      uint16_t pixel;
+      if (settings.infographicTransition == 0) {
+        pixel = blend_565(to[y * 64 + x], from[y * 64 + x], progress);
+      } else if (settings.infographicTransition == 1) {
+        const int sourceX = x + shiftX;
+        pixel = sourceX < 64 ? from[y * 64 + sourceX] : to[y * 64 + sourceX - 64];
+      } else if (settings.infographicTransition == 2) {
+        const int sourceY = y + shiftY;
+        pixel = sourceY < 21 ? from[sourceY * 64 + x] : to[(sourceY - 21) * 64 + x];
+      } else if (settings.infographicTransition == 3) {
+        pixel = progress < 0.5f
+          ? blend_565(0, from[y * 64 + x], progress * 2.0f)
+          : blend_565(to[y * 64 + x], 0, (progress - 0.5f) * 2.0f);
+      } else {
+        const uint8_t threshold = (uint8_t)((x * 73 + y * 151 + x * y * 17) & 0xFF);
+        const float local = constrain((progress * 320.0f - threshold) / 64.0f, 0.0f, 1.0f);
+        pixel = blend_565(to[y * 64 + x], from[y * 64 + x], local);
+      }
+      dma_canvas.drawPixel(x, y + 11, pixel);
+    }
+  }
+  if (progress >= 1.0f) {
+    activeModule = targetModule;
+    transitioning = false;
+    lastChange = now;
+  }
+  drawSecondsLine();
+}
+
 void Screen90() {     // Setup Clock QR code page
   // This screen is for showing the IP/QR code when connected for configuration
   if(currentState == STATE_RUNNING){
-  // Define colors for this screen (using specific indices for this setup screen)        
-  uint16_t time_color = dma_display->color565(web_time_col[currentScreen - 1].r, web_time_col[currentScreen - 1].g, web_time_col[currentScreen - 1].b);
-  uint16_t ampm_color = dma_display->color565(web_ampm_col[currentScreen - 1].r, web_ampm_col[currentScreen - 1].g, web_ampm_col[currentScreen - 1].b);
-  uint16_t seconds_color = dma_display->color565(web_seconds_col[currentScreen - 1].r, web_seconds_col[currentScreen - 1].g, web_seconds_col[currentScreen - 1].b);
-  uint16_t background_color = dma_display->color565(web_day_col[currentScreen - 1].r, web_day_col[currentScreen - 1].g, web_day_col[currentScreen - 1].b);
-  uint16_t date_color = dma_display->color565(web_date_col[currentScreen - 1].r, web_date_col[currentScreen - 1].g, web_date_col[currentScreen - 1].b);
-  uint16_t month_color = dma_display->color565(web_month_col[currentScreen - 1].r, web_month_col[currentScreen - 1].g, web_month_col[currentScreen - 1].b);               // Time Shadow
-  uint16_t date_bg_color = dma_display->color565(web_dateBG_col[currentScreen - 1].r, web_dateBG_col[currentScreen - 1].g, web_dateBG_col[currentScreen - 1].b);
-  uint16_t temp_color = dma_display->color565(web_temp_col[currentScreen - 1].r, web_temp_col[currentScreen - 1].g, web_temp_col[currentScreen - 1].b);
-  uint16_t humidity_color = dma_display->color565(web_humidity_col[currentScreen - 1].r, web_humidity_col[currentScreen - 1].g, web_humidity_col[currentScreen - 1].b);
-  uint16_t land_color = dma_display->color565(web_land_col[currentScreen - 1].r, web_land_col[currentScreen - 1].g, web_land_col[currentScreen - 1].b);
-  uint16_t water_color = dma_display->color565(web_water_col[currentScreen - 1].r, web_water_col[currentScreen - 1].g, web_water_col[currentScreen - 1].b);
-  uint16_t ice_color = dma_display->color565(web_ice_col[currentScreen - 1].r, web_ice_col[currentScreen - 1].g, web_ice_col[currentScreen - 1].b);
+  // Define colors for this screen (using specific indices for this setup screen)
+  // NOTE: the web_*_col[] palettes below only have 6 entries, but this function
+  // runs with currentScreen == SCREEN_ID_SETUP_QR (90), so `currentScreen - 1`
+  // read ~267 bytes past the end of every one of them. That is undefined
+  // behaviour reading whatever globals happen to follow, and the colours it
+  // produced were whatever those bytes contained. Clamp into range.
+  const int qrPaletteIndex = constrain(currentScreen - 1, 0,
+                                       (int)(sizeof(web_time_col) / sizeof(web_time_col[0])) - 1);
+  uint16_t time_color = dma_display->color565(web_time_col[qrPaletteIndex].r, web_time_col[qrPaletteIndex].g, web_time_col[qrPaletteIndex].b);
+  uint16_t ampm_color = dma_display->color565(web_ampm_col[qrPaletteIndex].r, web_ampm_col[qrPaletteIndex].g, web_ampm_col[qrPaletteIndex].b);
+  uint16_t seconds_color = dma_display->color565(web_seconds_col[qrPaletteIndex].r, web_seconds_col[qrPaletteIndex].g, web_seconds_col[qrPaletteIndex].b);
+  uint16_t background_color = dma_display->color565(web_day_col[qrPaletteIndex].r, web_day_col[qrPaletteIndex].g, web_day_col[qrPaletteIndex].b);
+  uint16_t date_color = dma_display->color565(web_date_col[qrPaletteIndex].r, web_date_col[qrPaletteIndex].g, web_date_col[qrPaletteIndex].b);
+  uint16_t month_color = dma_display->color565(web_month_col[qrPaletteIndex].r, web_month_col[qrPaletteIndex].g, web_month_col[qrPaletteIndex].b);               // Time Shadow
+  uint16_t date_bg_color = dma_display->color565(web_dateBG_col[qrPaletteIndex].r, web_dateBG_col[qrPaletteIndex].g, web_dateBG_col[qrPaletteIndex].b);
+  uint16_t temp_color = dma_display->color565(web_temp_col[qrPaletteIndex].r, web_temp_col[qrPaletteIndex].g, web_temp_col[qrPaletteIndex].b);
+  uint16_t humidity_color = dma_display->color565(web_humidity_col[qrPaletteIndex].r, web_humidity_col[qrPaletteIndex].g, web_humidity_col[qrPaletteIndex].b);
+  uint16_t land_color = dma_display->color565(web_land_col[qrPaletteIndex].r, web_land_col[qrPaletteIndex].g, web_land_col[qrPaletteIndex].b);
+  uint16_t water_color = dma_display->color565(web_water_col[qrPaletteIndex].r, web_water_col[qrPaletteIndex].g, web_water_col[qrPaletteIndex].b);
+  uint16_t ice_color = dma_display->color565(web_ice_col[qrPaletteIndex].r, web_ice_col[qrPaletteIndex].g, web_ice_col[qrPaletteIndex].b);
 
   //  Showing Setup Wifi   //
   dma_canvas.fillScreen(0);    // Clear canvas (not display)
@@ -7486,38 +9378,17 @@ void updateCurrentHoursMins() {
   }
   const auto& settings = allScreenSettings[screenIndex];
 
-  char format[16];  // Buffer for the strftime format string
-
-  // ** THE CORRECTION **
-  // Now we use the 'settings' object for the currently active screen to decide the format.
-  if (settings.twentyFourHourSwitch) {
-    // 24-hour format (HH:MM or HH:MM:SS)
-    if (settings.secondsSwitch) {
-      strcpy(format, "%H:%M:%S");  // 24-hour with seconds (e.g., "14:30:45")
-    } else {
-      strcpy(format, "%H:%M");     // 24-hour without seconds (e.g., "14:30")
-    }
+  int hour = timeinfo.tm_hour;
+  if (!settings.twentyFourHourSwitch) { hour %= 12; if (hour == 0) hour = 12; }
+  const char* suffix = (!settings.twentyFourHourSwitch && settings.ampmSwitch)
+    ? (timeinfo.tm_hour >= 12 ? " PM" : " AM") : "";
+  if (settings.secondsSwitch) {
+    snprintf(current_hoursmins, sizeof(current_hoursmins), "%d:%02d:%02d%s",
+             hour, timeinfo.tm_min, timeinfo.tm_sec, suffix);
   } else {
-    // 12-hour format
-    if (settings.ampmSwitch) {
-      // 12-hour format with AM/PM
-      if (settings.secondsSwitch) {
-        strcpy(format, "%l:%M:%S %p");  // 12-hour with seconds and AM/PM (e.g., "8:30:45 PM")
-      } else {
-        strcpy(format, "%l:%M %p");     // 12-hour without seconds and with AM/PM (e.g., "8:30 PM")
-      }
-    } else {
-      // 12-hour format without AM/PM
-      if (settings.secondsSwitch) {
-        strcpy(format, "%l:%M:%S");     // 12-hour with seconds, no AM/PM (e.g., "8:30:45")
-      } else {
-        strcpy(format, "%l:%M");        // 12-hour without seconds and no AM/PM (e.g., "8:30")
-      }
-    }
+    snprintf(current_hoursmins, sizeof(current_hoursmins), "%d:%02d%s",
+             hour, timeinfo.tm_min, suffix);
   }
-
-  // Use strftime to format the time based on the selected format
-  strftime(current_hoursmins, 64, format, &timeinfo);
 }
 
 
@@ -7759,6 +9630,13 @@ void drawCentreChar(const char *buf, int x, int y){
     dma_canvas.getTextBounds(buf, x, y, &x1, &y1, &w, &h); //calc width of new string
     dma_canvas.setCursor((PANEL_RES_X/2) - (w / 2), y);
     dma_canvas.print(buf); 
+}
+
+static void formatHourMinuteNoLeadingZero(char* output, size_t outputSize,
+                                          const struct tm& value, bool twentyFourHour) {
+  int hour = value.tm_hour;
+  if (!twentyFourHour) { hour %= 12; if (hour == 0) hour = 12; }
+  snprintf(output, outputSize, "%d:%02d", hour, value.tm_min);
 }
 
 

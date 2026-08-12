@@ -10,6 +10,98 @@ recorded — only version numbers and short notes.
 > some numbers below are just iteration builds with no shipped change of their
 > own. Entries are written against the version that first carried the change.
 
+## 4.00 - 2026-08-13
+- Fixed the render task reading weather icon names out of `String` globals that
+  `fetchWeatherTask` reassigns from another task. Reassigning a `String` frees
+  its buffer, so a renderer preempted mid-comparison could dereference freed
+  memory. Screen 13 was the heaviest reader (up to eight icon lookups per frame,
+  doubled during a module transition), which matches the crash being specific to
+  it. Icon names are now fixed char buffers that are overwritten in place.
+- The same render path was parsing `currentTemp`/`currentApparentTemp`/
+  `currentHumidity` with `.toFloat()` every frame - the same race, on the same
+  writer. It now reads the float mirrors those Strings are derived from.
+- Removed the ~28 KB contiguous heap `String` that every settings write built.
+  It was the largest allocation the firmware ever made, it happened on each
+  toggle, and it had to succeed alongside the display buffers, WiFi and TLS.
+  Settings now hash and stream straight to SPIFFS through a 512-byte buffer.
+- Screen 13's two transition canvases are allocated at startup instead of the
+  first time the screen is opened, so they no longer carve 5.4 KB out of a
+  running, fragmented heap.
+- Clamped the forecast weekday before it indexes Screen 13's 7-entry day-name
+  table; an out-of-range value there was a wild pointer, not a wrong label.
+- Fixed `Screen90()` reading ~267 bytes past the end of all thirteen 6-entry
+  `web_*_col[]` palettes (it indexes with `currentScreen - 1`, and runs with
+  `currentScreen == 90`).
+- Fixed a compile error (`resetReason` undeclared) that left the tree unbuildable.
+
+### WiFi
+- STATE_RUNNING no longer tears down the web server, mDNS and OTA on a single
+  not-connected sample. `WiFi.status()` dips out of `WL_CONNECTED` during an
+  ordinary roam between Orbi satellites; reacting instantly meant every blip
+  cost a full service rebuild, so the clock was dropping itself off the LAN and
+  that looked like the network dropping out. A loss must now persist 5 seconds.
+- Added a WiFi event log (`WiFi.onEvent`) recording the last 12
+  `ARDUINO_EVENT_WIFI_*` events with 802.11 disconnect reason codes, served by
+  `/debug`. This is the diagnostic `HANDOFF.md` has been asking for: it is
+  observational only and makes no network calls.
+- Added a crash breadcrumb in `RTC_NOINIT` RAM - screen, state, free heap,
+  largest contiguous block, and whether a settings write was in progress -
+  captured every loop and reported on the next boot via serial and `/debug`.
+
+## 3.95 - 2026-08-12
+- Reclaimed the 16 KB browser-OTA buffer whenever no update is active instead
+  of permanently taking that internal RAM away from WiFi and weather TLS.
+- Removed Screen 13's per-frame temporary text allocations and reduced its
+  unchanged-frame rendering from 30 FPS to 5 FPS. Its value slides and module
+  transitions still automatically render at 30 FPS.
+- Added reset reason, retained reset sequence, OTA state and both network-task
+  stack margins to `/debug` so any further reboot can be distinguished from a
+  watchdog, panic, brownout or deliberate software restart without USB.
+
+## 3.94 - 2026-08-12
+- Removed the 45-second browser-heartbeat watchdog that could deliberately
+  disconnect WiFi while background polling was paused for a firmware upload.
+- Rebuilt browser OTA as a preparation step plus fully buffered 16 KB chunks.
+  Chunk offsets are now acknowledged explicitly, so losing an `OK` response
+  and retrying cannot write the same firmware data twice and corrupt the image.
+- OTA now drains existing preview traffic, pauses weather/TLS work, protects a
+  validated settings checkpoint before opening the update partition, and
+  abandons an interrupted session safely after two minutes.
+
+## 3.93 - 2026-08-12
+- Replaced Screen 13's upper-right min/max temperatures with independently
+  switched and coloured day/date fields matching the Sunpath presentation.
+- Replaced Screen 13's temperature unit letters with its compact two-pixel
+  degree mark, including both values during the internal/external animation.
+- Shifted the Infographic Wind Dial compass and arrow two pixels right.
+
+## 3.92 - 2026-08-12
+- Kept the Infographic clock centred until its measured bounds would overlap
+  the widest enabled internal/external reading, then shifts it just far enough
+  right to preserve both values. Added a working PM-indicator switch and moved
+  the seconds progress line up one pixel.
+- Made the five-hour rain graph use exact fractional point positions from its
+  available left edge through pixel 63. Disabling its weather icon now expands
+  the graph safely to the full panel width while edge hour labels remain visible.
+- Moved the Wind Dial weather icon to the far left and down one pixel, with the
+  compass and arrow centred in the remaining space.
+- Added a deliberate one-pixel gap on both sides of the forecast min/max slash;
+  two-digit values such as `88 / 88` still fit in each forecast column.
+
+## 3.91 - 2026-08-12
+- Restored the HUB75 shift clock from 20 MHz to the library's 10 MHz default.
+  The faster clock left insufficient timing margin on the upper-half B1 lane,
+  causing blue from one pixel to appear one position to its left on rows 0-15.
+- Limited Screen 13 rendering to 30 FPS. Animated transitions no longer encode
+  and flip hundreds of complete HUB75 frames per second while competing with
+  the WiFi stack for CPU and internal-memory bandwidth.
+- Fixed the web recovery watchdog treating a working live preview as a dead
+  connection. Root, status, screenshot and OTA-chunk requests now refresh the
+  browser heartbeat instead of only the much larger settings response.
+- Removed the repeated 15-second full-settings download. The browser uses its
+  lightweight status request for transport recovery and fetches settings only
+  when their values may actually have changed.
+
 ## 3.69 - 2026-08-11
 - Replaced the hard 11% low-brightness lock with median plus exponential LDR
   filtering, a real output deadband and a short dwell, eliminating brightness
