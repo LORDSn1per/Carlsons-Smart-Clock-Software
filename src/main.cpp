@@ -10,7 +10,7 @@
 
 // Single source of truth for the version. Auto-incremented by +0.01 on every
 // successful build by scripts/merge_firmware.py; see CHANGELOG.md for history.
-float ver = 4.02;
+float ver = 4.04;
 
 
 /* #################### To add a new screen (example screen6) ####################
@@ -637,7 +637,15 @@ int cachedSettingsScreen = -1;
 uint8_t targetBrightness = 0; // Target brightness for smooth transition
 uint8_t currentBrightness = 200; // Current brightness 200 is for bootup brightness
 unsigned long lastBrightnessUpdate = 0; // For smooth transition timing
-const unsigned long brightnessUpdateInterval = 75; // Fast enough to fade smoothly, slow enough to avoid visible hunting
+const unsigned long brightnessUpdateInterval = 25; // Ramp tick; matches the LDR sample rate
+// The ramp moves a fraction of the remaining distance per tick rather than a
+// fixed one unit, so settling time scales with how far it actually has to
+// travel. Divisor sets the easing time constant (interval x divisor, so about
+// 150 ms here); the cap bounds the fastest part of a large swing so it eases
+// instead of snapping; the floor guarantees the final few units still arrive.
+const uint8_t BRIGHTNESS_RAMP_DIVISOR = 6;
+const uint8_t BRIGHTNESS_RAMP_MIN_STEP = 1;
+const uint8_t BRIGHTNESS_RAMP_MAX_STEP = 8;
 // Short OE pulses are unstable on this panel. Use at least this OE setting for
 // non-zero output, then compensate its quantised clock width with RGB scaling.
 // Unlike the old hybrid threshold, the compensation remains active across the
@@ -1821,10 +1829,25 @@ bool recoverSettingsFile() {
   return false;
 }
 
+// Best effort, and deliberately advisory: the return value must never block an
+// update. An OTA writes the app partition only - SPIFFS and the live
+// /settings.json are not touched by it - so the checkpoint is redundancy
+// against the *new* firmware mishandling the file, not protection against the
+// transfer. Refusing the update when the copy fails was strictly worse than
+// proceeding without it: it left no way to flash the firmware that would fix
+// whatever was wrong in the first place.
 bool prepareSettingsForOta() {
   if (settingsMutex && xSemaphoreTakeRecursive(settingsMutex, pdMS_TO_TICKS(5000)) != pdTRUE) {
-    Serial.println("[OTA] Settings storage is busy; refusing firmware update.");
+    Serial.println("[OTA] Settings storage busy; continuing without a checkpoint.");
     return false;
+  }
+
+  // Reclaim space before copying. The SPIFFS partition is 128 KB and a settings
+  // file this size does not fit four simultaneous copies, so a stale .ota left
+  // by an earlier update is the most likely reason the copy would fail.
+  SPIFFS.remove("/settings.json.ota");
+  if (SPIFFS.exists("/settings.json.tmp") && !settingsFileIsValid("/settings.json.tmp")) {
+    SPIFFS.remove("/settings.json.tmp");
   }
 
   bool ready = true;
@@ -1837,9 +1860,17 @@ bool prepareSettingsForOta() {
   if (ready) ready = copySettingsFile("/settings.json", "/settings.json.ota");
 
   if (settingsMutex) xSemaphoreGiveRecursive(settingsMutex);
-  Serial.println(ready
-    ? "[OTA] Validated settings checkpoint saved before firmware update."
-    : "[OTA] Could not create a validated settings checkpoint; update refused.");
+
+  if (ready) {
+    Serial.println("[OTA] Validated settings checkpoint saved before firmware update.");
+  } else {
+    // Log the two resources that actually cause this, so the next occurrence
+    // does not need guesswork.
+    Serial.printf("[OTA] No settings checkpoint (SPIFFS %u/%u bytes used, largest free block %u). "
+                  "Continuing; the update does not write the settings partition.\n",
+                  (unsigned)SPIFFS.usedBytes(), (unsigned)SPIFFS.totalBytes(),
+                  (unsigned)ESP.getMaxAllocHeap());
+  }
   return ready;
 }
 
@@ -4978,6 +5009,8 @@ void setup() {
     d["web_stack_free_words"] = webServerTaskHandle ? uxTaskGetStackHighWaterMark(webServerTaskHandle) : 0;
     d["weather_stack_free_words"] = fetchWeatherTaskHandle ? uxTaskGetStackHighWaterMark(fetchWeatherTaskHandle) : 0;
     d["ota_active"] = otaBrowserActive;
+    d["spiffs_used"] = SPIFFS.usedBytes();
+    d["spiffs_total"] = SPIFFS.totalBytes();
     d["screen13_module_mask"] = diagnosticScreen13Mask;
     d["wifi_status"] = (int)WiFi.status();
     d["state"] = (int)currentState;
@@ -5188,11 +5221,9 @@ void setup() {
       server.send(503, "text/plain", "FAIL: weather request is still busy; please retry");
       return;
     }
-    if (!prepareSettingsForOta()) {
-      releaseBrowserOtaSession(false);
-      server.send(503, "text/plain", "FAIL: settings could not be safely checkpointed; firmware was not changed");
-      return;
-    }
+    // Advisory only - see prepareSettingsForOta(). A missing checkpoint must not
+    // stop the update, or a full SPIFFS becomes an unrecoverable lockout.
+    prepareSettingsForOta();
     otaBrowserChunk = (uint8_t*)malloc(OTA_BROWSER_CHUNK_SIZE);
     if (!otaBrowserChunk) {
       releaseBrowserOtaSession(false);
@@ -5565,7 +5596,17 @@ void loop() {
   if (autoBrightnessEnabled) {
     if (currentBrightness != targetBrightness &&
         millis() - lastBrightnessUpdate >= brightnessUpdateInterval) {
-      currentBrightness += (currentBrightness < targetBrightness) ? 1 : -1;
+      // A fixed one-unit step cost the same time per unit no matter the size of
+      // the change, so a lamp coming on (about 180 units) took over 13 seconds
+      // and a full sweep took 19. Stepping by a fraction of what is left moves
+      // quickly while the gap is wide and eases in as it closes.
+      const int remaining = (int)targetBrightness - (int)currentBrightness;
+      const int magnitude = abs(remaining);
+      int step = constrain(magnitude / (int)BRIGHTNESS_RAMP_DIVISOR,
+                           (int)BRIGHTNESS_RAMP_MIN_STEP,
+                           (int)BRIGHTNESS_RAMP_MAX_STEP);
+      if (step > magnitude) step = magnitude; // never overshoot the target
+      currentBrightness += (remaining > 0) ? step : -step;
       applyDisplayBrightness(currentBrightness);
       lastBrightnessUpdate = millis();
     }

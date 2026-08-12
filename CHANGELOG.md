@@ -10,6 +10,31 @@ recorded — only version numbers and short notes.
 > some numbers below are just iteration builds with no shipped change of their
 > own. Entries are written against the version that first carried the change.
 
+## 4.03 - 2026-08-13
+- Browser OTA no longer refuses the update when it cannot checkpoint settings.
+  `/update/start` copies `/settings.json` to `/settings.json.ota` before opening
+  the OTA partition, and a failed copy aborted the whole transfer at 0 bytes
+  ("settings could not be safely checkpointed"). The SPIFFS partition is 128 KB
+  and cannot hold four simultaneous copies of a settings file this size, and the
+  validator also wants a 20 KB *contiguous* allocation, so the check failed
+  exactly when the device was most constrained. The reasoning behind refusing
+  was wrong regardless: an OTA writes the app partition only, never SPIFFS, so
+  the checkpoint is redundancy against the *new* firmware mishandling settings -
+  not protection for the transfer. Refusing left no way to flash the firmware
+  that would fix the problem. It is now advisory: stale `.ota`/`.tmp` copies are
+  reclaimed first, the checkpoint is still made when possible, and the update
+  always proceeds.
+- That failure now logs SPIFFS used/total and the largest free heap block
+  instead of a bare message, and `/debug` reports `spiffs_used`/`spiffs_total`.
+- Auto-brightness reacts at a sane speed again. The ramp stepped one brightness
+  unit per 75 ms regardless of how far it had to travel - about 13 units per
+  second, so a lamp being switched on (roughly 180 units) took over 13 seconds
+  and a full sweep took 19. It now moves a fraction of the remaining distance
+  each tick (`clamp(remaining / 6, 1, 8)` every 25 ms), which is quick while the
+  gap is wide and eases in as it closes: the same swings now settle in about a
+  second. The median filter, EMA and 350 ms dwell from the low-brightness
+  flicker work are untouched - the ramp was the entire problem.
+
 ## 4.00 - 2026-08-13
 - Fixed the render task reading weather icon names out of `String` globals that
   `fetchWeatherTask` reassigns from another task. Reassigning a `String` frees
