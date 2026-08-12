@@ -10,6 +10,26 @@ recorded — only version numbers and short notes.
 > some numbers below are just iteration builds with no shipped change of their
 > own. Entries are written against the version that first carried the change.
 
+## 4.08 - 2026-08-13
+- Reverted the OE dimming math to the hybrid-floor method that was in use right
+  after the low-brightness flicker fix (161470c). The 4.00 rewrite quantised OE
+  to whole HUB75 clock periods and compensated the remainder in RGB, intending
+  to remove a small hand-off artefact at the 15% floor. It made dimming visibly
+  steppy across the entire range instead: OE held flat for four brightness units
+  then jumped four at once while RGB sawtoothed 246-254 to compensate. OE is
+  duty cycle and RGB scaling is bitplane depth, so the compensation does not
+  cancel perceptually. It also cut OE from 216 distinct values to 52 while
+  producing the same 216 output pairs overall, so it bought no resolution for
+  the stepping it introduced. `applyDisplayBrightness()` carries a comment
+  recording this so it is not "improved" back.
+- Auto-brightness ramp tuned by feel to a fixed one-unit step on a 25 ms tick:
+  about 40 units/s, or 6.4 s for a full sweep. Three times the speed of the
+  original 75 ms tick and without the 19 s crawl that started this, while
+  keeping one ramp step equal to exactly one OE step - the smoothest motion the
+  panel can produce now that OE is continuous again. The proportional ramp
+  added in 4.03 is still in the code and re-enabled by raising
+  `BRIGHTNESS_RAMP_MAX_STEP` above 1; larger steps read as visibly coarser.
+
 ## 4.03 - 2026-08-13
 - Browser OTA no longer refuses the update when it cannot checkpoint settings.
   `/update/start` copies `/settings.json` to `/settings.json.ota` before opening

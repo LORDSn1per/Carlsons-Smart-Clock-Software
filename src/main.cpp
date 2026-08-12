@@ -10,7 +10,7 @@
 
 // Single source of truth for the version. Auto-incremented by +0.01 on every
 // successful build by scripts/merge_firmware.py; see CHANGELOG.md for history.
-float ver = 4.04;
+float ver = 4.13;
 
 
 /* #################### To add a new screen (example screen6) ####################
@@ -638,20 +638,20 @@ uint8_t targetBrightness = 0; // Target brightness for smooth transition
 uint8_t currentBrightness = 200; // Current brightness 200 is for bootup brightness
 unsigned long lastBrightnessUpdate = 0; // For smooth transition timing
 const unsigned long brightnessUpdateInterval = 25; // Ramp tick; matches the LDR sample rate
-// The ramp moves a fraction of the remaining distance per tick rather than a
-// fixed one unit, so settling time scales with how far it actually has to
-// travel. Divisor sets the easing time constant (interval x divisor, so about
-// 150 ms here); the cap bounds the fastest part of a large swing so it eases
-// instead of snapping; the floor guarantees the final few units still arrive.
-const uint8_t BRIGHTNESS_RAMP_DIVISOR = 6;
+// Ramp step is clamp(remaining / DIVISOR, MIN_STEP, MAX_STEP), so the shape is
+// selectable: a MAX_STEP above 1 gives a proportional ramp that moves fast over
+// a wide gap and eases in, while MAX_STEP == 1 gives a fixed one-unit ramp.
+//
+// Tuned by feel to a fixed one-unit step at 25 ms (40 units/s, about 6.4 s for
+// a full sweep - three times the speed of the original 75 ms tick, without the
+// 19 s crawl). One unit is exactly one OE step now that HYBRID_OE_FLOOR keeps
+// OE continuous, which is the smoothest motion the panel can produce; larger
+// steps were visibly coarser. DIVISOR has no effect while MAX_STEP is 1 - it
+// only matters if the proportional shape is re-enabled by raising MAX_STEP.
+const uint8_t BRIGHTNESS_RAMP_DIVISOR = 2;
 const uint8_t BRIGHTNESS_RAMP_MIN_STEP = 1;
-const uint8_t BRIGHTNESS_RAMP_MAX_STEP = 8;
-// Short OE pulses are unstable on this panel. Use at least this OE setting for
-// non-zero output, then compensate its quantised clock width with RGB scaling.
-// Unlike the old hybrid threshold, the compensation remains active across the
-// entire range so there is no visible hand-off at about 15%.
-const uint8_t MIN_STABLE_OE_BRIGHTNESS = 40;
-const uint8_t FULL_SCALE_OE_CLOCKS = 61; // 64-pixel row with two-clock latch blanking
+const uint8_t BRIGHTNESS_RAMP_MAX_STEP = 1;
+const uint8_t HYBRID_OE_FLOOR = 40; // ~15%: below this, keep OE stable and dim in the RGB bitplanes
 const uint32_t LDR_SAMPLE_INTERVAL_MS = 25;
 const uint32_t LDR_TARGET_HOLD_MS = 350;
 uint16_t ldrRawValue = 0;
@@ -4712,35 +4712,23 @@ void serviceAmbientBrightnessTarget() {
 }
 
 void applyDisplayBrightness(uint8_t desiredBrightness, bool initializeBothBuffers) {
-  uint8_t oeBrightness = 0;
-  uint8_t colorBrightness = 255;
-
-  if (desiredBrightness > 0) {
-    // The DMA engine can alter OE only in whole HUB75 clock periods. Select
-    // the first stable OE width at or above the requested energy, then trim
-    // the remainder with post-CIE RGB scaling. This prevents every OE clock
-    // boundary (including the former raw 40/41 boundary) becoming a jump.
-    const uint8_t requiredOeClocks = (uint8_t)(
-      ((uint16_t)desiredBrightness * FULL_SCALE_OE_CLOCKS + 254U) / 255U);
-    oeBrightness = MIN_STABLE_OE_BRIGHTNESS;
-
-    auto enabledOeClocks = [](uint8_t brightnessValue) -> uint8_t {
-      uint8_t clocks = (uint8_t)(
-        ((uint16_t)(FULL_SCALE_OE_CLOCKS + 1U) * brightnessValue) >> 8);
-      if (brightnessValue > 0 && clocks == 0) clocks = 1;
-      return min(clocks, FULL_SCALE_OE_CLOCKS);
-    };
-
-    while (oeBrightness < 255 && enabledOeClocks(oeBrightness) < requiredOeClocks) {
-      ++oeBrightness;
-    }
-
-    const uint8_t actualOeClocks = enabledOeClocks(oeBrightness);
-    colorBrightness = (uint8_t)min(
-      255U,
-      ((uint16_t)desiredBrightness * FULL_SCALE_OE_CLOCKS + actualOeClocks / 2U) /
-        actualOeClocks);
-  }
+  // OE pulse widths become coarse and panel-dependent below about 15%. Keep
+  // OE at a steady floor there and obtain the remaining range by scaling the
+  // already-linearised RGB bitplanes instead.
+  //
+  // Do NOT replace this with a scheme that quantises OE to whole HUB75 clock
+  // periods and compensates the remainder in RGB. That was tried (4.00-4.03)
+  // to remove a small hand-off artefact at the 15% floor, and it made dimming
+  // visibly steppy across the entire range: OE held flat for four brightness
+  // units then jumped four at once, with RGB sawtoothing to compensate. OE is
+  // duty cycle and RGB scaling is bitplane depth - different mechanisms, so
+  // the compensation does not cancel perceptually. It also cut OE from 216
+  // distinct values to 52 while producing the same 216 output pairs overall,
+  // so it bought no resolution. Phillip confirmed the regression by feel.
+  const uint8_t oeBrightness = max(desiredBrightness, HYBRID_OE_FLOOR);
+  const uint8_t colorBrightness = desiredBrightness < HYBRID_OE_FLOOR
+    ? (uint8_t)(((uint16_t)desiredBrightness * 255U + HYBRID_OE_FLOOR / 2) / HYBRID_OE_FLOOR)
+    : 255;
 
   appliedOeBrightness = oeBrightness;
   appliedColorBrightness = colorBrightness;
