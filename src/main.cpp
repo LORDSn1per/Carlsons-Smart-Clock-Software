@@ -10,7 +10,7 @@
 
 // Single source of truth for the version. Auto-incremented by +0.01 on every
 // successful build by scripts/merge_firmware.py; see CHANGELOG.md for history.
-float ver = 4.23;
+float ver = 4.24;
 
 
 /* #################### To add a new screen (example screen6) ####################
@@ -5733,6 +5733,14 @@ void WIFI_SETUP() {
   WiFi.setSleep(false);
   myWM.setConfigPortalBlocking(false); // Keep non-blocking
   myWM.setConfigPortalTimeout(0);      // Portal timeout can be set here if desired
+
+  // Verbose while the portal is the only thing standing between a new clock and
+  // being usable. At this level WiFiManager logs each inbound request and prints
+  // "<- Request redirected to captive portal" when it answers a phone's probe,
+  // which is the difference between "the phone never reached us" and "we
+  // answered and the phone ignored it". Costs nothing once WiFi is up, because
+  // the portal is not running then.
+  myWM.setDebugOutput(true, WM_DEBUG_VERBOSE);
 
   uint32_t id = 0;
   for(int i=0; i<17; i=i+8) {
