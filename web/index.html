@@ -666,6 +666,8 @@
     <div class="control-row"><label data-translate-key="externalTemperature">External Temperature</label><div class="color-picker"><input type="color" id="tempColorPicker11" onchange="updateColor('tempcolor',this.value.substring(1),11)"></div><label class="switch switch-col"><input type="checkbox" id="temperatureSwitch11" onchange="updateSwitch('temperature',this.checked,11)"><span class="slider"></span></label></div>
     <div class="control-row"><label data-translate-key="internalTemperature">Internal Temperature</label><div class="color-picker"><input type="color" id="ampmColorPicker11" onchange="updateColor('ampmcolor',this.value.substring(1),11)"></div><label class="switch switch-col"><input type="checkbox" id="internalTemperatureSwitch11" onchange="updateSwitch('internaltemperature',this.checked,11)"><span class="slider"></span></label></div>
     <div class="control-row"><label data-translate-key="sunArc">Sun Arc</label><div class="color-picker"><input type="color" id="dateBGColorPicker11" onchange="updateColor('datebgcolor',this.value.substring(1),11)"></div><div class="switch-col"></div></div>
+    <div class="control-row"><label data-translate-key="sunMarker">Sun</label><div class="color-picker"><input type="color" id="sunpathSunColor11" onchange="updateInfographicColor('sunpathsun',this.value.substring(1),11)"></div><div class="switch-col"></div></div>
+    <div class="control-row"><label data-translate-key="sunriseSunsetTimes">Sunrise / Sunset Times</label><div class="color-picker"><input type="color" id="sunpathHoursColor11" onchange="updateInfographicColor('sunpathhours',this.value.substring(1),11)"></div><div class="switch-col"></div></div>
     <div class="control-row"><label data-translate-key="minMaxTemps">Min/Max Temps</label><div class="color-picker"></div><label class="switch switch-col"><input type="checkbox" id="minmaxTempsSwitch11" onchange="updateSwitch('minmaxtemps',this.checked,11)"><span class="slider"></span></label></div>
 </div>
 <div id="screen12ClockControls" class="screen-clock-controls hidden">
@@ -692,6 +694,7 @@
         <div class="control-row"><label data-translate-key="sunriseSunset">Sunrise / Sunset</label><div class="color-picker"></div><label class="switch switch-col"><input type="checkbox" id="infographicSunpathSwitch13" onchange="updateInfographicModule('sunpath',this.checked);toggleInfographicBox('Sun',this.checked)"><span class="slider"></span></label></div>
         <div id="infographicSunExpandable" class="expandable">
             <div class="control-row"><label data-translate-key="sunArcGraph">Sun Arc Graph</label><div class="color-picker"><input type="color" id="infographicSunGraphColor13" onchange="updateInfographicColor('sungraph',this.value.substring(1))"></div><div class="switch-col"></div></div>
+            <div class="control-row"><label data-translate-key="sunMarker">Sun</label><div class="color-picker"><input type="color" id="infographicSunMarkerColor13" onchange="updateInfographicColor('sunmarker',this.value.substring(1))"></div><div class="switch-col"></div></div>
             <div class="control-row"><label data-translate-key="sunArcHours">Sunrise / Sunset Hours</label><div class="color-picker"><input type="color" id="infographicSunHoursColor13" onchange="updateInfographicColor('sunhours',this.value.substring(1))"></div><div class="switch-col"></div></div>
         </div>
     </div>
@@ -869,6 +872,7 @@
         forecastLabels:"Forecast Labels", transition:"Transition", pmIndicator:"PM Indicator",
         internalExternalTemperature:"Internal / External Temperature", internalExternalHumidity:"Internal / External Humidity",
         sunArcGraph:"Sun Arc Graph", sunArcHours:"Sunrise / Sunset Hours",
+        sunMarker:"Sun", sunriseSunsetTimes:"Sunrise / Sunset Times",
         forecastGraph:"Forecast Graph", forecastHours:"Forecast Hours", weatherIcon:"Weather Icon",
         windSpeed:"Speed", windUnits:"KMH / MPH", forecastDay:"Day",
         forecastMin:"Min Temperature", forecastMax:"Max Temperature",
@@ -1468,7 +1472,9 @@
                     infographicCompassColor13:e.infographic_compass_color,infographicArrowColor13:e.infographic_arrow_color,
                     infographicSpeedColor13:e.infographic_speed_color,infographicUnitsColor13:e.infographic_units_color,
                     infographicForecastDayColor13:e.infographic_forecast_day_color,infographicForecastMinColor13:e.infographic_forecast_min_color,
-                    infographicForecastMaxColor13:e.infographic_forecast_max_color,infographicForecastDividerColor13:e.infographic_forecast_divider_color
+                    infographicForecastMaxColor13:e.infographic_forecast_max_color,infographicForecastDividerColor13:e.infographic_forecast_divider_color,
+                    infographicSunMarkerColor13:e.infographic_sun_marker_color,
+                    sunpathSunColor11:e.sunpath_sun_color,sunpathHoursColor11:e.sunpath_hours_color
                 };
                 Object.entries(infographicColors).forEach(([id,color])=>{const picker=document.getElementById(id);if(picker&&color)picker.value=rgbToHex(color.r,color.g,color.b)});
                 const infographicTransition=document.getElementById('infographicTransition13');if(infographicTransition)infographicTransition.value=String(e.infographic_transition||0);
@@ -1541,7 +1547,7 @@
     function updateInfographicTransitionVisibility(){const count=['Sunpath','Rain','Wind','Forecast'].filter(name=>document.getElementById('infographic'+name+'Switch13')?.checked).length;document.getElementById('infographicTransitionControls')?.classList.toggle('hidden',count<2)}
     function toggleInfographicBox(name,state){toggleExpandableByIds('infographic'+name+'Container','infographic'+name+'Expandable',state,null,null,null)}
     function updateInfographicModule(module,state){blockPolling(2000);updateInfographicTransitionVisibility();deviceFetch(`/infographicmodule?module=${module}&state=${state}&screen=13`,{},`/infographicmodule?screen=13&module=${module}`)}
-    function updateInfographicColor(part,value){blockPolling(2000);if(isLoadingSettings)return;deviceFetch(`/infographiccolor?part=${part}&value=${value}&screen=13`,{},`/infographiccolor?screen=13&part=${part}`)}
+    function updateInfographicColor(part,value,screen){screen=screen||13;blockPolling(2000);if(isLoadingSettings)return;deviceFetch(`/infographiccolor?part=${part}&value=${value}&screen=${screen}`,{},`/infographiccolor?screen=${screen}&part=${part}`)}
     function updateInfographicTransition(value){blockPolling(2000);deviceFetch(`/infographictransition?value=${value}&screen=13`,{},'/infographictransition?screen=13')}
     function updateInfographicHold(value){blockPolling(2000);deviceFetch(`/infographichold?value=${value}&screen=13`,{},'/infographichold?screen=13')}
     function updateSwitch(e,t,n){blockPolling(2000);if(isLoadingSettings)return;deviceFetch(`/${e}?state=${t}&screen=${n}`,{},'/'+e+'?screen='+n)}

@@ -10,7 +10,7 @@
 
 // Single source of truth for the version. Auto-incremented by +0.01 on every
 // successful build by scripts/merge_firmware.py; see CHANGELOG.md for history.
-float ver = 4.20;
+float ver = 4.22;
 
 
 /* #################### To add a new screen (example screen6) ####################
@@ -210,7 +210,15 @@ struct ScreenSettings {
   RGBColor infographicForecastMinColor = {38, 211, 255};
   RGBColor infographicForecastMaxColor = {255, 216, 0};
   RGBColor infographicForecastDividerColor = {255, 164, 0};
-  
+  // Screen 13's sun marker had no colour of its own - it borrowed temp_col, so
+  // recolouring the temperature readout moved the sun with it.
+  RGBColor infographicSunMarkerColor = {255, 216, 0};
+  // Screen 11 (Sunpath) likewise: the sun borrowed temp_col and the sunrise /
+  // sunset times borrowed dateBG_col (shared with the arc). Both now stand alone.
+  RGBColor sunpathSunColor = {255, 225, 0};
+  RGBColor sunpathHoursColor = {255, 164, 0};
+
+
   // Switches
   bool ampmSwitch         = false;
   bool secondsSwitch      = false;
@@ -295,6 +303,10 @@ void applyNewWeatherScreenDefaults() {
   sunpath.iconsSwitch = true;
   sunpath.minMaxTempsSwitch = true;
   sunpath.land_col = {255, 80, 180};
+  // Seeded from the values these elements used to inherit, so the screen looks
+  // identical until the user actually changes one.
+  sunpath.sunpathSunColor = {255, 225, 0};   // was temp_col
+  sunpath.sunpathHoursColor = {255, 164, 0}; // was dateBG_col
 
   ScreenSettings& windDial = allScreenSettings[11];
   windDial.time_col = {255, 244, 220};
@@ -1684,7 +1696,20 @@ bool persistSettingsNow() {
       SAVE_INFOGRAPHIC_COLOR(infographicForecastMinColor);
       SAVE_INFOGRAPHIC_COLOR(infographicForecastMaxColor);
       SAVE_INFOGRAPHIC_COLOR(infographicForecastDividerColor);
+      SAVE_INFOGRAPHIC_COLOR(infographicSunMarkerColor);
 #undef SAVE_INFOGRAPHIC_COLOR
+    }
+    // Screen 11 only, for the same reason the block above is screen 13 only:
+    // writing these for all thirteen screens would add ~2 KB to a document that
+    // already has to fit a 128 KB SPIFFS alongside its .bak and .ota copies.
+    if (&settings == &allScreenSettings[10]) {
+#define SAVE_SUNPATH_COLOR(name) \
+      screenObj[#name "_r"] = settings.name.r; \
+      screenObj[#name "_g"] = settings.name.g; \
+      screenObj[#name "_b"] = settings.name.b
+      SAVE_SUNPATH_COLOR(sunpathSunColor);
+      SAVE_SUNPATH_COLOR(sunpathHoursColor);
+#undef SAVE_SUNPATH_COLOR
     }
   }
 
@@ -2101,7 +2126,18 @@ void loadSettings() {
           LOAD_INFOGRAPHIC_COLOR(infographicForecastMinColor);
           LOAD_INFOGRAPHIC_COLOR(infographicForecastMaxColor);
           LOAD_INFOGRAPHIC_COLOR(infographicForecastDividerColor);
+          LOAD_INFOGRAPHIC_COLOR(infographicSunMarkerColor);
 #undef LOAD_INFOGRAPHIC_COLOR
+        }
+        if (i == 10) {
+          ScreenSettings& sunpath = allScreenSettings[i];
+#define LOAD_SUNPATH_COLOR(name) \
+          sunpath.name.r = screenObj[#name "_r"] | sunpath.name.r; \
+          sunpath.name.g = screenObj[#name "_g"] | sunpath.name.g; \
+          sunpath.name.b = screenObj[#name "_b"] | sunpath.name.b
+          LOAD_SUNPATH_COLOR(sunpathSunColor);
+          LOAD_SUNPATH_COLOR(sunpathHoursColor);
+#undef LOAD_SUNPATH_COLOR
         }
       }
     }
@@ -2318,6 +2354,9 @@ void handleSettings() {
   addInfographicColor("infographic_forecast_min_color", settings.infographicForecastMinColor);
   addInfographicColor("infographic_forecast_max_color", settings.infographicForecastMaxColor);
   addInfographicColor("infographic_forecast_divider_color", settings.infographicForecastDividerColor);
+  addInfographicColor("infographic_sun_marker_color", settings.infographicSunMarkerColor);
+  addInfographicColor("sunpath_sun_color", settings.sunpathSunColor);
+  addInfographicColor("sunpath_hours_color", settings.sunpathHoursColor);
 
   doc["auto_brightness"] = autoBrightnessEnabled;
   doc["timezone"] = selectedTimezone;
@@ -3607,6 +3646,10 @@ void handleInfographicColor() {
   else if (part == "forecastmin") target = &settings.infographicForecastMinColor;
   else if (part == "forecastmax") target = &settings.infographicForecastMaxColor;
   else if (part == "forecastdivider") target = &settings.infographicForecastDividerColor;
+  else if (part == "sunmarker") target = &settings.infographicSunMarkerColor;
+  // Screen 11 rides the same endpoint rather than gaining two more of its own.
+  else if (part == "sunpathsun") target = &settings.sunpathSunColor;
+  else if (part == "sunpathhours") target = &settings.sunpathHoursColor;
   if (!target) {
     server.send(400, "text/plain", "Invalid infographic part");
     return;
@@ -8400,6 +8443,10 @@ void Screen11() { // Sunpath
   const uint16_t tempColor = dma_display->color565(settings.temp_col.r, settings.temp_col.g, settings.temp_col.b);
   const uint16_t internalTempColor = dma_display->color565(settings.ampm_col.r, settings.ampm_col.g, settings.ampm_col.b);
   const uint16_t weatherColor = dma_display->color565(settings.humidity_col.r, settings.humidity_col.g, settings.humidity_col.b);
+  // Own colours now. The sun used to be drawn in temp_col and the solar times in
+  // dateBG_col, so recolouring the temperature or the arc silently moved them.
+  const uint16_t sunColor = dma_display->color565(settings.sunpathSunColor.r, settings.sunpathSunColor.g, settings.sunpathSunColor.b);
+  const uint16_t solarHoursColor = dma_display->color565(settings.sunpathHoursColor.r, settings.sunpathHoursColor.g, settings.sunpathHoursColor.b);
 
   if (settings.daySwitch) {
     char dayLabel[4]; strftime(dayLabel, sizeof(dayLabel), "%a", &timeinfo);
@@ -8439,10 +8486,10 @@ void Screen11() { // Sunpath
   progress = constrain(progress, 0.0f, 1.0f);
   const int markerX = startX + (int)lroundf(progress * (endX - startX));
   const int markerY = baseY - (int)lroundf(4.0f * arcHeight * progress * (1.0f - progress));
-  drawSunpathMarker(markerX, markerY, daylight, tempColor, weatherColor);
+  drawSunpathMarker(markerX, markerY, daylight, sunColor, weatherColor);
 
-  drawSunpathSolarTime(sunrise, false, settings.twentyFourHourSwitch, arcColor);
-  drawSunpathSolarTime(sunset, true, settings.twentyFourHourSwitch, arcColor);
+  drawSunpathSolarTime(sunrise, false, settings.twentyFourHourSwitch, solarHoursColor);
+  drawSunpathSolarTime(sunset, true, settings.twentyFourHourSwitch, solarHoursColor);
   int16_t x1, y1; uint16_t w, h;
   if (settings.iconsSwitch) displayWeatherIconAt(weatherIcon, 27, 21);
   else if (settings.minMaxTempsSwitch) {
@@ -8548,9 +8595,15 @@ static void renderInfographicModule(GFXcanvas16& canvas, uint8_t module,
     const int markerX = startX + (int)lroundf(progress * (endX - startX));
     const int markerY = baseY - (int)lroundf(4.0f * arcHeight * progress * (1.0f - progress));
     if (daylight) {
-      canvas.fillRect(markerX - 1, markerY - 1, 3, 3, temperature);
-      canvas.drawPixel(markerX, markerY - 3, temperature);
-      canvas.drawPixel(markerX, markerY + 3, temperature);
+      // Four satellite pixels, matching Screen 11's drawSunpathMarker(). The 3
+      // and 9 o'clock pixels were simply missing here, so the sun rendered as a
+      // block with rays above and below but none to the sides.
+      const uint16_t sunColor = colour565(settings.infographicSunMarkerColor);
+      canvas.fillRect(markerX - 1, markerY - 1, 3, 3, sunColor);
+      canvas.drawPixel(markerX, markerY - 3, sunColor);
+      canvas.drawPixel(markerX, markerY + 3, sunColor);
+      canvas.drawPixel(markerX - 3, markerY, sunColor);
+      canvas.drawPixel(markerX + 3, markerY, sunColor);
     } else {
       canvas.fillCircle(markerX, markerY, 3, humidity);
       canvas.fillCircle(markerX + 2, markerY - 1, 3, 0);
