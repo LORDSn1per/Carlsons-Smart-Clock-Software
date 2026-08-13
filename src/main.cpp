@@ -10,7 +10,7 @@
 
 // Single source of truth for the version. Auto-incremented by +0.01 on every
 // successful build by scripts/merge_firmware.py; see CHANGELOG.md for history.
-float ver = 4.28;
+float ver = 4.29;
 
 
 /* #################### To add a new screen (example screen6) ####################
@@ -1250,7 +1250,7 @@ static void serviceSafeModeRelease() {
 //  Add a line here whenever you add a new function.
 // ===========================================================================
 void saveSettings();
-bool persistSettingsNow();
+bool persistSettingsNow(uint32_t maxWaitMs = 5000);
 void printSpiffsFile();
 void ClearWifi();
 float lerp(float a, float b, float t);
@@ -1491,7 +1491,11 @@ void debounceSaveSettings() {
   unsigned long currentTime = millis();
   if (currentTime - lastSettingsChangeTime >= saveDelay) {
     const uint32_t revisionBeingSaved = settingsRevision;
-    const bool saved = persistSettingsNow();
+    // Zero wait: this runs on EVERY loop() iteration. Waiting even one second
+    // here froze the display and the config portal behind whatever else held
+    // the lock. There is nothing urgent about a debounced save - if the lock is
+    // busy, the retry below picks it up a moment later.
+    const bool saved = persistSettingsNow(0);
     // A handler on the other core may have changed a setting while SPIFFS was
     // being written. Only clear the flag if the saved snapshot is still current.
     if (saved && settingsRevision == revisionBeingSaved) settingsChanged = false;
@@ -1600,14 +1604,18 @@ class BufferedFileWriter : public Print {
 };
 static uint32_t lastSavedSettingsHash = 0;
 
-bool persistSettingsNow() {
+bool persistSettingsNow(uint32_t maxWaitMs) {
   // Format SSD has begun; the filesystem is being wiped and a reboot follows.
   // Writing here would put the in-RAM settings straight back onto the fresh
   // filesystem, which is exactly what made Format SSD appear to do nothing.
   if (settingsWritesBlocked) return false;
 
-  if (settingsMutex && xSemaphoreTakeRecursive(settingsMutex, pdMS_TO_TICKS(5000)) != pdTRUE) {
-    Serial.println("[Settings] Could not acquire settingsMutex — skipping save this cycle.");
+  // maxWaitMs matters. fetchWeather() holds this mutex while it streams the
+  // response body off the socket, which on a marginal link runs for many
+  // seconds, so anything called from loop() must pass 0 and try again next
+  // time rather than stalling the whole clock behind a weather download.
+  if (settingsMutex && xSemaphoreTakeRecursive(settingsMutex, pdMS_TO_TICKS(maxWaitMs)) != pdTRUE) {
+    if (maxWaitMs > 0) Serial.println("[Settings] settingsMutex busy — skipping save this cycle.");
     return false;
   }
 
@@ -3156,9 +3164,19 @@ void fetchWeather() {
   // ===================================================================
   // === JSON PARSING (ALWAYS PARSING CELSIUS VALUES) ==================
   // ===================================================================
-  // Mutex is taken here (after the blocking network call above has already
-  // completed) and held across the global writes + final save below, so it's
-  // never held across the slow HTTPClient GET itself.
+  // Taken here and held across the parse, the global writes and the final save.
+  //
+  // NOTE, and this is the important part: http.GET() above only returns when the
+  // *headers* arrive. deserializeJson(doc, http.getStream(), ...) below reads the
+  // response BODY straight off the socket, so this lock IS held across network
+  // I/O - for as long as the body takes, up to the 15s HTTPClient timeout. The
+  // comment that used to sit here claimed otherwise and was wrong.
+  //
+  // Everything that waits on this mutex therefore has to assume it can be held
+  // for many seconds: debounceSaveSettings() passes a zero wait, and /reboot
+  // waits 25s. Narrowing the lock to just the global writes is the real fix, but
+  // the writes are interleaved with the parse across three provider branches, so
+  // it is a restructure rather than a move and has not been attempted here.
   if (settingsMutex) xSemaphoreTakeRecursive(settingsMutex, pdMS_TO_TICKS(5000));
 
   if (httpCode == HTTP_CODE_OK) {
@@ -5379,8 +5397,15 @@ void setup() {
   server.on("/reboot", []() {
     // Freeze all settings/weather writers, flush any pending user changes, and
     // unmount cleanly. If the save cannot be proven safe, refuse the reboot.
-    if (settingsMutex && xSemaphoreTakeRecursive(settingsMutex, pdMS_TO_TICKS(5000)) != pdTRUE) {
-      server.send(503, "text/plain", "Reboot cancelled: settings storage is busy. Please try again.");
+    // 25s, not 5s. fetchWeather() holds this mutex while it streams the response
+    // body, and the HTTPClient timeout alone is 15s - so on a slow link a reboot
+    // pressed at the wrong moment was refused with a 503 for reasons that had
+    // nothing to do with the user. Waiting out a weather download is the right
+    // trade for a deliberate button press; the refusal still stands if storage
+    // is genuinely wedged, because rebooting then would lose settings.
+    if (settingsMutex && xSemaphoreTakeRecursive(settingsMutex, pdMS_TO_TICKS(25000)) != pdTRUE) {
+      server.send(503, "text/plain",
+                  "Reboot cancelled: settings storage stayed busy for 25s. Please try again.");
       return;
     }
     if (settingsChanged) {
