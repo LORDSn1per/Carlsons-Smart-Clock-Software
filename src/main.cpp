@@ -10,7 +10,7 @@
 
 // Single source of truth for the version. Auto-incremented by +0.01 on every
 // successful build by scripts/merge_firmware.py; see CHANGELOG.md for history.
-float ver = 4.19;
+float ver = 4.20;
 
 
 /* #################### To add a new screen (example screen6) ####################
@@ -1160,6 +1160,42 @@ static void serviceLinkKeepAlive() {
 // brightness settings. Published to the web UI as doc["safe_mode"] so the
 // settings page can back off to its most conservative live-refresh rate.
 bool safeModeActive = false;
+// Reboot Guard tuning. Safe Mode exists because the supply can sag on bright
+// screens; rather than loop on brownouts, the clock comes up dim.
+static const char* REBOOT_GUARD_FILE = "/reboot_guard.json";
+static const int32_t REBOOT_GUARD_WINDOW_S = 60;   // boots this close together count as rapid
+static const int REBOOT_GUARD_TRIGGER_COUNT = 3;   // rapid boots needed to trip
+static const uint8_t SAFE_MODE_BRIGHTNESS = 40;    // ~15% of 255
+static const uint32_t RTC_PLAUSIBLE_EPOCH = 1600000000UL; // Sep 2020; below this the RTC is unset
+// How long the clock must stay up before Safe Mode is considered no longer
+// needed. Only the latch is cleared - the current session stays dim, because
+// raising brightness on a supply that just browned out invites another loop.
+static const uint32_t SAFE_MODE_PROVEN_MS = 10UL * 60UL * 1000UL;
+
+// Clears the Safe Mode latch once the clock has demonstrated it can stay up.
+// Only the stored flag is cleared, so the next boot starts normally; this
+// session stays dim deliberately - restoring full brightness on a supply that
+// just browned out is how the loop starts again.
+static void serviceSafeModeRelease() {
+  static bool latchCleared = false;
+  if (latchCleared || !safeModeActive) return;
+  if (millis() < SAFE_MODE_PROVEN_MS) return;
+
+  latchCleared = true;
+  if (!SPIFFS.exists(REBOOT_GUARD_FILE)) return;
+
+  DynamicJsonDocument doc(96);
+  File in = SPIFFS.open(REBOOT_GUARD_FILE, "r");
+  if (in) { deserializeJson(doc, in); in.close(); }
+  doc["safe"] = false;
+  doc["count"] = 0;
+  File out = SPIFFS.open(REBOOT_GUARD_FILE, "w");
+  if (out) {
+    serializeJson(doc, out);
+    out.close();
+    Serial.println("[Reboot Guard] Stable for 10 minutes - Safe Mode latch cleared for next boot.");
+  }
+}
 
 
 
@@ -1314,40 +1350,45 @@ void drawCentreChar(const char *buf, int x, int y);
 void MenuButtonPressed();
 
 
+// Build the time components straight from timeinfo.
+//
+// These used to be carved out of current_hoursmins with fixed substring offsets
+// that assumed a two-digit hour. updateCurrentHoursMins() formats the hour with
+// %d, so at 4:06:08 PM the string is "4:06:08 PM" - one character shorter than
+// the offsets expect - and every field slid: hoursMins kept a trailing colon
+// ("4:06:"), seconds came out as "8 ", and the meridiem as just "M". It only
+// misbehaved for hours 1-9 (and before 10:00 in 24-hour mode), which is why it
+// looked intermittent rather than plainly broken. Screens 1, 7 and 9 all shared
+// the fault. Formatting each part separately removes the class of bug entirely.
+static void splitTimeParts(const struct tm& value, bool twentyFourHour, bool showAmPm,
+                           bool showSeconds, String& hoursMins, String& seconds,
+                           String& ampm) {
+  int hour = value.tm_hour;
+  if (!twentyFourHour) { hour %= 12; if (hour == 0) hour = 12; }
+
+  char buffer[8];
+  snprintf(buffer, sizeof(buffer), "%d:%02d", hour, value.tm_min);
+  hoursMins = buffer;
+
+  if (showSeconds) {
+    snprintf(buffer, sizeof(buffer), "%02d", value.tm_sec);
+    seconds = buffer;
+  } else {
+    seconds = "";
+  }
+
+  ampm = (!twentyFourHour && showAmPm) ? (value.tm_hour >= 12 ? "PM" : "AM") : "";
+}
+
 TimeDateComponents getTimeDateString() {
     TimeDateComponents components;
     
     getLocalTime(&timeinfo);
     updateCurrentHoursMins();
 
-    // Split time string into parts
-    String timeStr = String(current_hoursmins);
-    if (twentyFourHourSwitch[currentScreen - 1]) {
-        if (secondsSwitch[currentScreen - 1]) {
-            components.hoursMins = timeStr.substring(0, 5);  // e.g., "14:30"
-            components.seconds = timeStr.substring(6);       // e.g., "45"
-        } else {
-            components.hoursMins = timeStr.substring(0, 5);  // e.g., "14:30"
-        }
-    } else {
-        if (ampmSwitch[currentScreen - 1]) {
-            if (secondsSwitch[currentScreen - 1]) {
-                components.hoursMins = timeStr.substring(0, 5);  // e.g., "8:30"
-                components.seconds = timeStr.substring(6, 8);    // e.g., "45"
-                components.ampm = timeStr.substring(9);          // e.g., "PM"
-            } else {
-                components.hoursMins = timeStr.substring(0, 5);  // e.g., "8:30"
-                components.ampm = timeStr.substring(6);          // e.g., "PM"
-            }
-        } else {
-            if (secondsSwitch[currentScreen - 1]) {
-                components.hoursMins = timeStr.substring(0, 5);  // e.g., "8:30"
-                components.seconds = timeStr.substring(6);       // e.g., "45"
-            } else {
-                components.hoursMins = timeStr.substring(0, 5);  // e.g., "8:30"
-            }
-        }
-    }
+    splitTimeParts(timeinfo, twentyFourHourSwitch[currentScreen - 1],
+                   ampmSwitch[currentScreen - 1], secondsSwitch[currentScreen - 1],
+                   components.hoursMins, components.seconds, components.ampm);
 
     // Build date components
     char dayBuf[16] = "";
@@ -4887,61 +4928,75 @@ void setup() {
     Serial.println("[Reboot Guard] SPIFFS not mounted! Guard is DISABLED.");
   } else {
     // Both RTC and SPIFFS are working.
-    const char* guardFile = "/reboot_guard.json";
-    uint32_t currentTimestamp = rtc.now().unixtime();
-    
-    File file = SPIFFS.open(guardFile, "r");
-    if (!file) {
-      // File doesn't exist. This is the first boot after a clean shutdown or format.
-      Serial.println("[Reboot Guard] Log file not found. Creating new sequence.");
-      rebootCount = 1;
-    } else {
-      // File exists, let's read it.
-      DynamicJsonDocument doc(96); // Small doc for the log file
-      DeserializationError error = deserializeJson(doc, file);
-      file.close(); // Close the file immediately after reading
+    const uint32_t currentTimestamp = rtc.now().unixtime();
 
-      if (error) {
-        Serial.println("[Reboot Guard] Failed to parse log file. Starting new sequence.");
+    // A DS3231 that has lost power reads back a fixed or nonsensical time, so
+    // every boot would look like it happened at the same instant - a delta of
+    // zero, which reads as a rapid reboot and trips Safe Mode on the third
+    // ordinary power-up. Require a plausible clock before trusting the maths.
+    if (currentTimestamp < RTC_PLAUSIBLE_EPOCH) {
+      Serial.printf("[Reboot Guard] RTC time implausible (%u); guard DISABLED this boot.\n",
+                    currentTimestamp);
+    } else {
+      bool latchedSafeMode = false;
+      File file = SPIFFS.open(REBOOT_GUARD_FILE, "r");
+      if (!file) {
+        // File doesn't exist. This is the first boot after a clean shutdown or format.
+        Serial.println("[Reboot Guard] Log file not found. Creating new sequence.");
         rebootCount = 1;
       } else {
-        uint32_t lastTimestamp = doc["timestamp"] | 0;
-        int lastCount = doc["count"] | 0;
-        Serial.printf("[Reboot Guard] Read Log: Last boot was at %u with count %d.\n", lastTimestamp, lastCount);
-        
-        // The core logic: Compare current time to the last saved time.
-        if ((currentTimestamp - lastTimestamp) <= 60) {
-          // Rapid reboot detected!
-          rebootCount = lastCount + 1;
-          Serial.printf("[Reboot Guard] Rapid reboot detected! New count is %d.\n", rebootCount);
-        } else {
-          // Normal boot (more than 60s has passed).
-          Serial.println("[Reboot Guard] Normal boot detected. Resetting sequence.");
+        DynamicJsonDocument doc(96); // Small doc for the log file
+        DeserializationError error = deserializeJson(doc, file);
+        file.close(); // Close the file immediately after reading
+
+        if (error) {
+          Serial.println("[Reboot Guard] Failed to parse log file. Starting new sequence.");
           rebootCount = 1;
+        } else {
+          const uint32_t lastTimestamp = doc["timestamp"] | 0;
+          const int lastCount = doc["count"] | 0;
+          latchedSafeMode = doc["safe"] | false;
+          Serial.printf("[Reboot Guard] Read Log: Last boot at %u, count %d, safe %d.\n",
+                        lastTimestamp, lastCount, (int)latchedSafeMode);
+
+          // Signed comparison: an RTC corrected backwards by NTP would underflow
+          // an unsigned subtraction into a huge value and silently look normal.
+          const int32_t elapsed = (int32_t)(currentTimestamp - lastTimestamp);
+          if (elapsed >= 0 && elapsed <= REBOOT_GUARD_WINDOW_S) {
+            rebootCount = lastCount + 1;
+            Serial.printf("[Reboot Guard] Rapid reboot detected! New count is %d.\n", rebootCount);
+          } else {
+            Serial.println("[Reboot Guard] Normal boot detected. Resetting sequence.");
+            rebootCount = 1;
+          }
         }
       }
-    }
 
-    // Now, check if the trigger condition is met.
-    if (rebootCount >= 3) {
-      Serial.println("!!! [Reboot Guard] TRIGGERED: 3+ reboots in under 60 seconds!");
-      safeModeActive = true;
-      // We delete the file so the next boot is clean.
-      SPIFFS.remove(guardFile); 
-      Serial.println("[Reboot Guard] Log file deleted to prevent re-triggering.");
-    } else {
-      // If not triggered, we update the log file for the *next* boot to read.
+      // Safe Mode persists across boots until the clock proves it can stay up.
+      // Deleting the log on trigger (the old behaviour) meant the very next boot
+      // came back at full brightness - straight back into the brownout loop that
+      // tripped the guard. serviceSafeModeRelease() clears the latch instead,
+      // once the clock has run long enough to be considered stable.
+      safeModeActive = (rebootCount >= REBOOT_GUARD_TRIGGER_COUNT) || latchedSafeMode;
+      if (safeModeActive && !latchedSafeMode) {
+        Serial.printf("!!! [Reboot Guard] TRIGGERED: %d reboots inside %ds.\n",
+                      rebootCount, REBOOT_GUARD_WINDOW_S);
+      } else if (latchedSafeMode) {
+        Serial.println("[Reboot Guard] Safe Mode still latched from a previous boot.");
+      }
+
       DynamicJsonDocument doc(96);
       doc["timestamp"] = currentTimestamp;
-      doc["count"] = rebootCount;
-      
-      File file = SPIFFS.open(guardFile, "w");
-      if(serializeJson(doc, file) == 0) {
+      doc["count"] = safeModeActive ? 0 : rebootCount; // start clean once latched
+      doc["safe"] = safeModeActive;
+
+      File out = SPIFFS.open(REBOOT_GUARD_FILE, "w");
+      if (!out || serializeJson(doc, out) == 0) {
         Serial.println("[Reboot Guard] Failed to write updated log file.");
       } else {
         Serial.println("[Reboot Guard] Wrote updated log file for next boot.");
       }
-      file.close();
+      if (out) out.close();
     }
   }
   // --- END OF REBOOT GUARD LOGIC ---
@@ -4952,18 +5007,26 @@ void setup() {
   applyNewWeatherScreenDefaults();
   if (spiffsOk) loadSettings();
   
-  // If the guard was triggered, OVERWRITE the loaded settings with safe ones and SAVE them.
+  // Safe Mode dims the panel for THIS session only.
+  //
+  // It used to call saveSettings() here, which wrote autoBrightness=off and
+  // brightness=40 into /settings.json permanently. Once the guard had tripped
+  // even once, the user's real brightness configuration was gone for good -
+  // there was no restore path, and the clock stayed manually dim forever
+  // afterwards with no indication why. The dimming is an emergency measure to
+  // break a brownout loop, not a settings change the user asked for, so it is
+  // applied in RAM and never persisted. The latch in /reboot_guard.json is what
+  // carries Safe Mode across a reboot; /settings.json keeps the real values.
   if (safeModeActive) {
     autoBrightnessEnabled = false;
-    brightness = 40; // Approx 15% (40/255)
-    
-    Serial.println("*************************************************");
-    Serial.println("[Reboot Guard] EMERGENCY SETTINGS APPLIED:");
-    Serial.println("--> Auto Brightness turned OFF.");
-    Serial.printf("--> Manual Brightness set to %d (15%%).\n", brightness);
-    Serial.println("*************************************************");
+    brightness = SAFE_MODE_BRIGHTNESS; // ~15% (40/255)
 
-    if (spiffsOk) saveSettings(); // Save the new "safe" settings to the main settings file
+    Serial.println("*************************************************");
+    Serial.println("[Reboot Guard] SAFE MODE - this session only:");
+    Serial.println("--> Auto Brightness suspended.");
+    Serial.printf("--> Brightness held at %d (15%%).\n", brightness);
+    Serial.println("--> Saved settings left untouched.");
+    Serial.println("*************************************************");
   }
 
   // --- NOW, INITIALIZE THE POWER-HUNGRY DISPLAY ---
@@ -5623,6 +5686,7 @@ void loop() {
   button.read();  // Check button state
 
   serviceLinkKeepAlive();        // keep our MAC fresh in the AP/mesh forwarding tables
+  serviceSafeModeRelease();      // drop the Safe Mode latch once the clock has proven stable
   serviceWebSessionRecovery();   // recover an active page from a false-connected link
   serviceBrowserOtaTimeout();    // release an abandoned browser OTA session safely
   updateCrashBreadcrumb();      // cheap; survives a panic so the next boot can report it
@@ -6138,34 +6202,9 @@ void Screen1() { // Info Clock
   static int temperatureAnimationTextWidthCache = 0;
   static int humidityAnimationTextWidthCache = 0;
 
-  String timeStr = String(current_hoursmins);
   String hoursMins, seconds, ampm;
-  if (settings.twentyFourHourSwitch) {
-    if (settings.secondsSwitch) {
-      hoursMins = timeStr.substring(0, 5);
-      seconds = timeStr.substring(6);
-    } else {
-      hoursMins = timeStr.substring(0, 5);
-    }
-  } else {
-    if (settings.ampmSwitch) {
-      if (settings.secondsSwitch) {
-        hoursMins = timeStr.substring(0, 5);
-        seconds = timeStr.substring(6, 8);
-        ampm = timeStr.substring(9);
-      } else {
-        hoursMins = timeStr.substring(0, 5);
-        ampm = timeStr.substring(6);
-      }
-    } else {
-      if (settings.secondsSwitch) {
-        hoursMins = timeStr.substring(0, 5);
-        seconds = timeStr.substring(6);
-      } else {
-        hoursMins = timeStr.substring(0, 5);
-      }
-    }
-  }
+  splitTimeParts(timeinfo, settings.twentyFourHourSwitch, settings.ampmSwitch,
+                 settings.secondsSwitch, hoursMins, seconds, ampm);
 
   dma_canvas.setFont(&timeFont);
   int16_t x1, y1;
