@@ -10,7 +10,7 @@
 
 // Single source of truth for the version. Auto-incremented by +0.01 on every
 // successful build by scripts/merge_firmware.py; see CHANGELOG.md for history.
-float ver = 4.25;
+float ver = 4.26;
 
 
 /* #################### To add a new screen (example screen6) ####################
@@ -5777,7 +5777,17 @@ void loop() {
   static uint32_t loopIterations = 0;
   ++loopIterations;
 
+  // Slow-loop detector. loop=0/s in the [Health] line means a single iteration
+  // is taking about a second, and everything reactive - the config portal's DNS
+  // and HTTP, the seconds bar, the button - moves only as fast as this. These
+  // three probes say which call is responsible instead of leaving it to
+  // guesswork.
+  const uint32_t loopStartMs = millis();
+  uint32_t wmMs = 0, screenMs = 0, presentMs = 0;
+
+  const uint32_t wmStartMs = millis();
   myWM.process(); // Keep WiFiManager alive. This is critical for the portal.
+  wmMs = millis() - wmStartMs;
   button.read();  // Check button state
 
   serviceLinkKeepAlive();        // keep our MAC fresh in the AP/mesh forwarding tables
@@ -6073,7 +6083,9 @@ switch (currentState) {
     //     currentScreen = 1; // Default to screen 1 if trying to access screen 7 when not in no-creds state
     // }
     
-    choosescreen(); 
+    const uint32_t screenStartMs = millis();
+    choosescreen();
+    screenMs = millis() - screenStartMs;
 
     bool showRedDot = false;
     if (currentState == STATE_WIFI_DISCONNECTED) showRedDot = true;
@@ -6090,7 +6102,8 @@ switch (currentState) {
   debounceSaveSettings();
   handleSerialInput();
   
-  if(dma_display_is_valid() && dma_canvas_is_valid()) {    
+  const uint32_t presentStartMs = millis();
+  if(dma_display_is_valid() && dma_canvas_is_valid()) {
     const uint8_t* completedFrame = (const uint8_t*)dma_canvas.getBuffer();
     const bool frameChanged = memcmp(screenshotBuffer, completedFrame, sizeof(screenshotBuffer)) != 0;
     if (frameChanged) {
@@ -6107,7 +6120,21 @@ switch (currentState) {
       displayFrameRefreshRequired = false;
     }
   }
-  vTaskDelay(1); 
+  presentMs = millis() - presentStartMs;
+
+  // Report only genuinely slow iterations, so this stays silent in normal
+  // operation. "other" is everything not covered by the three probes.
+  const uint32_t totalMs = millis() - loopStartMs;
+  if (totalMs >= 150) {
+    const uint32_t accounted = wmMs + screenMs + presentMs;
+    Serial.printf("[SlowLoop] total=%lums wm=%lu screen=%lu present=%lu other=%lu state=%d\n",
+                  (unsigned long)totalMs, (unsigned long)wmMs, (unsigned long)screenMs,
+                  (unsigned long)presentMs,
+                  (unsigned long)(totalMs > accounted ? totalMs - accounted : 0),
+                  (int)currentState);
+  }
+
+  vTaskDelay(1);
 }
 
 
