@@ -10,7 +10,7 @@
 
 // Single source of truth for the version. Auto-incremented by +0.01 on every
 // successful build by scripts/merge_firmware.py; see CHANGELOG.md for history.
-float ver = 4.26;
+float ver = 4.27;
 
 
 /* #################### To add a new screen (example screen6) ####################
@@ -723,8 +723,26 @@ RTC_DS3231 rtc;
 // https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
 //String MY_TZ = "AEST-10AEDT,M10.1.0,M4.1.0/3"; 
 // String MY_TZ = String('AEST-10AEDT,M10.1.0,M4.1.0/3'); 
-time_t now;   
+time_t now;
 struct tm timeinfo;
+
+// Arduino's getLocalTime(tm*, ms) is not a "read the clock" call - it is a
+// RETRY LOOP that keeps polling until the year looks valid, and its default
+// timeout is 5000 ms. Every render path used that default, and the clock
+// screens call it twice, so with the system clock unset a single frame cost
+// TEN SECONDS. Measured on a clock whose DS3231 had lost its time and had no
+// WiFi to reach NTP:
+//
+//   [SlowLoop] total=10033ms wm=1 screen=10024 present=8 other=0 state=0
+//   [Health]   loop=0/s
+//
+// At under one iteration per second the config portal answered DNS and HTTP
+// roughly once every ten seconds, so a phone's captive-portal probe always
+// timed out - the portal looked broken when it was merely starved. Reading the
+// clock must never wait: if the time is not valid yet the caller falls back to
+// the RTC, or simply draws with what it has.
+static const uint32_t LOCAL_TIME_MAX_WAIT_MS = 5;
+
 #define MY_TZ "AEST-10AEDT,M10.1.0,M4.1.0/3"
 const char* ntpServer = "pool.ntp.org";
 
@@ -1396,7 +1414,7 @@ static void splitTimeParts(const struct tm& value, bool twentyFourHour, bool sho
 TimeDateComponents getTimeDateString() {
     TimeDateComponents components;
     
-    getLocalTime(&timeinfo);
+    getLocalTime(&timeinfo, LOCAL_TIME_MAX_WAIT_MS);
     updateCurrentHoursMins();
 
     splitTimeParts(timeinfo, twentyFourHourSwitch[currentScreen - 1],
@@ -4513,7 +4531,7 @@ void handleSpareSwitch3() {
 
 void handleFullYearAnimation() {
         struct tm timeinfo;
-        if (getLocalTime(&timeinfo)) {
+        if (getLocalTime(&timeinfo, LOCAL_TIME_MAX_WAIT_MS)) {
           int currentYear = timeinfo.tm_year + 1900;
           yearAnimationActive = true;
           animationStartTime = millis();
@@ -5190,7 +5208,7 @@ void setup() {
   setenv("TZ", selectedTimezone.c_str(), 1);
   tzset(); 
   syncRTCtoESP(); 
-  getLocalTime(&timeinfo);
+  getLocalTime(&timeinfo, LOCAL_TIME_MAX_WAIT_MS);
 
   // Button Setup
   pinMode(MenuButtonPin, INPUT_PULLUP);
@@ -5996,7 +6014,7 @@ switch (currentState) {
           currentState = STATE_RUNNING; 
           stateStartTime = millis();
           syncRTCtoESP(); 
-          getLocalTime(&timeinfo); 
+          getLocalTime(&timeinfo, LOCAL_TIME_MAX_WAIT_MS); 
           ntpSyncAttemptedThisConnection = false; 
       }
       break;
@@ -6280,9 +6298,9 @@ void Screen1() { // Info Clock
 
   dma_canvas.fillScreen(0);
   
-  getLocalTime(&timeinfo);  
+  getLocalTime(&timeinfo, LOCAL_TIME_MAX_WAIT_MS);  
   struct tm localTimeinfo;
-  if (!getLocalTime(&localTimeinfo)) {
+  if (!getLocalTime(&localTimeinfo, LOCAL_TIME_MAX_WAIT_MS)) {
       DateTime rtcTime = rtc.now();
       localTimeinfo.tm_year = rtcTime.year() - 1900;
       localTimeinfo.tm_mon = rtcTime.month() - 1;
@@ -6489,7 +6507,7 @@ void Screen2() { // Large Weather Clock
 
   // Get time from system (either NTP or RTC)
   struct tm localTimeinfo;
-  if (!getLocalTime(&localTimeinfo)) {
+  if (!getLocalTime(&localTimeinfo, LOCAL_TIME_MAX_WAIT_MS)) {
       DateTime rtcTime = rtc.now();
       localTimeinfo.tm_year = rtcTime.year() - 1900;
       localTimeinfo.tm_mon = rtcTime.month() - 1;
@@ -6808,7 +6826,7 @@ void Screen3() {  // Analogue & calendar Clock
 
   // Get time from system - this logic remains the same.
   struct tm localTimeinfo;
-  if (!getLocalTime(&localTimeinfo)) {
+  if (!getLocalTime(&localTimeinfo, LOCAL_TIME_MAX_WAIT_MS)) {
       DateTime rtcTime = rtc.now();
       localTimeinfo.tm_year = rtcTime.year() - 1900;
       localTimeinfo.tm_mon = rtcTime.month() - 1;
@@ -7140,7 +7158,7 @@ void Screen4() { // Day/night terminator map
     uint16_t month_color_for_text_shadow_val = dma_display->color565(settings.month_col.r, settings.month_col.g, settings.month_col.b);
 
     struct tm localTimeinfo;
-    if (!getLocalTime(&localTimeinfo)) {
+    if (!getLocalTime(&localTimeinfo, LOCAL_TIME_MAX_WAIT_MS)) {
         DateTime rtcTime = rtc.now();
         localTimeinfo.tm_year = rtcTime.year() - 1900;
         localTimeinfo.tm_mon = rtcTime.month() - 1;
@@ -7545,7 +7563,7 @@ void Screen5() {    // Moon Phase
 
   // Get time from system (either NTP or RTC)
   struct tm localTimeinfo;
-  if (!getLocalTime(&localTimeinfo)) {
+  if (!getLocalTime(&localTimeinfo, LOCAL_TIME_MAX_WAIT_MS)) {
       DateTime rtcTime = rtc.now();
       localTimeinfo.tm_year = rtcTime.year() - 1900;
       localTimeinfo.tm_mon = rtcTime.month() - 1;
@@ -7816,7 +7834,7 @@ void Screen6() { // Gradient Clock
   // --- 1. SETUP AND DATA PREPARATION ---
   int screenIndex = currentScreen - 1;
   const auto& settings = allScreenSettings[screenIndex];
-  getLocalTime(&timeinfo);
+  getLocalTime(&timeinfo, LOCAL_TIME_MAX_WAIT_MS);
 
   uint16_t time_color = dma_display->color565(settings.time_col.r, settings.time_col.g, settings.time_col.b);
   uint16_t ampm_color = dma_display->color565(settings.ampm_col.r, settings.ampm_col.g, settings.ampm_col.b);
@@ -7950,7 +7968,7 @@ void Screen7() { // Digital watch
   // --- 1. SETUP ---
   int screenIndex = currentScreen - 1;
   const auto& settings = allScreenSettings[screenIndex];
-  getLocalTime(&timeinfo);
+  getLocalTime(&timeinfo, LOCAL_TIME_MAX_WAIT_MS);
 
   // --- 2. MAP SETTINGS TO VISUALS ---
   uint16_t digit_core_color = dma_display->color565(settings.time_col.r, settings.time_col.g, settings.time_col.b);
@@ -8100,7 +8118,7 @@ void drawHourMarker(int hour, const String& mode, uint16_t num_color, uint16_t s
 void Screen8() { // Fullscreen Analog Clock
     int screenIndex = currentScreen - 1;
     const auto& settings = allScreenSettings[screenIndex];
-    getLocalTime(&timeinfo);
+    getLocalTime(&timeinfo, LOCAL_TIME_MAX_WAIT_MS);
 
     uint16_t hour_color = dma_display->color565(settings.time_col.r, settings.time_col.g, settings.time_col.b);
     uint16_t minute_color = dma_display->color565(settings.ampm_col.r, settings.ampm_col.g, settings.ampm_col.b);
@@ -8214,7 +8232,7 @@ void Screen9() { // Nixie Tube Clock
   // --- 1. SETUP ---
   int screenIndex = currentScreen - 1;
   const auto& settings = allScreenSettings[screenIndex];
-  getLocalTime(&timeinfo);
+  getLocalTime(&timeinfo, LOCAL_TIME_MAX_WAIT_MS);
 
   // --- 2. PREPARE ALL POSSIBLE TIME & DATE STRINGS ---
   // We prepare everything upfront, then decide what to draw.
@@ -8421,7 +8439,7 @@ static void drawRainlineHourLabel(int pointX, uint8_t hour24,
 
 void Screen10() { // Rainline
   const ScreenSettings& settings = allScreenSettings[currentScreen - 1];
-  getLocalTime(&timeinfo);
+  getLocalTime(&timeinfo, LOCAL_TIME_MAX_WAIT_MS);
   dma_canvas.fillScreen(cc_blk);
   const uint16_t timeColor = dma_display->color565(settings.time_col.r, settings.time_col.g, settings.time_col.b);
   const uint16_t tempColor = dma_display->color565(settings.temp_col.r, settings.temp_col.g, settings.temp_col.b);
@@ -8520,7 +8538,7 @@ static void drawSunpathSolarTime(uint16_t minuteOfDay, bool rightAligned,
 
 void Screen11() { // Sunpath
   const ScreenSettings& settings = allScreenSettings[currentScreen - 1];
-  getLocalTime(&timeinfo);
+  getLocalTime(&timeinfo, LOCAL_TIME_MAX_WAIT_MS);
   dma_canvas.fillScreen(cc_blk);
   const uint16_t timeColor = dma_display->color565(settings.time_col.r, settings.time_col.g, settings.time_col.b);
   const uint16_t dayColor = dma_display->color565(settings.day_col.r, settings.day_col.g, settings.day_col.b);
@@ -8588,7 +8606,7 @@ void Screen11() { // Sunpath
 
 void Screen12() { // Wind Dial
   const ScreenSettings& settings = allScreenSettings[currentScreen - 1];
-  getLocalTime(&timeinfo);
+  getLocalTime(&timeinfo, LOCAL_TIME_MAX_WAIT_MS);
   dma_canvas.fillScreen(cc_blk);
   const uint16_t timeColor = dma_display->color565(settings.time_col.r, settings.time_col.g, settings.time_col.b);
   const uint16_t compassColor = dma_display->color565(settings.dateBG_col.r, settings.dateBG_col.g, settings.dateBG_col.b);
@@ -8954,7 +8972,7 @@ void Screen13() { // Infographic
   lastRenderAt = renderNow;
 
   const ScreenSettings& settings = allScreenSettings[currentScreen - 1];
-  getLocalTime(&timeinfo);
+  getLocalTime(&timeinfo, LOCAL_TIME_MAX_WAIT_MS);
   dma_canvas.fillScreen(0);
 
   const uint16_t timeColor = dma_display->color565(settings.time_col.r, settings.time_col.g, settings.time_col.b);
@@ -9399,7 +9417,7 @@ void handleSerialInput() {
         String dayStr = input.substring(1);
         int newDay = dayStr.toInt();
         struct tm timeinfo;
-        if (!getLocalTime(&timeinfo)) {
+        if (!getLocalTime(&timeinfo, LOCAL_TIME_MAX_WAIT_MS)) {
           Serial.println("Failed to get current time.");
           return;
         }
@@ -9432,7 +9450,7 @@ void handleSerialInput() {
           moonPercentage = roundf(illumFraction * 100.0f * 10.0f) / 10.0f;
 
           struct tm updatedTimeinfo;
-          if (getLocalTime(&updatedTimeinfo)) {
+          if (getLocalTime(&updatedTimeinfo, LOCAL_TIME_MAX_WAIT_MS)) {
             char dateStr[20];
             strftime(dateStr, sizeof(dateStr), "%Y-%m-%d", &updatedTimeinfo);
             Serial.printf("Day set to %d (Year: %d, Date: %s), Moon phase: %.3f, Moon percentage: %.1f%%, NTP paused for 10 seconds.\n", 
@@ -9468,7 +9486,7 @@ void handleSerialInput() {
       int targetDay = 1 + (elapsedTime / DISPLAY_TIME_PER_DAY);
       if (targetDay != currentAnimationDay) {
         struct tm timeinfo;
-        if (getLocalTime(&timeinfo)) {
+        if (getLocalTime(&timeinfo, LOCAL_TIME_MAX_WAIT_MS)) {
           int currentYear = timeinfo.tm_year + 1900;
           int month, day;
           dayOfYearToDate(targetDay, currentYear, month, day);
@@ -9707,7 +9725,7 @@ void choosescreen() {
   //    and Schedules are actually enabled.
   if (currentScreen < 90 && schedulesEnabled) {
     screenToShow = defaultScreen; // Start with default
-    getLocalTime(&timeinfo);
+    getLocalTime(&timeinfo, LOCAL_TIME_MAX_WAIT_MS);
 
     int now_in_minutes = timeinfo.tm_hour * 60 + timeinfo.tm_min;
 
