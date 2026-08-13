@@ -10,7 +10,7 @@
 
 // Single source of truth for the version. Auto-incremented by +0.01 on every
 // successful build by scripts/merge_firmware.py; see CHANGELOG.md for history.
-float ver = 4.24;
+float ver = 4.25;
 
 
 /* #################### To add a new screen (example screen6) ####################
@@ -5774,6 +5774,9 @@ void WIFI_SETUP() {
 
 
 void loop() {
+  static uint32_t loopIterations = 0;
+  ++loopIterations;
+
   myWM.process(); // Keep WiFiManager alive. This is critical for the portal.
   button.read();  // Check button state
 
@@ -5788,14 +5791,21 @@ void loop() {
   // the fact, quiet enough to leave enabled. Live values are also at GET /debug.
   static uint32_t lastDebugPrintTime = 0;
   if (millis() - lastDebugPrintTime > 60000) {
-    Serial.printf("[Health] t=%lus heap=%u minHeap=%u wifi=%d state=%d rssi=%ld brt=%u target=%u oe=%u rgb=%u ldr=%u/%u refresh=%dHz\n",
-                  millis() / 1000, ESP.getFreeHeap(), ESP.getMinFreeHeap(),
+    // loop/s is the one number that separates "the firmware is busy" from
+    // "the network is at fault". Everything reactive here - myWM.process(),
+    // server.handleClient(), the seconds bar - moves at exactly this rate.
+    const uint32_t elapsedMs = millis() - lastDebugPrintTime;
+    const uint32_t loopsPerSecond = elapsedMs ? (loopIterations * 1000UL) / elapsedMs : 0;
+    Serial.printf("[Health] t=%lus loop=%lu/s heap=%u minHeap=%u wifi=%d state=%d rssi=%ld brt=%u target=%u oe=%u rgb=%u ldr=%u/%u refresh=%dHz\n",
+                  millis() / 1000, (unsigned long)loopsPerSecond,
+                  ESP.getFreeHeap(), ESP.getMinFreeHeap(),
                   (int)WiFi.status(), (int)currentState,
                   WiFi.status() == WL_CONNECTED ? (long)WiFi.RSSI() : 0,
                   currentBrightness, targetBrightness, appliedOeBrightness,
                   appliedColorBrightness, ldrRawValue,
                   (uint16_t)lroundf(ldrFilteredValue),
                   dma_display ? dma_display->calculated_refresh_rate : 0);
+    loopIterations = 0;
     lastDebugPrintTime = millis();
   }
 
@@ -9121,15 +9131,41 @@ void Screen91(){ // Setup Wifi (when no credentials saved or connection failed)
   dma_canvas.setTextColor(cc_bylw, cc_blk);  dma_canvas.setCursor(10, 17); dma_canvas.setFont(&Font_5x7_practical8pt7b);  dma_canvas.print("WIFI");
   dma_canvas.setTextColor(cc_bgrn, cc_blk);  dma_canvas.setCursor(0, 30); dma_canvas.setFont(&TomThumb); dma_canvas.print(AutoChipID);
         
-  // Create QR code object
-  QRCode qrcode;
+  // The QR encodes AutoChipID, which is fixed for the life of the board, so it
+  // is built once and kept.
+  //
+  // This used to run on EVERY loop() iteration: a String concatenation plus a
+  // full qrcode_initText(), which does Reed-Solomon encoding and then scores
+  // all eight mask patterns over the 29x29 grid. That is by far the most
+  // expensive thing in the loop, and this screen is the one shown while the
+  // config portal is the only way to set the clock up - so the cost landed
+  // squarely on myWM.process(), delaying DNS and HTTP replies. The portal was
+  // slow to load and a phone's captive-portal probe could time out before the
+  // clock answered, which reads as "no captive portal" even though the portal
+  // is running.
+  //
+  // qrcode_getBufferSize(3) is bb_getGridSizeBytes(29) = ((29*29)+7)/8 = 106.
+  // Spelled out because the library's helper is a runtime function and this
+  // buffer has to be static.
+  static const uint8_t QR_VERSION = 3;
+  static const int QR_MODULES = QR_VERSION * 4 + 17;                    // 29
+  static const int QR_BUFFER_BYTES = ((QR_MODULES * QR_MODULES) + 7) / 8; // 106
 
-  // Generate WiFi connection string
-  String wifiString = "WIFI:S:" + String(AutoChipID) + ";T:nopass;P:;;";
-  uint8_t qrcodeData[qrcode_getBufferSize(3)]; // Version 3
-
-  // Generate QR code (version 3, 29x29 pixels)
-  qrcode_initText(&qrcode, qrcodeData, 3, ECC_MEDIUM, wifiString.c_str());
+  static uint8_t qrcodeData[QR_BUFFER_BYTES];
+  static QRCode qrcode;
+  static bool qrcodeReady = false;
+  if (!qrcodeReady) {
+    if (qrcode_getBufferSize(QR_VERSION) > QR_BUFFER_BYTES) {
+      // A library update changed the geometry; skip rather than overflow.
+      Serial.println("[Screen91] QR buffer too small for this qrcoderm build.");
+      return;
+    }
+    char wifiString[64];
+    snprintf(wifiString, sizeof(wifiString), "WIFI:S:%s;T:nopass;P:;;", AutoChipID);
+    qrcode_initText(&qrcode, qrcodeData, QR_VERSION, ECC_MEDIUM, wifiString);
+    qrcodeReady = true;
+    Serial.printf("[Screen91] QR built once for %s\n", AutoChipID);
+  }
 
   // Calculate offsets: flush right and centered vertically
   int offsetX = 64 - qrcode.size ;  // Flush with right edge (35 pixels offset) 
