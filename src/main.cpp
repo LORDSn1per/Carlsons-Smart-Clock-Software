@@ -10,7 +10,7 @@
 
 // Single source of truth for the version. Auto-incremented by +0.01 on every
 // successful build by scripts/merge_firmware.py; see CHANGELOG.md for history.
-float ver = 4.13;
+float ver = 4.17;
 
 
 /* #################### To add a new screen (example screen6) ####################
@@ -1056,8 +1056,25 @@ static volatile uint32_t lastNetSuccessMs = 0; // updated by weather / NTP / web
 static const uint32_t NET_DEAD_REBOOT_MS = 30UL * 60UL * 1000UL; // 30 minutes
 // Called from the places that prove the network is genuinely working.
 static inline void noteNetworkSuccess() { lastNetSuccessMs = millis(); }
+
+// Web session recovery, restored from 3.91. The 3.92-4.00 rework reduced
+// noteWebRequest() to only feeding the 30-minute reboot watchdog above, which
+// deleted the fast path: a browser that had been talking to the clock and then
+// stopped getting answers waited half an hour for a reboot instead of 45
+// seconds for a WiFi recycle. Phillip measured 3.91 as the last build whose web
+// UI stayed responsive, and this is one of the two fixes that regression undid.
+//
+// "Armed" matters: the watchdog only fires when a browser was *actively* using
+// the clock and then went silent. An idle clock nobody is talking to must not
+// recycle its WiFi on a timer.
+static volatile uint32_t lastWebRequestMs = 0;
+static volatile bool webRecoveryArmed = false;
+static const uint32_t WEB_SESSION_DEAD_MS = 45UL * 1000UL;
+
 static inline void noteWebRequest() {
   noteNetworkSuccess();
+  lastWebRequestMs = millis();
+  webRecoveryArmed = true;
 }
 
 static void releaseBrowserOtaSession(bool abortUpdate) {
@@ -1068,6 +1085,24 @@ static void releaseBrowserOtaSession(bool abortUpdate) {
   }
   otaBrowserActive = false;
   otaBrowserReady = false;
+}
+
+// Restored from 3.91 - see noteWebRequest() above for why it was brought back.
+// An active browser that stops reaching the clock means the inbound path is
+// wedged even though WiFi.status() still says connected, which is exactly the
+// failure mode documented in HANDOFF.md. Recycling the station association
+// recovers it in seconds; waiting for the 30-minute reboot watchdog does not.
+static void serviceWebSessionRecovery() {
+  if (!webRecoveryArmed || currentState != STATE_RUNNING ||
+      WiFi.status() != WL_CONNECTED) return;
+  if (millis() - lastWebRequestMs < WEB_SESSION_DEAD_MS) return;
+
+  webRecoveryArmed = false;
+  networkServicesStarted = false; // pauses webServerTask before socket rebuild
+  Serial.println("[WebWatch] active page stopped reaching the clock - recycling WiFi.");
+  WiFi.disconnect(false, false);
+  currentState = STATE_WIFI_DISCONNECTED;
+  stateStartTime = millis();
 }
 
 static void serviceBrowserOtaTimeout() {
@@ -5552,6 +5587,7 @@ void loop() {
   button.read();  // Check button state
 
   serviceLinkKeepAlive();        // keep our MAC fresh in the AP/mesh forwarding tables
+  serviceWebSessionRecovery();   // recover an active page from a false-connected link
   serviceBrowserOtaTimeout();    // release an abandoned browser OTA session safely
   updateCrashBreadcrumb();      // cheap; survives a panic so the next boot can report it
   serviceConnectivityWatchdog(); // last-resort: reboot if the network stays dead
@@ -8691,14 +8727,15 @@ void Screen13() { // Infographic
   static uint32_t lastChange = 0, transitionStarted = 0;
   static bool transitioning = false;
 
-  // Static content needs only five refreshes per second. Switch to 30 FPS just
-  // before a corner-value slide or while a module transition is active. This
-  // preserves smooth animation without continuously competing with WiFi and
-  // the web task for CPU and heap on an otherwise unchanged frame.
+  // Render at a steady 30 FPS. An earlier version dropped to 5 FPS whenever no
+  // module transition or corner-value slide was due, on the theory that a
+  // static frame did not need redrawing - but the seconds bar is always
+  // moving, so it visibly animated only while some other animation happened to
+  // be running. The cap stays at 33 ms so the frame rate is bounded rather than
+  // running as fast as loop() iterates.
   static uint32_t lastRenderAt = 0;
   const uint32_t renderNow = millis();
-  const bool cornerValueAnimationApproaching = (renderNow % 10000U) >= 9600U;
-  const uint32_t frameInterval = (transitioning || cornerValueAnimationApproaching) ? 33U : 200U;
+  const uint32_t frameInterval = 33U;
   if (lastRenderAt && renderNow - lastRenderAt < frameInterval) return;
   lastRenderAt = renderNow;
 
