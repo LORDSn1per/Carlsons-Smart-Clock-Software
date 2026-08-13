@@ -10,7 +10,7 @@
 
 // Single source of truth for the version. Auto-incremented by +0.01 on every
 // successful build by scripts/merge_firmware.py; see CHANGELOG.md for history.
-float ver = 4.22;
+float ver = 4.23;
 
 
 /* #################### To add a new screen (example screen6) ####################
@@ -69,6 +69,7 @@ float ver = 4.22;
 #include <ArduinoJson.h>
 #include <qrcoderm.h> 
 #include <SPIFFS.h>
+#include <Preferences.h> // NVS flag recording that SPIFFS has been created once
 #include <math.h> // Required for sin, cos, asin, atan2, sqrt, fmaxf, fminf
 #include <algorithm> // Required for std::min, std::max
 #include "WebPage_gz.h" // generated from web/index.html by scripts/build_web.py
@@ -4960,8 +4961,48 @@ void setup() {
     spiffsOk = SPIFFS.begin(false);
     Serial.printf("[SPIFFS] Mount attempt %d/4: %s\n", attempt, spiffsOk ? "OK" : "FAILED");
   }
+  // A mount failure has two very different causes and they need opposite
+  // responses. On a brand new or fully erased chip the partition has simply
+  // never held a filesystem, and formatting it destroys nothing. On a chip that
+  // has been running, a failure means corruption, and formatting would silently
+  // throw the user's settings away - the thing SPIFFS.begin(false) exists to
+  // prevent.
+  //
+  // NVS tells them apart: it survives a firmware update but not erase_flash, so
+  // if the "created" flag is missing the chip really is fresh. Without this the
+  // clock came up after an erase unable to mount, unable to save anything, and
+  // stayed that way for every future boot until someone found Format SSD.
+  Preferences bootPrefs;
+  const char* kPrefsNamespace = "clockfs";
+  const char* kCreatedKey = "created";
+
   if (!spiffsOk) {
-    Serial.println("[SPIFFS] Filesystem left untouched. Settings are unavailable this boot; reboot or use explicit Format SSD only if recovery is impossible.");
+    bool everCreated = false;
+    if (bootPrefs.begin(kPrefsNamespace, true)) {
+      everCreated = bootPrefs.getBool(kCreatedKey, false);
+      bootPrefs.end();
+    }
+
+    if (everCreated) {
+      Serial.println("[SPIFFS] Filesystem existed before but will not mount - leaving it untouched. "
+                     "Reboot, or use Format SSD only if recovery is impossible.");
+    } else {
+      Serial.println("[SPIFFS] No filesystem, and none was ever created on this chip. "
+                     "Formatting once so a new or erased device can store settings.");
+      if (SPIFFS.format() && SPIFFS.begin(false)) {
+        spiffsOk = true;
+        Serial.println("[SPIFFS] Formatted and mounted.");
+      } else {
+        Serial.println("[SPIFFS] Format failed; settings are unavailable this boot.");
+      }
+    }
+  }
+
+  // Record the first success, so a later mount failure is treated as corruption
+  // to be preserved rather than a fresh chip to be formatted.
+  if (spiffsOk && bootPrefs.begin(kPrefsNamespace, false)) {
+    if (!bootPrefs.getBool(kCreatedKey, false)) bootPrefs.putBool(kCreatedKey, true);
+    bootPrefs.end();
   }
 
   // 2. Reboot guard now gates only on RTC presence + the SPIFFS mount state established above.
