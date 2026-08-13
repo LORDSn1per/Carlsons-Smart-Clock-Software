@@ -10,7 +10,7 @@
 
 // Single source of truth for the version. Auto-incremented by +0.01 on every
 // successful build by scripts/merge_firmware.py; see CHANGELOG.md for history.
-float ver = 4.27;
+float ver = 4.28;
 
 
 /* #################### To add a new screen (example screen6) ####################
@@ -742,6 +742,16 @@ struct tm timeinfo;
 // clock must never wait: if the time is not valid yet the caller falls back to
 // the RTC, or simply draws with what it has.
 static const uint32_t LOCAL_TIME_MAX_WAIT_MS = 5;
+
+// Seconds since boot, for the web UI's uptime readout.
+//
+// Deliberately not millis(): that wraps at 2^32 ms, about 49.7 days, and this
+// clock is expected to sit on a shelf for months at a time - the reading would
+// silently fall back to zero and then climb again. esp_timer_get_time() is a
+// 64-bit microsecond counter that will not wrap in any practical lifetime.
+static uint32_t uptimeSeconds() {
+  return (uint32_t)(esp_timer_get_time() / 1000000LL);
+}
 
 #define MY_TZ "AEST-10AEDT,M10.1.0,M4.1.0/3"
 const char* ntpServer = "pool.ntp.org";
@@ -2444,6 +2454,7 @@ void handleStatus() {
   doc["max_temp"] = todayMaxTemp;
   doc["weather_icon"] = weatherIcon;
   doc["rssi"] = (WiFi.status() == WL_CONNECTED) ? WiFi.RSSI() : 0;
+  doc["uptime_s"] = uptimeSeconds();
   doc["weather_stage"] = (uint8_t)weatherFetchStage;
   doc["weather_error"] = (uint8_t)weatherErrorDetail;
   doc["weather_http_code"] = weatherLastHttpStatus;
@@ -4742,6 +4753,7 @@ void handleScreenshot() {
     server.sendHeader("X-Frame-Revision", String(revision));
     server.sendHeader("X-Current-Brightness", String(brightnessPercent));
     server.sendHeader("X-WiFi-RSSI", String(rssi));
+    server.sendHeader("X-Uptime", String(uptimeSeconds()));
     server.send(304);
     return;
   }
@@ -4751,6 +4763,7 @@ void handleScreenshot() {
   server.sendHeader("X-Frame-Revision", String(revision));
   server.sendHeader("X-Current-Brightness", String(brightnessPercent));
   server.sendHeader("X-WiFi-RSSI", String(rssi));
+  server.sendHeader("X-Uptime", String(uptimeSeconds()));
 
   server.send_P(200, "application/octet-stream", (const char*)screenshotBuffer, sizeof(screenshotBuffer)); // Send the SAFE screenshot buffer, not the live dma_canvas buffer.
 }
@@ -5224,7 +5237,7 @@ void setup() {
   server.on("/status", handleStatus);
   server.on("/debug", []() { // Health snapshot (heap/uptime/WiFi) - handy when the UI misbehaves
     DynamicJsonDocument d(512);
-    d["uptime_s"] = millis() / 1000;
+    d["uptime_s"] = uptimeSeconds(); // not millis(), which wraps at 49.7 days
     d["free_heap"] = ESP.getFreeHeap();
     d["min_free_heap"] = ESP.getMinFreeHeap();
     d["max_alloc"] = ESP.getMaxAllocHeap();

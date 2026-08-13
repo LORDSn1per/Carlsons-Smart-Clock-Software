@@ -159,6 +159,13 @@
             background: rgba(255,255,255,.025); color: var(--muted); font-size: 11px; line-height: 1.5;
         }
         .device-state b { display: block; color: var(--text); font-size: 12px; margin-bottom: 2px; }
+        /* Scoped to direct children so the status dot inside <b> stays inline. */
+        .device-state > span { display: block; }
+        .device-uptime {
+            margin-top: 4px; padding-top: 6px; border-top: 1px solid var(--line);
+            color: var(--muted); font-variant-numeric: tabular-nums; /* digits do not jitter as it ticks */
+        }
+        .device-uptime em { font-style: normal; color: #6e7686; margin-right: 5px; }
         .status-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 7px; background: var(--accent); box-shadow: 0 0 12px var(--accent); }
 
         .page-layout {
@@ -466,7 +473,7 @@
             <button type="button" class="side-link" onclick="document.getElementById('weatherCard').scrollIntoView()"><i>◌</i><span>Weather</span></button>
             <button type="button" class="side-link" onclick="document.getElementById('systemCard').scrollIntoView()"><i>⚙</i><span>System</span></button>
         </nav>
-        <div class="device-state"><b><span class="status-dot" id="sideStatusDot"></span>Smart Clock</b><span id="sideWifiText">Checking Wi-Fi…</span></div>
+        <div class="device-state"><b><span class="status-dot" id="sideStatusDot"></span>Smart Clock</b><span id="sideWifiText">Checking Wi-Fi…</span><span class="device-uptime" id="sideUptimeText"><em data-translate-key="uptime">Up</em> —</span></div>
     </aside>
     <div class="page-layout">
     <div class="header-bar">
@@ -839,16 +846,16 @@
 <script>
     const translations = {
         en: {
-            liveRefresh:"Live Refresh", liveDisplay:"Live display", wifiSignal:"Wi-Fi signal", wifiExcellent:"Excellent", wifiGood:"Good", wifiFair:"Fair", wifiWeak:"Weak", wifiOffline:"Offline", uploadFirmware:"Upload Firmware", otaHint:"Pick any SmartClock_vX.XX.bin from the BIN folder (or firmware.bin). Uploads in retry-safe 16KB chunks over WiFi. Settings are kept; the clock reboots when done.", otaUpload:"Upload", weatherLive:"Live weather activity", weatherWaiting:"Waiting for weather", weatherConnection:"Connection", weatherDownloaded:"Downloaded", weatherAttempt:"API attempts", weatherLastUpdate:"Last update", refreshWeather:"Refresh weather now", weatherNever:"Never", weatherJustNow:"Just now", weatherIdle:"No weather request has run yet.", weatherQueued:"Weather update queued", weatherValidating:"Checking provider, API key and location", weatherConnecting:"Connecting to weather provider", weatherDownloading:"Connected — downloading weather data", weatherParsing:"Checking downloaded weather data", weatherUpdated:"Weather updated successfully", weatherError:"Weather update failed", weatherDisabled:"Weather is disabled",
+            liveRefresh:"Live Refresh", liveDisplay:"Live display", wifiSignal:"Wi-Fi signal", uptime:"Up", wifiExcellent:"Excellent", wifiGood:"Good", wifiFair:"Fair", wifiWeak:"Weak", wifiOffline:"Offline", uploadFirmware:"Upload Firmware", otaHint:"Pick any SmartClock_vX.XX.bin from the BIN folder (or firmware.bin). Uploads in retry-safe 16KB chunks over WiFi. Settings are kept; the clock reboots when done.", otaUpload:"Upload", weatherLive:"Live weather activity", weatherWaiting:"Waiting for weather", weatherConnection:"Connection", weatherDownloaded:"Downloaded", weatherAttempt:"API attempts", weatherLastUpdate:"Last update", refreshWeather:"Refresh weather now", weatherNever:"Never", weatherJustNow:"Just now", weatherIdle:"No weather request has run yet.", weatherQueued:"Weather update queued", weatherValidating:"Checking provider, API key and location", weatherConnecting:"Connecting to weather provider", weatherDownloading:"Connected — downloading weather data", weatherParsing:"Checking downloaded weather data", weatherUpdated:"Weather updated successfully", weatherError:"Weather update failed", weatherDisabled:"Weather is disabled",
             schedules: "Schedules", scheduleSettings: "Schedule Settings", defaultScreen: "Default Screen", addSchedule: "Add", indoorOffset: "Indoor Temp Offset", language: "Language", mainTitle: "Carlson's Smart Clock", clockSettings: "Clock Settings", screenSelection: "Screen Selection", panelType: "Panel Type (Reboot Req.)", screen1: "Screen 1 - Classic Digital", screen2: "Screen 2 - Alt. Digital", screen3: "Screen 3 - Analog", screen4: "Screen 4 - World Map", screen5: "Screen 5 - Moon Phase", screen6: "Screen 6 - Gradient Clock", screen7: "Screen 7 - Digital Watch", screen8: "Screen 8 - Color Analog", screen9: "Screen 9 - Nixie Tube", screen10: "Screen 10 - Rainline", screen11: "Screen 11 - Sunpath", screen12: "Screen 12 - Wind Dial", weatherGlyph: "Weather Glyph", weatherIcons: "Weather Icons", rainBars: "Rain Bars", chartLine: "Chart Line", dateHeader: "Date Header", sunArc: "Sun Arc", compass: "Compass", windArrow: "Wind Arrow", gusts: "Gusts", fullYearAnimation: "Full Year Animation", "24hour": "24 Hour", icons: "Icons", minMaxTemps: "Min/Max Temps", ampm: "AM/PM", seconds: "Seconds", time: "Time", day: "Day", date: "Date", month: "Month", dateBg: "Date Background", divider: "Divider", temperature: "Temperature", humidity: "Humidity", clockFace: "Clock Face", option: "Option", colour: "Colour", image: "Image", clockOptions: "Clock Options", displayMode: "Display Mode", "4numbers": "4 Numbers", allNumbers: "All Numbers", "4ticks": "4 Ticks", allTicks: "All Ticks", handFuzz: "Hand Fuzziness", handLength: "Hand Length", hourHand: "Hour Hand", minuteHand: "Minute Hand", secondHand: "Second Hand", topCalendar: "Top Calendar", bottomCalendar: "Bottom Calendar", timeShadow: "Time Shadow", nightLights: "Night Lights", nightShadow: "Night Shadow", "3dEffects": "3D Effects", speedDir: "Speed & Direction", numStars: "Number of Stars", sun: "Sun", land: "Land", water: "Water", ice: "Ice", moonShadow: "Moon Shadow", moonPercent: "Moon Percentage", gradSpeed: "Gradient Speed", boxSize: "Box Size", boxFeather: "Box Feather", glowIntensity: "Glow Intensity", glow: "Glow", bgColor: "Background Colour", showMarkers: "Show Markers", cycleSpeed: "Cycle Speed", showDate: "Show Date", brightnessSettings: "Brightness Settings", brightness: "Brightness", autoBrightness: "Auto Brightness", darkRoomBrightness: "Dark Room Brightness", brightRoomBrightness: "Bright Room Brightness", currentBrightness: "Current Brightness:", setDarkRoom: "Set Dark Room", setBrightRoom: "Set Bright Room", weatherSettings: "Weather Settings", timezone: "Timezone Selection", weatherService: "Weather Service", pirateApi: "Pirate Weather API", owmApi: "OpenWeatherMap API", weatherapiApi: "WeatherAPI.com API", getKey: "Get Key", units: "Units", celsius: "Celsius", fahrenheit: "Fahrenheit", tempType: "Temperature", actualTemp: "Actual Temperature", feelsLike: "Feels Like", city: "City", search: "Search", latitude: "Latitude", longitude: "Longitude", systemSettings: "System Settings", reboot: "Reboot", clearWifi: "Clear Wifi", firmwareUpdate: "Firmware Update", formatSsd: "Format SSD"
         },
         de: {
-            liveRefresh:"Aktualisierung", liveDisplay:"Live-Anzeige", wifiSignal:"WLAN-Signal", wifiExcellent:"Ausgezeichnet", wifiGood:"Gut", wifiFair:"Mittel", wifiWeak:"Schwach", wifiOffline:"Offline", uploadFirmware:"Firmware hochladen", otaHint:"Beliebige SmartClock_vX.XX.bin aus dem BIN-Ordner wählen (oder firmware.bin). Upload in wiederholbaren 16KB-Blöcken über WLAN. Einstellungen bleiben erhalten; die Uhr startet danach neu.", otaUpload:"Hochladen", weatherLive:"Live-Wetteraktivität", weatherWaiting:"Warten auf Wetter", weatherConnection:"Verbindung", weatherDownloaded:"Heruntergeladen", weatherAttempt:"API-Versuche", weatherLastUpdate:"Letzte Aktualisierung", refreshWeather:"Wetter jetzt aktualisieren", weatherNever:"Nie", weatherJustNow:"Gerade eben", weatherIdle:"Noch keine Wetterabfrage.", weatherQueued:"Wetteraktualisierung eingeplant", weatherValidating:"Anbieter, API-Schlüssel und Ort werden geprüft", weatherConnecting:"Verbindung zum Wetteranbieter", weatherDownloading:"Verbunden — Wetterdaten werden geladen", weatherParsing:"Wetterdaten werden geprüft", weatherUpdated:"Wetter erfolgreich aktualisiert", weatherError:"Wetteraktualisierung fehlgeschlagen", weatherDisabled:"Wetter ist deaktiviert",
+            liveRefresh:"Aktualisierung", liveDisplay:"Live-Anzeige", wifiSignal:"WLAN-Signal", uptime:"Läuft", wifiExcellent:"Ausgezeichnet", wifiGood:"Gut", wifiFair:"Mittel", wifiWeak:"Schwach", wifiOffline:"Offline", uploadFirmware:"Firmware hochladen", otaHint:"Beliebige SmartClock_vX.XX.bin aus dem BIN-Ordner wählen (oder firmware.bin). Upload in wiederholbaren 16KB-Blöcken über WLAN. Einstellungen bleiben erhalten; die Uhr startet danach neu.", otaUpload:"Hochladen", weatherLive:"Live-Wetteraktivität", weatherWaiting:"Warten auf Wetter", weatherConnection:"Verbindung", weatherDownloaded:"Heruntergeladen", weatherAttempt:"API-Versuche", weatherLastUpdate:"Letzte Aktualisierung", refreshWeather:"Wetter jetzt aktualisieren", weatherNever:"Nie", weatherJustNow:"Gerade eben", weatherIdle:"Noch keine Wetterabfrage.", weatherQueued:"Wetteraktualisierung eingeplant", weatherValidating:"Anbieter, API-Schlüssel und Ort werden geprüft", weatherConnecting:"Verbindung zum Wetteranbieter", weatherDownloading:"Verbunden — Wetterdaten werden geladen", weatherParsing:"Wetterdaten werden geprüft", weatherUpdated:"Wetter erfolgreich aktualisiert", weatherError:"Wetteraktualisierung fehlgeschlagen", weatherDisabled:"Wetter ist deaktiviert",
             screen10:"Bildschirm 10 - Regenlinie", screen11:"Bildschirm 11 - Sonnenbahn", screen12:"Bildschirm 12 - Windrose", weatherGlyph:"Wettersymbol", weatherIcons:"Wettersymbole", rainBars:"Regenbalken", chartLine:"Diagrammlinie", dateHeader:"Datumskopf", sunArc:"Sonnenbogen", compass:"Kompass", windArrow:"Windpfeil", gusts:"Böen",
             schedules: "Zeitpläne", scheduleSettings: "Zeitplan-Einstellungen", defaultScreen: "Standardbildschirm", addSchedule: "Hinzufügen", indoorOffset: "Innen-Temp Offset", language: "Sprache", mainTitle: "Carlson's Smart Clock", clockSettings: "Uhreinstellungen", screenSelection: "Bildschirmauswahl", panelType: "Panel-Typ (Neustart Erf.)", screen1: "Bildschirm 1 - Klassisch Digital", screen2: "Bildschirm 2 - Alt. Digital", screen3: "Bildschirm 3 - Analog", screen4: "Bildschirm 4 - Weltkarte", screen5: "Bildschirm 5 - Mondphase", screen6: "Bildschirm 6 - Farbverlauf", screen7: "Bildschirm 7 - Digitaluhr", screen8: "Bildschirm 8 - Farb-Analog", screen9: "Bildschirm 9 - Nixie-Röhre", fullYearAnimation: "Ganzjahresanimation", "24hour": "24-Stunden", icons: "Symbole", minMaxTemps: "Min/Max Temp.", ampm: "AM/PM", seconds: "Sekunden", time: "Zeit", day: "Tag", date: "Datum", month: "Monat", dateBg: "Datum-Hintergrund", divider: "Trennlinie", temperature: "Temperatur", humidity: "Luftfeuchtigkeit", clockFace: "Zifferblatt", option: "Option", colour: "Farbe", image: "Bild", clockOptions: "Uhrenoptionen", displayMode: "Anzeigemodus", "4numbers": "4 Zahlen", allNumbers: "Alle Zahlen", "4ticks": "4 Striche", allTicks: "Alle Striche", handFuzz: "Zeigerunschärfe", handLength: "Zeigerlänge", hourHand: "Stundenzeiger", minuteHand: "Minutenzeiger", secondHand: "Sekundenzeiger", topCalendar: "Oberer Kalender", bottomCalendar: "Unterer Kalender", timeShadow: "Zeitschatten", nightLights: "Nachtlichter", nightShadow: "Nachtschatten", "3dEffects": "3D-Effekte", speedDir: "Geschw. & Richtung", numStars: "Anzahl Sterne", sun: "Sonne", land: "Land", water: "Wasser", ice: "Eis", moonShadow: "Mondschatten", moonPercent: "Mond in Prozent", gradSpeed: "Farbverlaufgeschw.", boxSize: "Boxgröße", boxFeather: "Box-Weichzeichnung", glowIntensity: "Leuchtintensität", glow: "Leuchten", bgColor: "Hintergrundfarbe", showMarkers: "Markierungen", cycleSpeed: "Zyklusgeschw.", showDate: "Datum anzeigen", brightnessSettings: "Helligkeitseinstellungen", brightness: "Helligkeit", autoBrightness: "Auto-Helligkeit", darkRoomBrightness: "Dunkler Raum", brightRoomBrightness: "Heller Raum", currentBrightness: "Aktuelle Helligkeit:", setDarkRoom: "Dunkel einst.", setBrightRoom: "Hell einst.", weatherSettings: "Wettereinstellungen", timezone: "Zeitzonenauswahl", weatherService: "Wetterdienst", pirateApi: "Pirate Weather API", owmApi: "OpenWeatherMap API", weatherapiApi: "WeatherAPI.com API", getKey: "Schlüssel holen", units: "Einheiten", celsius: "Celsius", fahrenheit: "Fahrenheit", tempType: "Temperatur", actualTemp: "Tatsächliche Temp.", feelsLike: "Gefühlte Temp.", city: "Stadt", search: "Suchen", latitude: "Breitengrad", longitude: "Längengrad", systemSettings: "Systemeinstellungen", reboot: "Neustart", clearWifi: "WLAN löschen", firmwareUpdate: "Firmware-Update", formatSsd: "SSD formatieren"
         },
         sv: {
-            liveRefresh:"Uppdatering", liveDisplay:"Livevisning", wifiSignal:"Wi-Fi-signal", wifiExcellent:"Utmärkt", wifiGood:"Bra", wifiFair:"Måttlig", wifiWeak:"Svag", wifiOffline:"Offline", uploadFirmware:"Ladda upp firmware", otaHint:"Välj valfri SmartClock_vX.XX.bin från BIN-mappen (eller firmware.bin). Laddas upp i återförsökssäkra 16KB-block över WiFi. Inställningarna behålls; klockan startar om när den är klar.", otaUpload:"Ladda upp", weatherLive:"Live väderaktivitet", weatherWaiting:"Väntar på väder", weatherConnection:"Anslutning", weatherDownloaded:"Nedladdat", weatherAttempt:"API-försök", weatherLastUpdate:"Senaste uppdatering", refreshWeather:"Uppdatera väder nu", weatherNever:"Aldrig", weatherJustNow:"Just nu", weatherIdle:"Ingen väderhämtning har körts ännu.", weatherQueued:"Väderuppdatering köad", weatherValidating:"Kontrollerar leverantör, API-nyckel och plats", weatherConnecting:"Ansluter till väderleverantören", weatherDownloading:"Ansluten — hämtar väderdata", weatherParsing:"Kontrollerar hämtad väderdata", weatherUpdated:"Vädret uppdaterades", weatherError:"Väderuppdateringen misslyckades", weatherDisabled:"Väder är avstängt",
+            liveRefresh:"Uppdatering", liveDisplay:"Livevisning", wifiSignal:"Wi-Fi-signal", uptime:"Uppe", wifiExcellent:"Utmärkt", wifiGood:"Bra", wifiFair:"Måttlig", wifiWeak:"Svag", wifiOffline:"Offline", uploadFirmware:"Ladda upp firmware", otaHint:"Välj valfri SmartClock_vX.XX.bin från BIN-mappen (eller firmware.bin). Laddas upp i återförsökssäkra 16KB-block över WiFi. Inställningarna behålls; klockan startar om när den är klar.", otaUpload:"Ladda upp", weatherLive:"Live väderaktivitet", weatherWaiting:"Väntar på väder", weatherConnection:"Anslutning", weatherDownloaded:"Nedladdat", weatherAttempt:"API-försök", weatherLastUpdate:"Senaste uppdatering", refreshWeather:"Uppdatera väder nu", weatherNever:"Aldrig", weatherJustNow:"Just nu", weatherIdle:"Ingen väderhämtning har körts ännu.", weatherQueued:"Väderuppdatering köad", weatherValidating:"Kontrollerar leverantör, API-nyckel och plats", weatherConnecting:"Ansluter till väderleverantören", weatherDownloading:"Ansluten — hämtar väderdata", weatherParsing:"Kontrollerar hämtad väderdata", weatherUpdated:"Vädret uppdaterades", weatherError:"Väderuppdateringen misslyckades", weatherDisabled:"Väder är avstängt",
             screen10:"Skärm 10 - Regnlinje", screen11:"Skärm 11 - Solbana", screen12:"Skärm 12 - Vindratt", weatherGlyph:"Vädersymbol", weatherIcons:"Väderikoner", rainBars:"Regnstaplar", chartLine:"Diagramlinje", dateHeader:"Datumrubrik", sunArc:"Solbåge", compass:"Kompass", windArrow:"Vindpil", gusts:"Vindbyar",
             schedules: "Tidsscheman", scheduleSettings: "Schemainställningar", defaultScreen: "Standardskärm", addSchedule: "Lägg till", indoorOffset: "Inomhus Temp Offset", language: "Språk", mainTitle: "Carlsons Smartklocka", clockSettings: "Klockinställningar", screenSelection: "Skärmval", panelType: "Paneltyp (Kräver omstart)", screen1: "Skärm 1 - Klassisk Digital", screen2: "Skärm 2 - Alt. Digital", screen3: "Skärm 3 - Analog", screen4: "Skärm 4 - Världskarta", screen5: "Skärm 5 - Månfas", screen6: "Skärm 6 - Gradientklocka", screen7: "Skärm 7 - Digitalt Armbandsur", screen8: "Skärm 8 - Färg-Analog", screen9: "Skärm 9 - Nixie-rör", fullYearAnimation: "Helårsanimation", "24hour": "24-timmars", icons: "Ikoner", minMaxTemps: "Min/Max Temp.", ampm: "AM/PM", seconds: "Sekunder", time: "Tid", day: "Dag", date: "Datum", month: "Månad", dateBg: "Datum-bakgrund", divider: "Avdelare", temperature: "Temperatur", humidity: "Luftfuktighet", clockFace: "Urtavla", option: "Alternativ", colour: "Färg", image: "Bild", clockOptions: "Klockalternativ", displayMode: "Visningsläge", "4numbers": "4 Siffror", allNumbers: "Alla Siffror", "4ticks": "4 Markeringar", allTicks: "Alla Markeringar", handFuzz: "Visaroskärpa", handLength: "Visarlängd", hourHand: "Timvisare", minuteHand: "Minutvisare", secondHand: "Sekundvisare", topCalendar: "Övre Kalender", bottomCalendar: "Nedre Kalender", timeShadow: "Tidsskugga", nightLights: "Nattljus", nightShadow: "Nattskugga", "3dEffects": "3D-effekter", speedDir: "Fart & Riktning", numStars: "Antal Stjärnor", sun: "Sol", land: "Land", water: "Vatten", ice: "Is", moonShadow: "Månskugga", moonPercent: "Månprocent", gradSpeed: "Gradienthastighet", boxSize: "Boxstorlek", boxFeather: "Box-ludd", glowIntensity: "Ljusintensitet", glow: "Ljus", bgColor: "Bakgrundsfärg", showMarkers: "Markörer", cycleSpeed: "Cykelfart", showDate: "Visa Datum", brightnessSettings: "Ljusstyrkeinställningar", brightness: "Ljusstyrka", autoBrightness: "Auto-ljusstyrka", darkRoomBrightness: "Mörkt Rum", brightRoomBrightness: "Ljust Rum", currentBrightness: "Nuvarande Ljusstyrka:", setDarkRoom: "Ställ in Mörkt", setBrightRoom: "Ställ in Ljust", weatherSettings: "Väderinställningar", timezone: "Tidszonsval", weatherService: "Vädertjänst", pirateApi: "Pirate Weather API", owmApi: "OpenWeatherMap API", weatherapiApi: "WeatherAPI.com API", getKey: "Hämta Nyckel", units: "Enheter", celsius: "Celsius", fahrenheit: "Fahrenheit", tempType: "Temperatur", actualTemp: "Faktisk Temp.", feelsLike: "Känns Som", city: "Stad", search: "Sök", latitude: "Latitud", longitude: "Longitud", systemSettings: "Systeminställningar", reboot: "Starta om", clearWifi: "Rensa WiFi", firmwareUpdate: "Firmware-uppdat.", formatSsd: "Formatera SSD"
         }
@@ -882,6 +889,41 @@
     });
 
     let lastWifiRssi = null;
+    // "23d 15h 21m". Drops the units that are zero from the left, so a clock up
+    // for two hours reads "2h 14m" rather than "0d 2h 14m". Seconds only appear
+    // in the first minute, where they are the only thing moving.
+    function formatUptime(seconds) {
+        const total = Math.floor(Number(seconds));
+        if (!Number.isFinite(total) || total < 0) return '—';
+        const d = Math.floor(total / 86400);
+        const h = Math.floor((total % 86400) / 3600);
+        const m = Math.floor((total % 3600) / 60);
+        const s = total % 60;
+        if (d > 0) return `${d}d ${h}h ${m}m`;
+        if (h > 0) return `${h}h ${m}m`;
+        if (m > 0) return `${m}m`;
+        return `${s}s`;
+    }
+    let lastUptimeSeconds = null, lastUptimeAt = 0;
+    function updateUptime(seconds) {
+        const value = Number(seconds);
+        if (!Number.isFinite(value) || value < 0) return;
+        lastUptimeSeconds = value;
+        lastUptimeAt = Date.now();
+        renderUptime();
+    }
+    function renderUptime() {
+        const element = document.getElementById('sideUptimeText');
+        if (!element || lastUptimeSeconds === null) return;
+        // Advance locally between polls so the reading stays honest even when
+        // the status request is slow or the tab has been idle.
+        const drift = Math.floor((Date.now() - lastUptimeAt) / 1000);
+        const dictionary = translations[localStorage.getItem('language')||'en'] || translations.en;
+        const label = dictionary.uptime || translations.en.uptime;
+        element.innerHTML = `<em>${label}</em> ${formatUptime(lastUptimeSeconds + drift)}`;
+    }
+    setInterval(renderUptime, 30000);
+
     function updateWifiQuality(value) {
         const rssi = Number(value);
         const connected = Number.isFinite(rssi) && rssi !== 0;
@@ -1611,12 +1653,13 @@
         });
     }
     let lastLiveStatusAt=0;
-    function applyLiveStatus(brightness,rssi,weatherData){
+    function applyLiveStatus(brightness,rssi,weatherData,uptime){
         const brightnessNumber=Number(brightness);
         if(Number.isFinite(brightnessNumber)) {
             document.getElementById("currentBrightness").textContent=Math.round(brightnessNumber)+"%";
         }
         updateWifiQuality(rssi);
+        if(uptime!==undefined && uptime!==null) updateUptime(uptime);
         if(weatherData) updateWeatherDiagnostics(weatherData);
         lastLiveStatusAt=Date.now();
     }
@@ -1638,7 +1681,8 @@
             weather_request:response.headers.get('X-Weather-Request'),
             weather_provider:response.headers.get('X-Weather-Provider')
         };
-        if(brightness!==null && rssi!==null) applyLiveStatus(brightness,rssi,weatherData);
+        const uptime=response.headers.get('X-Uptime');
+        if(brightness!==null && rssi!==null) applyLiveStatus(brightness,rssi,weatherData,uptime);
         else if(weatherData) updateWeatherDiagnostics(weatherData);
     }
     function fetchCurrentBrightness(priority=false){
@@ -1651,7 +1695,7 @@
         return fetchWithTimeout("/status", {}, priority?3000:5000, priority?'status':'passive')
             .then(e => { if(!e.ok) throw new Error('HTTP '+e.status); return e.json(); })
             .then(e => {
-                applyLiveStatus(e.current_brightness,e.rssi,e);
+                applyLiveStatus(e.current_brightness,e.rssi,e,e.uptime_s);
                 applySafeMode(e.safe_mode);
             })
             .catch(e => { if(e.name !== 'AbortError') console.debug('Brightness poll skipped:',e); })
