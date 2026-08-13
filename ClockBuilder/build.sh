@@ -12,13 +12,14 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-APP_NAME="Clock Builder"
-BUNDLE_ID="com.carlson.clockbuilder"
-# Where the finished .app is delivered. Sits beside the firmware images it
-# flashes, so both are in one place on the NAS.
-DEST_DIR="${1:-../../BIN}"
-
 VERSION="$(cat VERSION)"
+
+# The version is part of the app's name, so each build lands as its own bundle
+# rather than replacing the last one - the same "keep the history" idea as the
+# BIN folder full of SmartClock_vX.XX.bin files.
+APP_NAME="Clock Builder ${VERSION}"
+BUNDLE_ID="com.carlson.clockbuilder"
+DEST_DIR="${1:-/Volumes/home/Documents/Arduino/SmartClock/Software/Clock Builder}"
 # Build on local disk, not on the NAS. An AFP share stores Mac metadata in
 # sidecar files, and codesign refuses any bundle carrying them ("resource fork,
 # Finder information, or similar detritus not allowed") no matter how often
@@ -27,7 +28,7 @@ VERSION="$(cat VERSION)"
 BUILD_DIR="${TMPDIR:-/tmp}/clockbuilder-build"
 APP_DIR="${BUILD_DIR}/${APP_NAME}.app"
 
-echo "Building ${APP_NAME} v${VERSION}"
+echo "Building ${APP_NAME}"
 
 rm -rf "${APP_DIR}"
 mkdir -p "${APP_DIR}/Contents/MacOS" "${APP_DIR}/Contents/Resources"

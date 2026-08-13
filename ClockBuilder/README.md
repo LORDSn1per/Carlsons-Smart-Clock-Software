@@ -4,19 +4,24 @@ A small native macOS app for flashing SmartClock firmware onto an ESP32 over
 USB. SwiftUI, single window, no Xcode project.
 
 ```
-./build.sh              # builds and delivers to ../../BIN/Clock Builder.app
+./build.sh              # builds and delivers to Software/Clock Builder/
 ./build.sh /some/path   # deliver somewhere else
 ```
 
-The finished `Clock Builder.app` is written to `Firmware/BIN/`, beside the
-firmware images it flashes. Only the source lives in git — the built bundle
-does not, for the same reason the `.bin` files do not.
+The finished bundle is written to
+`/Volumes/home/Documents/Arduino/SmartClock/Software/Clock Builder/`. Only the
+source lives in git — the built bundle does not, for the same reason the `.bin`
+files do not.
 
 ## Versioning
 
 `VERSION` holds the number the next build will stamp, and `build.sh` bumps it by
 0.01 afterwards. Same convention as `scripts/merge_firmware.py`, so the app's
 version behaves like the firmware's. Started at 0.1.
+
+**The version is part of the app's name** — `Clock Builder 0.11.app` — so each
+build lands as its own bundle beside the last rather than replacing it, the same
+way `Firmware/BIN` keeps every image.
 
 ## What it checks before writing anything
 
@@ -41,6 +46,17 @@ by trusting its name:
 An app-only image belongs at 0x10000 and is what the clock's own browser update
 page expects. Writing it at 0x0 produces a device with no bootloader. That is
 the easiest way to brick a flash, so Clock Builder will not do it.
+
+## Choosing an image
+
+Two modes, switched with the segmented control:
+
+- **Folder** — lists every `.bin` in a directory, newest first. Good for working
+  through the BIN history.
+- **Single file** — an open panel restricted to `.bin`, for a one-off image kept
+  somewhere else.
+
+Either way the file is inspected before it can be flashed.
 
 ## Write modes
 
@@ -69,6 +85,13 @@ PlatformIO's virtualenv is used because it has `pyserial`; the system
 `/usr/bin/python3` does not, and esptool cannot open a serial port without it.
 The app falls back to other interpreters if it finds one that works, and says so
 plainly if it finds none.
+
+## Appearance
+
+The palette is taken from `web/index.html`'s `:root` block — the same
+`#090b10` ground, `#11141b` panels and `#d9ff62` accent as the clock's settings
+page, including the radial accent glow — so the app and the page read as one
+product rather than two unrelated tools.
 
 Built against the macOS 12 SDK with Command Line Tools only, ad-hoc signed.
 Signing happens on local disk — an AFP share adds metadata that `codesign`

@@ -22,6 +22,16 @@ final class Flasher: ObservableObject {
     @Published var device: DeviceInfo?
     @Published var deviceProblem: String?
 
+    /// Picking a folder gives the dropdown of every image in it; picking a
+    /// single file skips the list entirely. Both are useful - the folder for
+    /// working through the BIN history, the file for a one-off somewhere else.
+    enum SourceMode: String, CaseIterable, Identifiable {
+        case folder = "Folder"
+        case file = "Single file"
+        var id: String { rawValue }
+    }
+
+    @Published var sourceMode: SourceMode = .folder
     @Published var binFolder = Flasher.defaultBinFolder
     @Published var images: [FirmwareImage] = []
     /// Selection is held as a URL rather than the struct so it survives the list
@@ -30,6 +40,20 @@ final class Flasher: ObservableObject {
 
     var selectedImage: FirmwareImage? {
         images.first(where: { $0.url == selectedImageURL })
+    }
+
+    /// Bytes written so far, derived from esptool's percentage against the real
+    /// file size. esptool reports progress as a percentage only, so this is the
+    /// honest way to show a KB counter beside it.
+    var bytesWritten: Int {
+        Int(progress * Double(selectedImage?.byteCount ?? 0))
+    }
+
+    var totalBytes: Int { selectedImage?.byteCount ?? 0 }
+
+    var transferDescription: String {
+        guard totalBytes > 0 else { return "" }
+        return "\(bytesWritten / 1024) / \(totalBytes / 1024) KB"
     }
 
     @Published var eraseEverything = false
@@ -65,7 +89,16 @@ final class Flasher: ObservableObject {
         if selectedPort == nil { selectedPort = ports.first }
     }
 
+    /// Selects one specific .bin, bypassing the folder listing.
+    func useSingleFile(_ url: URL) {
+        sourceMode = .file
+        images = [FirmwareImage.inspect(url: url)]
+        selectedImageURL = url
+        revalidateAgainstDevice()
+    }
+
     func refreshImages() {
+        guard sourceMode == .folder else { return }
         let folder = URL(fileURLWithPath: binFolder)
         let entries = (try? FileManager.default.contentsOfDirectory(
             at: folder, includingPropertiesForKeys: nil)) ?? []
@@ -84,6 +117,7 @@ final class Flasher: ObservableObject {
         if selectedImageURL == nil {
             selectedImageURL = images.first(where: { $0.isFlashable })?.url
         }
+        revalidateAgainstDevice()
     }
 
     // MARK: - Identify
@@ -131,6 +165,16 @@ final class Flasher: ObservableObject {
     private func evaluate(_ info: DeviceInfo) {
         device = info
         stage = .idle
+        revalidateAgainstDevice()
+        if deviceProblem == nil { appendLog("\nIdentified: \(info.summary)\n") }
+    }
+
+    /// Re-checks the identified chip against whatever image is selected now.
+    /// Called again whenever the image changes, so switching to one with a
+    /// larger partition table cannot inherit a stale "all good" verdict.
+    func revalidateAgainstDevice() {
+        guard let info = device else { return }
+        deviceProblem = nil
 
         guard info.isClassicESP32 else {
             deviceProblem = """
@@ -150,10 +194,7 @@ final class Flasher: ObservableObject {
             partition table runs to \(needMB) MB. Flashing it would truncate the \
             partitions and the clock would not boot.
             """
-            return
         }
-
-        appendLog("\nIdentified: \(info.summary)\n")
     }
 
     // MARK: - Flash

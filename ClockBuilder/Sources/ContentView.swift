@@ -1,11 +1,14 @@
 import SwiftUI
+import AppKit
+import UniformTypeIdentifiers
 
 @main
 struct ClockBuilderApp: App {
     var body: some Scene {
         WindowGroup("Clock Builder") {
             ContentView()
-                .frame(minWidth: 620, idealWidth: 660, minHeight: 640)
+                .frame(minWidth: 640, idealWidth: 680, minHeight: 700)
+                .preferredColorScheme(.dark)
         }
     }
 }
@@ -20,24 +23,22 @@ struct ContentView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            Divider()
-            ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
-                    deviceSection
-                    firmwareSection
-                    flashSection
-                    if showLog { logSection }
+        ZStack {
+            Theme.backdrop
+            VStack(spacing: 0) {
+                header
+                ScrollView {
+                    VStack(spacing: 14) {
+                        deviceCard
+                        firmwareCard
+                        writeCard
+                        if showLog { logCard }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 18)
                 }
-                .padding(22)
+                footer
             }
-            Divider()
-            footer
-        }
-        .onAppear {
-            flasher.refreshPorts()
-            flasher.refreshImages()
         }
         .alert("Erase everything on this ESP32?", isPresented: $showEraseConfirmation) {
             Button("Cancel", role: .cancel) { }
@@ -51,27 +52,64 @@ struct ContentView: View {
             Choose Update instead to keep them.
             """)
         }
+        .onAppear {
+            flasher.refreshPorts()
+            flasher.refreshImages()
+        }
     }
 
-    // MARK: - Header
+    // MARK: - Header / footer
 
     private var header: some View {
-        HStack(alignment: .firstTextBaseline) {
+        HStack(spacing: 10) {
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(
+                    LinearGradient(colors: [Theme.accent, Theme.accent.opacity(0.55)],
+                                   startPoint: .topLeading, endPoint: .bottomTrailing)
+                )
+                .frame(width: 26, height: 26)
+                .overlay(
+                    Image(systemName: "bolt.fill")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(Theme.accentInk)
+                )
             Text("Clock Builder")
-                .font(.system(size: 20, weight: .semibold))
-            Text("v\(version)")
-                .font(.system(size: 12, design: .monospaced))
-                .foregroundColor(.secondary)
+                .font(.system(size: 19, weight: .semibold))
+                .foregroundColor(Theme.text)
+            Text(version)
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .foregroundColor(Theme.accent)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .background(Capsule().fill(Theme.accent.opacity(0.12)))
             Spacer()
         }
         .padding(.horizontal, 22)
-        .padding(.vertical, 14)
+        .padding(.top, 18)
+        .padding(.bottom, 16)
+    }
+
+    private var footer: some View {
+        HStack {
+            Toggle("Show log", isOn: $showLog)
+                .toggleStyle(.checkbox)
+                .font(.system(size: 11))
+                .foregroundColor(Theme.muted)
+            Spacer()
+            Text("Writes full images at 0x0")
+                .font(.system(size: 10))
+                .foregroundColor(Theme.muted.opacity(0.7))
+        }
+        .padding(.horizontal, 22)
+        .padding(.vertical, 11)
+        .background(Theme.panel.opacity(0.6))
+        .overlay(Rectangle().fill(Theme.line).frame(height: 1), alignment: .top)
     }
 
     // MARK: - 1. Device
 
-    private var deviceSection: some View {
-        Section(title: "1", heading: "ESP32") {
+    private var deviceCard: some View {
+        Card(step: "1", heading: "ESP32") {
             HStack(spacing: 8) {
                 Picker("", selection: $flasher.selectedPort) {
                     if flasher.ports.isEmpty {
@@ -84,15 +122,15 @@ struct ContentView: View {
                 .labelsHidden()
                 .disabled(flasher.isBusy)
 
-                Button {
-                    flasher.refreshPorts()
-                } label: {
-                    Image(systemName: "arrow.clockwise")
+                Button { flasher.refreshPorts() } label: {
+                    Image(systemName: "arrow.clockwise").font(.system(size: 11, weight: .semibold))
                 }
+                .buttonStyle(QuietButtonStyle())
                 .help("Rescan for connected devices")
                 .disabled(flasher.isBusy)
 
                 Button("Identify") { flasher.identify() }
+                    .buttonStyle(QuietButtonStyle())
                     .disabled(flasher.selectedPort == nil || flasher.isBusy)
             }
 
@@ -116,37 +154,68 @@ struct ContentView: View {
 
     // MARK: - 2. Firmware
 
-    private var firmwareSection: some View {
-        Section(title: "2", heading: "Firmware") {
+    private var firmwareCard: some View {
+        Card(step: "2", heading: "Firmware") {
+            Picker("", selection: $flasher.sourceMode) {
+                ForEach(Flasher.SourceMode.allCases) { mode in
+                    Text(mode.rawValue).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .disabled(flasher.isBusy)
+
             HStack(spacing: 8) {
-                Picker("", selection: $flasher.selectedImageURL) {
-                    if flasher.images.isEmpty {
-                        Text("No .bin files found").tag(URL?.none)
+                if flasher.sourceMode == .folder {
+                    Picker("", selection: $flasher.selectedImageURL) {
+                        if flasher.images.isEmpty {
+                            Text("No .bin files found").tag(URL?.none)
+                        }
+                        ForEach(flasher.images, id: \.url) { image in
+                            Text(image.name).tag(URL?.some(image.url))
+                        }
                     }
-                    ForEach(flasher.images, id: \.url) { image in
-                        Text(image.name).tag(URL?.some(image.url))
-                    }
-                }
-                .labelsHidden()
-                .disabled(flasher.isBusy)
-
-                Button {
-                    flasher.refreshImages()
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                }
-                .help("Rescan the firmware folder")
-                .disabled(flasher.isBusy)
-
-                Button("Browse…") { chooseFolder() }
+                    .labelsHidden()
                     .disabled(flasher.isBusy)
+
+                    Button { flasher.refreshImages() } label: {
+                        Image(systemName: "arrow.clockwise").font(.system(size: 11, weight: .semibold))
+                    }
+                    .buttonStyle(QuietButtonStyle())
+                    .help("Rescan the folder")
+                    .disabled(flasher.isBusy)
+
+                    Button("Choose Folder…") { chooseFolder() }
+                        .buttonStyle(QuietButtonStyle())
+                        .disabled(flasher.isBusy)
+                } else {
+                    Text(flasher.selectedImage?.name ?? "No file chosen")
+                        .font(.system(size: 12))
+                        .foregroundColor(flasher.selectedImage == nil ? Theme.muted : Theme.text)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 7)
+                        .padding(.horizontal, 10)
+                        .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .fill(Theme.panel2))
+                        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .stroke(Theme.line, lineWidth: 1))
+
+                    Button("Choose File…") { chooseFile() }
+                        .buttonStyle(QuietButtonStyle())
+                        .disabled(flasher.isBusy)
+                }
             }
 
-            Text(flasher.binFolder)
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundColor(.secondary)
+            Text(flasher.sourceMode == .folder
+                 ? flasher.binFolder
+                 : (flasher.selectedImage?.url.deletingLastPathComponent().path ?? ""))
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundColor(Theme.muted.opacity(0.75))
                 .lineLimit(1)
                 .truncationMode(.head)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
             if let image = flasher.selectedImage {
                 if let problem = image.problem {
@@ -154,17 +223,19 @@ struct ContentView: View {
                 } else {
                     Hint(icon: "checkmark.seal.fill", tone: .good, text: image.verdict)
                 }
-            } else if flasher.images.isEmpty {
+            } else if flasher.sourceMode == .folder && flasher.images.isEmpty {
                 Hint(icon: "folder", tone: .neutral,
-                     text: "No .bin files in that folder. Use Browse to pick another.")
+                     text: "No .bin files in that folder. Choose another.")
+            } else if flasher.sourceMode == .file {
+                Hint(icon: "doc", tone: .neutral, text: "Choose a .bin file to flash.")
             }
         }
     }
 
-    // MARK: - 3. Flash
+    // MARK: - 3. Write
 
-    private var flashSection: some View {
-        Section(title: "3", heading: "Write") {
+    private var writeCard: some View {
+        Card(step: "3", heading: "Write") {
             Picker("", selection: $flasher.eraseEverything) {
                 Text("Update — keep settings and WiFi").tag(false)
                 Text("Erase everything, then flash").tag(true)
@@ -173,32 +244,44 @@ struct ContentView: View {
             .labelsHidden()
             .disabled(flasher.isBusy)
 
-            HStack(spacing: 12) {
+            HStack(spacing: 10) {
                 if flasher.stage == .flashing {
                     Button("Cancel") { flasher.cancel() }
+                        .buttonStyle(AccentButtonStyle(destructive: true))
                 } else {
-                    Button {
+                    Button(flasher.eraseEverything ? "Erase and Flash" : "Flash Clock") {
                         if flasher.eraseEverything { showEraseConfirmation = true }
                         else { flasher.flash() }
-                    } label: {
-                        Text(flasher.eraseEverything ? "Erase and Flash" : "Flash Clock")
-                            .frame(maxWidth: .infinity)
                     }
+                    .buttonStyle(AccentButtonStyle(destructive: flasher.eraseEverything))
                     .keyboardShortcut(.defaultAction)
                     .disabled(!flasher.canFlash)
                 }
 
-                Picker("Speed", selection: $flasher.baud) {
+                Picker("", selection: $flasher.baud) {
                     ForEach(flasher.baudChoices, id: \.self) { rate in
                         Text("\(rate)").tag(rate)
                     }
                 }
-                .frame(width: 150)
+                .labelsHidden()
+                .frame(width: 110)
                 .disabled(flasher.isBusy)
             }
 
             if flasher.stage == .flashing || flasher.progress > 0 {
-                ProgressView(value: flasher.progress)
+                VStack(spacing: 7) {
+                    AccentProgressBar(value: flasher.progress)
+                    HStack {
+                        Text("\(Int(flasher.progress * 100))%")
+                            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                            .foregroundColor(Theme.accent)
+                        Spacer()
+                        Text(flasher.transferDescription)
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundColor(Theme.muted)
+                    }
+                }
+                .padding(.top, 2)
             }
 
             switch flasher.stage {
@@ -215,32 +298,39 @@ struct ContentView: View {
         }
     }
 
-    private var logSection: some View {
-        Section(title: "·", heading: "Log") {
+    private var logCard: some View {
+        Card(step: "·", heading: "Log") {
             ScrollView {
                 Text(flasher.log.isEmpty ? "Nothing yet." : flasher.log)
                     .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(Theme.muted)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .textSelection(.enabled)
-                    .padding(8)
+                    .padding(9)
             }
-            .frame(height: 180)
-            .background(Color(nsColor: .textBackgroundColor))
-            .cornerRadius(6)
+            .frame(height: 170)
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Theme.bg))
+            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(Theme.line, lineWidth: 1))
         }
     }
 
-    private var footer: some View {
-        HStack {
-            Toggle("Show log", isOn: $showLog)
-                .toggleStyle(.checkbox)
-            Spacer()
-            Text("Writes merged images at 0x0")
-                .font(.caption)
-                .foregroundColor(.secondary)
+    // MARK: - Pickers
+
+    private func chooseFile() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        // Only .bin - picking anything else here is always a mistake.
+        if let binType = UTType(filenameExtension: "bin") {
+            panel.allowedContentTypes = [binType]
         }
-        .padding(.horizontal, 22)
-        .padding(.vertical, 10)
+        panel.directoryURL = URL(fileURLWithPath: flasher.binFolder)
+        panel.prompt = "Choose"
+        if panel.runModal() == .OK, let url = panel.url {
+            flasher.useSingleFile(url)
+        }
     }
 
     private func chooseFolder() {
@@ -249,66 +339,12 @@ struct ContentView: View {
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
         panel.directoryURL = URL(fileURLWithPath: flasher.binFolder)
+        panel.prompt = "Choose"
         if panel.runModal() == .OK, let url = panel.url {
             flasher.binFolder = url.path
+            flasher.sourceMode = .folder
+            flasher.selectedImageURL = nil
             flasher.refreshImages()
         }
-    }
-}
-
-// MARK: - Small building blocks
-
-private struct Section<Content: View>: View {
-    let title: String
-    let heading: String
-    @ViewBuilder var content: Content
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Text(title)
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
-                    .foregroundColor(.secondary)
-                    .frame(width: 16, height: 16)
-                    .background(Circle().fill(Color.secondary.opacity(0.15)))
-                Text(heading)
-                    .font(.system(size: 13, weight: .semibold))
-            }
-            content
-        }
-    }
-}
-
-private enum Tone { case good, bad, neutral }
-
-private struct Hint: View {
-    let icon: String
-    let tone: Tone
-    let text: String
-
-    private var color: Color {
-        switch tone {
-        case .good: return .green
-        case .bad: return .red
-        case .neutral: return .secondary
-        }
-    }
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 7) {
-            Image(systemName: icon)
-                .foregroundColor(color)
-                .font(.system(size: 11))
-                .frame(width: 14)
-            Text(text)
-                .font(.system(size: 11))
-                .foregroundColor(tone == .neutral ? .secondary : .primary)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
-        }
-        .padding(9)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(color.opacity(tone == .neutral ? 0.06 : 0.10))
-        .cornerRadius(6)
     }
 }
