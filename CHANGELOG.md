@@ -10,6 +10,113 @@ recorded — only version numbers and short notes.
 > some numbers below are just iteration builds with no shipped change of their
 > own. Entries are written against the version that first carried the change.
 
+## 4.26 - 2026-08-13
+- **The config portal is no longer starved.** Reading the clock never blocks a
+  render again. `getLocalTime(tm*, ms)` is not a "read the clock" call: it is a
+  retry loop that polls until the year looks valid, and its default timeout is
+  5000 ms. Every render path used that default, and the clock screens call it
+  twice, so with the system clock unset a single frame cost **ten seconds**:
+
+      [SlowLoop] total=10033ms wm=1 screen=10024 present=8 other=0 state=0
+      [Health]   loop=0/s
+
+  Normally the first poll succeeds and the cost is nil, which is why this went
+  unnoticed for years. On a clock whose DS3231 had lost its time, with no WiFi
+  to reach NTP, the year stayed at 2000 and both calls ran their timeouts in
+  full. Everything reactive moves at the loop rate, so the portal answered DNS
+  and HTTP roughly once every ten seconds and a phone's captive-portal probe
+  always gave up first — the portal appeared broken when it was merely starved.
+  All 22 unbounded call sites now pass a 5 ms cap. The two deliberate waits are
+  untouched: the 100 ms poll in `STATE_WIFI_CONNECTING` and the explicit 5000 ms
+  NTP sync. Callers already fall back to the RTC, so nothing changes when the
+  clock is healthy. Confirmed working by Phillip.
+
+## 4.25 - 2026-08-13
+- Added a slow-loop detector: any `loop()` iteration over 150 ms prints a
+  breakdown of `myWM.process()`, the screen draw and the DMA present. It named
+  the cause of the above on the first capture, and contradicted the expectation
+  that WiFiManager was at fault.
+
+## 4.24 - 2026-08-13
+- `Screen91()` built the setup QR code on **every** `loop()` iteration —
+  Reed-Solomon encoding plus scoring all eight mask patterns over a 29x29 grid,
+  the most expensive thing in the loop, on the screen shown for the entire
+  duration of the config portal. The QR encodes `AutoChipID`, which never
+  changes, so it is now built once into a 106-byte static buffer.
+- Added `loop=N/s` to the `[Health]` line. It is the one number that separates
+  "the firmware is busy" from "the network is at fault".
+
+## 4.23 - 2026-08-13
+- Raised WiFiManager to `WM_DEBUG_VERBOSE` so the portal logs each inbound
+  request and reports when it answers a captive-portal probe. Silent in normal
+  operation, since the portal only runs before WiFi is configured.
+
+## 4.22 - 2026-08-13
+- A brand new or fully erased chip could never store settings. `erase_flash`
+  wipes the SPIFFS partition and nothing recreated it, because the mount uses
+  `SPIFFS.begin(false)` so a transient failure can never destroy user data.
+  Correct for a clock that has been running, wrong for one that has never had a
+  filesystem: it came up unable to mount, unable to save anything, and stayed
+  that way every boot until someone found Format SSD. NVS distinguishes the two
+  — it survives a firmware update but not `erase_flash` — so a missing "created"
+  flag means the chip really is fresh and formatting destroys nothing. A chip
+  that has mounted before is still left strictly alone.
+
+## 4.21 - 2026-08-13
+- Screen 13's sun marker was drawn with only two satellite pixels, at 12 and 6
+  o'clock, where Screen 11 draws four. Added the 3 and 9 o'clock pixels so both
+  screens draw the same sun.
+- Gave three elements their own colours instead of silently borrowing another
+  control's: Screen 11's sun and solar times (previously `temp_col` and
+  `dateBG_col`) and Screen 13's sun marker (previously `temp_col`). Defaults are
+  seeded from the values they used to inherit, so nothing changes appearance
+  until a new colour is chosen.
+
+## 4.19 - 2026-08-13
+- Fixed Screen 1's seconds and PM indicator. `updateCurrentHoursMins()` formats
+  the hour with `%d` — no zero padding — but the parts were carved out of that
+  string with fixed substring offsets assuming a two-digit hour. At 4:06:08 PM
+  the string is `"4:06:08 PM"`, one character short, so every field slid:
+  `hoursMins` kept a trailing colon, seconds became `"8 "` and the meridiem
+  `"M"`. It only misbehaved for hours 1-9, which is why it looked intermittent.
+  The identical parsing sat in `getTimeDateString()`, so Screens 7 and 9 were
+  affected too. Each field is now formatted straight from `struct tm`.
+- Safe Mode no longer overwrites saved settings. It called `saveSettings()`
+  after forcing auto-brightness off and brightness to 40, writing those into
+  `/settings.json` permanently — one trip of the guard and the real brightness
+  configuration was gone with no restore path. The dimming is now applied in RAM
+  only.
+- Safe Mode is latched in `/reboot_guard.json` instead of the guard file being
+  deleted on trigger. Deleting it meant the next boot came up at full brightness,
+  straight back into the brownout loop it had just caught. The latch is released
+  after ten minutes of uptime; the running session stays dim deliberately.
+- Hardened the trigger: a DS3231 that has lost power reads back a fixed time,
+  making every boot look simultaneous, so three ordinary power-ups would trip
+  Safe Mode. Implausible timestamps now disable the guard for that boot, and the
+  elapsed comparison is signed so an NTP correction backwards cannot underflow.
+
+## 4.18 - 2026-08-13
+- Format SSD actually clears settings now. It formatted and then sat in
+  `delay(1000)` with both settings writers still running, so the in-RAM settings
+  were written straight back onto the freshly formatted filesystem before the
+  reboot. A single latch honoured by `persistSettingsNow()` now blocks every
+  writer for the window, and the on-clock menu no longer calls the web handler
+  (which replies on `server`, owned by a task on the other core).
+
+## 4.16 - 2026-08-13
+- Restored the two 3.91 fixes that 3.92-4.00 had undone, after Phillip
+  identified v3.91 as the last build with responsive WiFi and no animation lag.
+  A true rollback was impossible: versions 3.71-4.01 were built from uncommitted
+  working trees and exist only as binaries.
+- Screen 13 back to a flat 30 FPS. The conditional that dropped to 5 FPS
+  whenever no transition was due meant the seconds bar, which is always moving,
+  visibly animated only while some other animation happened to be running.
+- Web session recovery, which had been deleted outright. `noteWebRequest()` had
+  been reduced to feeding the 30-minute reboot watchdog; its nine call sites
+  still fired but nothing consumed them, so a browser that stopped getting
+  answers waited thirty minutes for a reboot instead of forty-five seconds for a
+  WiFi recycle.
+
 ## 4.08 - 2026-08-13
 - Reverted the OE dimming math to the hybrid-floor method that was in use right
   after the low-brightness flicker fix (161470c). The 4.00 rewrite quantised OE
