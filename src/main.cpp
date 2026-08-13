@@ -10,7 +10,7 @@
 
 // Single source of truth for the version. Auto-incremented by +0.01 on every
 // successful build by scripts/merge_firmware.py; see CHANGELOG.md for history.
-float ver = 4.17;
+float ver = 4.19;
 
 
 /* #################### To add a new screen (example screen6) ####################
@@ -617,6 +617,10 @@ uint8_t brightRoomBrightness = 255; // Renamed from maxBrightness
 bool autoBrightnessEnabled = false; // variable to toggle auto-brightness
 volatile bool settingsChanged = false; // Persist once the user stops changing controls
 volatile uint32_t settingsRevision = 1; // Invalidates the cached /settings response
+// Latched by Format SSD. Every flash write funnels through persistSettingsNow(),
+// which honours this, so nothing can recreate /settings.json between the format
+// and the reboot that follows it.
+volatile bool settingsWritesBlocked = false;
 static const size_t OTA_BROWSER_CHUNK_SIZE = 16384;
 static const size_t OTA_MERGED_APP_OFFSET = 0x10000;
 static uint8_t* otaBrowserChunk = nullptr; // allocated only while an OTA session is active
@@ -1515,6 +1519,11 @@ class BufferedFileWriter : public Print {
 static uint32_t lastSavedSettingsHash = 0;
 
 bool persistSettingsNow() {
+  // Format SSD has begun; the filesystem is being wiped and a reboot follows.
+  // Writing here would put the in-RAM settings straight back onto the fresh
+  // filesystem, which is exactly what made Format SSD appear to do nothing.
+  if (settingsWritesBlocked) return false;
+
   if (settingsMutex && xSemaphoreTakeRecursive(settingsMutex, pdMS_TO_TICKS(5000)) != pdTRUE) {
     Serial.println("[Settings] Could not acquire settingsMutex — skipping save this cycle.");
     return false;
@@ -4462,15 +4471,42 @@ void handleFullYearAnimation() {
 
 
 
-void handleFormatSSD() {
+// Wipes SPIFFS. Shared by the web button and the on-clock menu.
+//
+// Stopping the writers first is the whole point. debounceSaveSettings() runs on
+// every loop() iteration and flushes whenever settingsChanged is set, and
+// fetchWeather() marks settings dirty from the other core to cache its results.
+// The old version formatted and then sat in delay(1000) with both of those still
+// live, so the in-RAM settings were written straight back onto the freshly
+// formatted filesystem before the reboot - which is why Format SSD looked like
+// it did nothing at all.
+static bool formatSettingsStorage() {
+  settingsWritesBlocked = true; // persistSettingsNow() now refuses
+  settingsChanged = false;      // drop anything already pending
+
+  // Wait out a write that is already in progress rather than formatting under it.
+  const bool holdingMutex =
+    settingsMutex && xSemaphoreTakeRecursive(settingsMutex, pdMS_TO_TICKS(5000)) == pdTRUE;
+
   Serial.println("Formatting SPIFFS...");
-  if (SPIFFS.format()) {
-    Serial.println("SPIFFS formatted successfully");
+  const bool formatted = SPIFFS.format();
+  if (formatted) {
+    Serial.println("SPIFFS formatted successfully - rebooting, writes stay blocked until then");
+    return true; // deliberately keeps the mutex; a restart is imminent
+  }
+
+  Serial.println("SPIFFS formatting failed");
+  settingsWritesBlocked = false; // let normal operation resume
+  if (holdingMutex) xSemaphoreGiveRecursive(settingsMutex);
+  return false;
+}
+
+void handleFormatSSD() {
+  if (formatSettingsStorage()) {
     server.send(200, "text/plain", "SPIFFS formatted. Rebooting...");
-    delay(1000); // Give time for the response to be sent
-    ESP.restart(); // Reboot the ESP32
+    delay(200); // flush the response; writes are blocked so nothing can recreate the file
+    ESP.restart();
   } else {
-    Serial.println("SPIFFS formatting failed");
     server.send(500, "text/plain", "Failed to format SPIFFS");
   }
 }
@@ -9787,8 +9823,13 @@ void MenuButtonHeld() {
 
     switch (Menu_Select) {
       case 1: // Execute "FORMAT SSD"
-        // We call the existing handler function for this action.
-        handleFormatSSD(); 
+        // Deliberately NOT handleFormatSSD(): that replies on `server`, which is
+        // owned by webServerTask on the other core. This path runs in loop() from
+        // the button handler, so it does the work and reboots without touching it.
+        if (formatSettingsStorage()) {
+          delay(200);
+          ESP.restart();
+        }
         break;
 
       case 2: // Execute "CLEAR WIFI"
