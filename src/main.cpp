@@ -10,7 +10,7 @@
 
 // Single source of truth for the version. Auto-incremented by +0.01 on every
 // successful build by scripts/merge_firmware.py; see CHANGELOG.md for history.
-float ver = 4.32;
+float ver = 4.33;
 
 
 /* #################### To add a new screen (example screen6) ####################
@@ -774,6 +774,15 @@ volatile int16_t diagnosticSecondsBarPx = -1;
 // got past the frame-rate gate. millis()-driven animations keep working either
 // way, which is why the panel still transitions while the clock face sticks.
 volatile uint32_t diagnosticScreenDraws = 0;
+// loop_per_s is computed BY the loop, so when the loop blocks it does not fall
+// to zero - it holds the last value it managed to compute and reads as healthy.
+// That misdiagnosis cost several rounds. These cannot lie the same way:
+// lastLoopTickMs is stamped every iteration, so /debug can report how long ago
+// the loop last ran, and the worst-iteration breakdown is the same measurement
+// the serial [SlowLoop] line makes, kept for a clock that is not on USB.
+volatile uint32_t lastLoopTickMs = 0;
+volatile uint32_t worstLoopTotalMs = 0, worstLoopWmMs = 0, worstLoopScreenMs = 0;
+volatile uint32_t worstLoopPresentMs = 0, worstLoopOtherMs = 0, slowLoopCount = 0;
 
 static uint32_t uptimeSeconds() {
   return (uint32_t)(esp_timer_get_time() / 1000000LL);
@@ -5293,6 +5302,13 @@ void setup() {
     d["render_tm_sec"] = diagnosticRenderSec;
     d["sys_epoch"] = (uint32_t)time(nullptr);   // wall clock: is time() itself moving?
     d["screen_draws"] = diagnosticScreenDraws;  // is the render body executing?
+    d["loop_stall_ms"] = millis() - lastLoopTickMs; // how long since loop() last ran
+    d["slow_loops"] = slowLoopCount;
+    d["worst_total_ms"] = worstLoopTotalMs;
+    d["worst_wm_ms"] = worstLoopWmMs;
+    d["worst_screen_ms"] = worstLoopScreenMs;
+    d["worst_present_ms"] = worstLoopPresentMs;
+    d["worst_other_ms"] = worstLoopOtherMs;
     d["seconds_bar_px"] = diagnosticSecondsBarPx;
     d["frame_revision"] = screenshotRevision;
     d["current_screen"] = currentScreen;
@@ -5881,6 +5897,7 @@ void loop() {
   // three probes say which call is responsible instead of leaving it to
   // guesswork.
   const uint32_t loopStartMs = millis();
+  lastLoopTickMs = loopStartMs;
   uint32_t wmMs = 0, screenMs = 0, presentMs = 0;
 
   const uint32_t wmStartMs = millis();
@@ -6226,6 +6243,12 @@ switch (currentState) {
   const uint32_t totalMs = millis() - loopStartMs;
   if (totalMs >= 150) {
     const uint32_t accounted = wmMs + screenMs + presentMs;
+    ++slowLoopCount;
+    if (totalMs > worstLoopTotalMs) {
+      worstLoopTotalMs = totalMs; worstLoopWmMs = wmMs;
+      worstLoopScreenMs = screenMs; worstLoopPresentMs = presentMs;
+      worstLoopOtherMs = totalMs > accounted ? totalMs - accounted : 0;
+    }
     Serial.printf("[SlowLoop] total=%lums wm=%lu screen=%lu present=%lu other=%lu state=%d\n",
                   (unsigned long)totalMs, (unsigned long)wmMs, (unsigned long)screenMs,
                   (unsigned long)presentMs,
