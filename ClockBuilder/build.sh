@@ -19,7 +19,7 @@ VERSION="$(cat VERSION)"
 # BIN folder full of SmartClock_vX.XX.bin files.
 APP_NAME="Clock Builder ${VERSION}"
 BUNDLE_ID="com.carlson.clockbuilder"
-DEST_DIR="${1:-/Volumes/home/Documents/Arduino/SmartClock/Software/Clock Builder}"
+DEST_DIR="${1:-/Volumes/home/Documents/Arduino/SmartClock/Software/Clock Builder/Mac}"
 # Build on local disk, not on the NAS. An AFP share stores Mac metadata in
 # sidecar files, and codesign refuses any bundle carrying them ("resource fork,
 # Finder information, or similar detritus not allowed") no matter how often

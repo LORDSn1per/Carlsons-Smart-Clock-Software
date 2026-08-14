@@ -4,12 +4,12 @@ A small native macOS app for flashing SmartClock firmware onto an ESP32 over
 USB. SwiftUI, single window, no Xcode project.
 
 ```
-./build.sh              # builds and delivers to Software/Clock Builder/
+./build.sh              # builds and delivers to Software/Clock Builder/Mac/
 ./build.sh /some/path   # deliver somewhere else
 ```
 
 The finished bundle is written to
-`/Volumes/home/Documents/Arduino/SmartClock/Software/Clock Builder/`. Only the
+`/Volumes/home/Documents/Arduino/SmartClock/Software/Clock Builder/Mac/`. Only the
 source lives in git — the built bundle does not, for the same reason the `.bin`
 files do not.
 
@@ -88,10 +88,10 @@ plainly if it finds none.
 
 ## Appearance
 
-The palette is taken from `web/index.html`'s `:root` block — the same
-`#090b10` ground, `#11141b` panels and `#d9ff62` accent as the clock's settings
-page, including the radial accent glow — so the app and the page read as one
-product rather than two unrelated tools.
+The palette is taken from `web/index.html`'s `:root` block — the same graphite
+ground, layered panels and `#d9ff62` accent as the clock's settings page. The
+subtle LED grid, cyan data colour, illuminated status display and restrained
+control glow make the app and web interface read as one product.
 
 Built against the macOS 12 SDK with Command Line Tools only, ad-hoc signed.
 Signing happens on local disk — an AFP share adds metadata that `codesign`
