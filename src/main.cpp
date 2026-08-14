@@ -10,7 +10,7 @@
 
 // Single source of truth for the version. Auto-incremented by +0.01 on every
 // successful build by scripts/merge_firmware.py; see CHANGELOG.md for history.
-float ver = 4.29;
+float ver = 4.30;
 
 
 /* #################### To add a new screen (example screen6) ####################
@@ -749,6 +749,13 @@ static const uint32_t LOCAL_TIME_MAX_WAIT_MS = 5;
 // clock is expected to sit on a shelf for months at a time - the reading would
 // silently fall back to zero and then climb again. esp_timer_get_time() is a
 // 64-bit microsecond counter that will not wrap in any practical lifetime.
+// Loop iterations in the last whole second. Exposed at /debug because the
+// clocks that need this measurement are usually the ones NOT on a USB cable -
+// the serial [Health] line was useless for diagnosing a unit across the house.
+// Healthy is hundreds; anything low means something in loop() is blocking, and
+// every reactive behaviour is degraded by the same factor.
+volatile uint32_t loopRatePerSecond = 0;
+
 static uint32_t uptimeSeconds() {
   return (uint32_t)(esp_timer_get_time() / 1000000LL);
 }
@@ -5263,6 +5270,8 @@ void setup() {
     d["reset_sequence"] = retainedResetSequence;
     d["web_stack_free_words"] = webServerTaskHandle ? uxTaskGetStackHighWaterMark(webServerTaskHandle) : 0;
     d["weather_stack_free_words"] = fetchWeatherTaskHandle ? uxTaskGetStackHighWaterMark(fetchWeatherTaskHandle) : 0;
+    d["loop_per_s"] = loopRatePerSecond;
+    d["current_screen"] = currentScreen;
     d["ota_active"] = otaBrowserActive;
     d["spiffs_used"] = SPIFFS.usedBytes();
     d["spiffs_total"] = SPIFFS.totalBytes();
@@ -5832,6 +5841,15 @@ void WIFI_SETUP() {
 void loop() {
   static uint32_t loopIterations = 0;
   ++loopIterations;
+
+  // Rolling one-second sample, independent of the 60s [Health] average.
+  static uint32_t rateWindowStartMs = 0, rateWindowCount = 0;
+  ++rateWindowCount;
+  if (millis() - rateWindowStartMs >= 1000) {
+    loopRatePerSecond = rateWindowCount;
+    rateWindowCount = 0;
+    rateWindowStartMs = millis();
+  }
 
   // Slow-loop detector. loop=0/s in the [Health] line means a single iteration
   // is taking about a second, and everything reactive - the config portal's DNS
