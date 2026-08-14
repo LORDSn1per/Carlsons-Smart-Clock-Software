@@ -10,7 +10,7 @@
 
 // Single source of truth for the version. Auto-incremented by +0.01 on every
 // successful build by scripts/merge_firmware.py; see CHANGELOG.md for history.
-float ver = 4.33;
+float ver = 4.34;
 
 
 /* #################### To add a new screen (example screen6) ####################
@@ -1872,6 +1872,46 @@ bool persistSettingsNow(uint32_t maxWaitMs) {
   const char* finalPath = "/settings.json";
   const char* tmpPath   = "/settings.json.tmp";
   const char* backupPath = "/settings.json.bak";
+
+  // Make room before writing, or the write grinds and fails.
+  //
+  // SPIFFS is 113 KB and this document is about 31 KB. Keeping settings.json,
+  // its .bak AND the .ota checkpoint leaves under 20 KB free - not enough for
+  // the .tmp this function is about to write. SPIFFS does not fail that
+  // quickly: it garbage-collects hard first, blocking the caller for SECONDS,
+  // then fails, and debounceSaveSettings() retries. That is what froze the
+  // display for ten-plus seconds at a time, and why it cleared during an OTA -
+  // prepareSettingsForOta() deletes the .ota checkpoint, which frees exactly
+  // the space the write needed.
+  //
+  // The .ota checkpoint is only meaningful between starting an update and the
+  // next successful boot, so it is the first thing to reclaim. The rolling .bak
+  // goes only if that was not enough; losing it costs a recovery copy, whereas
+  // failing to save loses the user's actual change.
+  const size_t needed = expectedLength + 2048; // + SPIFFS per-file overhead
+  size_t freeBytes = SPIFFS.totalBytes() - SPIFFS.usedBytes();
+  if (freeBytes < needed && SPIFFS.exists("/settings.json.ota")) {
+    Serial.printf("[Settings] %u bytes free, need %u - dropping stale OTA checkpoint.\n",
+                  (unsigned)freeBytes, (unsigned)needed);
+    SPIFFS.remove("/settings.json.ota");
+    freeBytes = SPIFFS.totalBytes() - SPIFFS.usedBytes();
+  }
+  if (freeBytes < needed && SPIFFS.exists(backupPath)) {
+    Serial.printf("[Settings] still only %u bytes free - dropping the rolling backup.\n",
+                  (unsigned)freeBytes);
+    SPIFFS.remove(backupPath);
+    freeBytes = SPIFFS.totalBytes() - SPIFFS.usedBytes();
+  }
+  if (freeBytes < needed) {
+    // Refuse rather than grind. A failed open after a multi-second garbage
+    // collection is far worse than not trying.
+    Serial.printf("[Settings] Not enough SPIFFS space to save (%u free, %u needed).\n",
+                  (unsigned)freeBytes, (unsigned)needed);
+    settingsSaveInProgress = 0;
+    if (settingsMutex) xSemaphoreGiveRecursive(settingsMutex);
+    return false;
+  }
+
   // Flagged in the crash breadcrumb: a reboot that lands inside this window is
   // the settings write, not the renderer. Cleared on every exit path below.
   settingsSaveInProgress = 1;
@@ -5174,6 +5214,14 @@ void setup() {
   allScreenSettings.resize(NUM_CLOCK_SCREENS);
   applyNewWeatherScreenDefaults();
   if (spiffsOk) loadSettings();
+
+  // The OTA checkpoint has done its job the moment settings load cleanly on a
+  // new boot. Leaving it behind permanently occupied ~31 KB of a 113 KB
+  // filesystem, which is what starved the settings writer.
+  if (spiffsOk && SPIFFS.exists("/settings.json.ota")) {
+    SPIFFS.remove("/settings.json.ota");
+    Serial.println("[Settings] Reclaimed the OTA checkpoint after a successful boot.");
+  }
   
   // Safe Mode dims the panel for THIS session only.
   //
@@ -5314,6 +5362,10 @@ void setup() {
     d["current_screen"] = currentScreen;
     d["ota_active"] = otaBrowserActive;
     d["spiffs_used"] = SPIFFS.usedBytes();
+    d["spiffs_free"] = SPIFFS.totalBytes() - SPIFFS.usedBytes();
+    { File f = SPIFFS.open("/settings.json", "r");     d["sz_settings"] = f ? f.size() : 0; if (f) f.close(); }
+    { File f = SPIFFS.open("/settings.json.bak", "r"); d["sz_bak"] = f ? f.size() : 0; if (f) f.close(); }
+    { File f = SPIFFS.open("/settings.json.ota", "r"); d["sz_ota"] = f ? f.size() : 0; if (f) f.close(); }
     d["spiffs_total"] = SPIFFS.totalBytes();
     d["screen13_module_mask"] = diagnosticScreen13Mask;
     d["wifi_status"] = (int)WiFi.status();
