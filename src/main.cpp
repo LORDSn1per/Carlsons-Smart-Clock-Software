@@ -10,7 +10,7 @@
 
 // Single source of truth for the version. Auto-incremented by +0.01 on every
 // successful build by scripts/merge_firmware.py; see CHANGELOG.md for history.
-float ver = 4.31;
+float ver = 4.32;
 
 
 /* #################### To add a new screen (example screen6) ####################
@@ -768,6 +768,12 @@ volatile uint32_t loopRatePerSecond = 0;
 // animations, the render is not happening.
 volatile uint8_t diagnosticRenderSec = 0;
 volatile int16_t diagnosticSecondsBarPx = -1;
+// render_tm_sec alone cannot tell "the render is not running" from "the system
+// clock is frozen" - both hold timeinfo.tm_sec still. These separate them:
+// sys_epoch is the wall clock, screen_draws counts full Screen13 bodies that
+// got past the frame-rate gate. millis()-driven animations keep working either
+// way, which is why the panel still transitions while the clock face sticks.
+volatile uint32_t diagnosticScreenDraws = 0;
 
 static uint32_t uptimeSeconds() {
   return (uint32_t)(esp_timer_get_time() / 1000000LL);
@@ -5285,6 +5291,8 @@ void setup() {
     d["weather_stack_free_words"] = fetchWeatherTaskHandle ? uxTaskGetStackHighWaterMark(fetchWeatherTaskHandle) : 0;
     d["loop_per_s"] = loopRatePerSecond;
     d["render_tm_sec"] = diagnosticRenderSec;
+    d["sys_epoch"] = (uint32_t)time(nullptr);   // wall clock: is time() itself moving?
+    d["screen_draws"] = diagnosticScreenDraws;  // is the render body executing?
     d["seconds_bar_px"] = diagnosticSecondsBarPx;
     d["frame_revision"] = screenshotRevision;
     d["current_screen"] = currentScreen;
@@ -9044,6 +9052,7 @@ void Screen13() { // Infographic
   const uint32_t frameInterval = 33U;
   if (lastRenderAt && renderNow - lastRenderAt < frameInterval) return;
   lastRenderAt = renderNow;
+  ++diagnosticScreenDraws; // counts bodies that actually run, not calls
 
   const ScreenSettings& settings = allScreenSettings[currentScreen - 1];
   getLocalTime(&timeinfo, LOCAL_TIME_MAX_WAIT_MS);
