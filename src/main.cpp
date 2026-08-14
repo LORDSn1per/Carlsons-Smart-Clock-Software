@@ -10,7 +10,7 @@
 
 // Single source of truth for the version. Auto-incremented by +0.01 on every
 // successful build by scripts/merge_firmware.py; see CHANGELOG.md for history.
-float ver = 4.30;
+float ver = 4.31;
 
 
 /* #################### To add a new screen (example screen6) ####################
@@ -755,6 +755,19 @@ static const uint32_t LOCAL_TIME_MAX_WAIT_MS = 5;
 // Healthy is hundreds; anything low means something in loop() is blocking, and
 // every reactive behaviour is degraded by the same factor.
 volatile uint32_t loopRatePerSecond = 0;
+
+// Render-truth probes, exposed at /debug.
+//
+// Phillip reports the seconds bar and the time only moving when something else
+// on the screen animates, on any screen. From outside, that is indistinguishable
+// from a bar with very coarse resolution: X-Frame-Revision only advances when
+// the composed frame differs, so "redrawn but identical" and "not redrawn at
+// all" look the same. These two say which it is. render_tm_sec is the second
+// the last completed render actually used - if it advances once a second the
+// render loop is live and the bar is merely coarse; if it freezes between
+// animations, the render is not happening.
+volatile uint8_t diagnosticRenderSec = 0;
+volatile int16_t diagnosticSecondsBarPx = -1;
 
 static uint32_t uptimeSeconds() {
   return (uint32_t)(esp_timer_get_time() / 1000000LL);
@@ -5271,6 +5284,9 @@ void setup() {
     d["web_stack_free_words"] = webServerTaskHandle ? uxTaskGetStackHighWaterMark(webServerTaskHandle) : 0;
     d["weather_stack_free_words"] = fetchWeatherTaskHandle ? uxTaskGetStackHighWaterMark(fetchWeatherTaskHandle) : 0;
     d["loop_per_s"] = loopRatePerSecond;
+    d["render_tm_sec"] = diagnosticRenderSec;
+    d["seconds_bar_px"] = diagnosticSecondsBarPx;
+    d["frame_revision"] = screenshotRevision;
     d["current_screen"] = currentScreen;
     d["ota_active"] = otaBrowserActive;
     d["spiffs_used"] = SPIFFS.usedBytes();
@@ -6195,6 +6211,7 @@ switch (currentState) {
     }
   }
   presentMs = millis() - presentStartMs;
+  diagnosticRenderSec = (uint8_t)timeinfo.tm_sec; // the second the frame just composed used
 
   // Report only genuinely slow iterations, so this stays silent in normal
   // operation. "other" is everything not covered by the three probes.
@@ -8430,6 +8447,7 @@ static void drawWeatherSecondsLine(int startX, int endX, int y,
     settings.land_col.r, settings.land_col.g, settings.land_col.b);
   const int width = endX - startX;
   const int elapsedWidth = (int)((uint32_t)timeinfo.tm_sec * width / 60U);
+  diagnosticSecondsBarPx = (int16_t)constrain(elapsedWidth, 0, width);
   dma_canvas.drawFastHLine(startX, y, constrain(elapsedWidth, 0, width), color);
 }
 
@@ -9056,6 +9074,7 @@ void Screen13() { // Infographic
     if (!settings.SpareSwitch) return;
     const uint16_t secondsColor = dma_display->color565(settings.land_col.r, settings.land_col.g, settings.land_col.b);
     const int elapsedWidth = (int)lroundf((timeinfo.tm_sec / 59.0f) * max(0, (int)w - 1));
+    diagnosticSecondsBarPx = (int16_t)(elapsedWidth + 1);
     dma_canvas.drawFastHLine(timeX, 10, elapsedWidth + 1, secondsColor);
   };
 
