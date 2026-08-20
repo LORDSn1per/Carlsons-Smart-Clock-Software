@@ -10,7 +10,7 @@
 
 // Single source of truth for the version. Auto-incremented by +0.01 on every
 // successful build by scripts/merge_firmware.py; see CHANGELOG.md for history.
-float ver = 4.35;
+float ver = 4.36;
 
 
 /* #################### To add a new screen (example screen6) ####################
@@ -252,6 +252,12 @@ struct ScreenSettings {
   bool SpareSwitch2       = false;
   bool SpareSwitch3       = false;
   bool infographicRainGridSwitch = false;
+  // When on, the rain module is skipped in Screen 13's rotation unless the
+  // next hour's rain chance reaches infographicRainThresholdPercent - see the
+  // choices[] mask in Screen13(). Lets someone drop the rain panel from the
+  // rotation entirely on a dry day rather than see it hold an unchanging low
+  // number every cycle.
+  bool infographicRainThresholdSwitch = false;
 
   // Sliders
   int pageSlider          = 128;
@@ -262,6 +268,7 @@ struct ScreenSettings {
   // Shared by Screen 10 and Screen 13's rain module: 0 = line (default,
   // matches every clock already in the field), 1 = bar.
   uint8_t rainGraphStyle = 0;
+  uint8_t infographicRainThresholdPercent = 30;
 
   // Image/Colour Options
   bool land_use_image     = false;
@@ -1350,6 +1357,7 @@ void handleInfographicModule();
 void handleInfographicColor();
 void handleInfographicTransition();
 void handleRainGraphStyle();
+void handleRainThresholdPercent();
 void handleInfographicHold();
 void handleMinMaxTemps();
 void handleDay();
@@ -1793,6 +1801,8 @@ bool persistSettingsNow(uint32_t maxWaitMs) {
       SAVE_INFOGRAPHIC_COLOR(infographicRainGridColor);
 #undef SAVE_INFOGRAPHIC_COLOR
       screenObj["infographicRainGridSwitch"] = settings.infographicRainGridSwitch;
+      screenObj["infographicRainThresholdSwitch"] = settings.infographicRainThresholdSwitch;
+      screenObj["infographicRainThresholdPercent"] = settings.infographicRainThresholdPercent;
     }
     // Screen 11 only, for the same reason the block above is screen 13 only:
     // writing these for all thirteen screens would add ~2 KB to a document that
@@ -2270,6 +2280,9 @@ void loadSettings() {
           LOAD_INFOGRAPHIC_COLOR(infographicRainGridColor);
 #undef LOAD_INFOGRAPHIC_COLOR
           infographic.infographicRainGridSwitch = screenObj["infographicRainGridSwitch"] | false;
+          infographic.infographicRainThresholdSwitch = screenObj["infographicRainThresholdSwitch"] | false;
+          infographic.infographicRainThresholdPercent = (uint8_t)constrain(
+            (int)(screenObj["infographicRainThresholdPercent"] | 30), 0, 100);
         }
         if (i == 10) {
           ScreenSettings& sunpath = allScreenSettings[i];
@@ -2424,6 +2437,8 @@ void handleSettings() {
   doc["infographic_hold_seconds"] = settings.infographicHoldSeconds;
   doc["rain_graph_style"] = settings.rainGraphStyle;
   doc["infographic_rain_grid_switch"] = settings.infographicRainGridSwitch;
+  doc["infographic_rain_threshold_switch"] = settings.infographicRainThresholdSwitch;
+  doc["infographic_rain_threshold_percent"] = settings.infographicRainThresholdPercent;
   doc["minmax_temps_switch"] = settings.minMaxTempsSwitch;
   doc["day_switch"] = settings.daySwitch;
   doc["date_switch"] = settings.dateSwitch;
@@ -3810,6 +3825,7 @@ void handleInfographicModule() {
   else if (module == "rainicon") settings.infographicRainIconSwitch = enabled;
   else if (module == "windcompass") settings.infographicWindCompassSwitch = enabled;
   else if (module == "raingrid") settings.infographicRainGridSwitch = enabled;
+  else if (module == "rainthreshold") settings.infographicRainThresholdSwitch = enabled;
   else {
     server.send(400, "text/plain", "Invalid module");
     return;
@@ -3906,6 +3922,25 @@ void handleRainGraphStyle() {
     return;
   }
   allScreenSettings[screenIndex].rainGraphStyle = (uint8_t)value;
+  saveSettings();
+  server.send(200, "text/plain", "OK");
+}
+
+// Screen 13's rain module only. The switch that gates on this lives on
+// handleInfographicModule() (module=="rainthreshold"), same as the rest of
+// Screen 13's per-module toggles.
+void handleRainThresholdPercent() {
+  if (!server.hasArg("value") || !server.hasArg("screen")) {
+    server.send(400, "text/plain", "Missing parameters");
+    return;
+  }
+  const int screenIndex = server.arg("screen").toInt() - 1;
+  const int value = server.arg("value").toInt();
+  if (screenIndex < 0 || screenIndex >= allScreenSettings.size() || value < 0 || value > 100) {
+    server.send(400, "text/plain", "Invalid threshold");
+    return;
+  }
+  allScreenSettings[screenIndex].infographicRainThresholdPercent = (uint8_t)value;
   saveSettings();
   server.send(200, "text/plain", "OK");
 }
@@ -5522,6 +5557,7 @@ void setup() {
   server.on("/infographictransition", handleInfographicTransition);
   server.on("/infographichold", handleInfographicHold);
   server.on("/raingraphstyle", handleRainGraphStyle);
+  server.on("/rainthresholdpercent", handleRainThresholdPercent);
   server.on("/units", handleUnits);
   server.on("/temp_type", handleTempType);
   server.on("/minmaxtemps", handleMinMaxTemps);
@@ -9368,8 +9404,23 @@ void Screen13() { // Infographic
     dma_canvas.drawFastHLine(timeX, 10, elapsedWidth + 1, secondsColor);
   };
 
+  // Peak of the same numbers the rain module itself plots for "next hour":
+  // the four 15-minute buckets when PirateWeather's minutely data is present,
+  // otherwise the current hourly point. Peak, not average, so a real spike
+  // isn't smoothed away and this screen still shows up for it.
+  uint8_t nextHourRainPeak = 0;
+  if (quarterHourRainValid) {
+    for (uint8_t k = 0; k < QUARTER_HOUR_POINTS; ++k)
+      nextHourRainPeak = max(nextHourRainPeak, quarterHourRainChance[k]);
+  } else if (hourlyForecastCount > 0) {
+    nextHourRainPeak = hourlyRainChance[0];
+  }
+  const bool rainThresholdMet = !settings.infographicRainThresholdSwitch
+    || nextHourRainPeak >= settings.infographicRainThresholdPercent;
+
   uint8_t enabled[4]; uint8_t count = 0; uint8_t mask = 0;
-  const bool choices[4] = {settings.infographicSunpathSwitch, settings.infographicRainSwitch,
+  const bool choices[4] = {settings.infographicSunpathSwitch,
+                           settings.infographicRainSwitch && rainThresholdMet,
                            settings.infographicWindSwitch, settings.infographicForecastSwitch};
   for (uint8_t i = 0; i < 4; ++i) if (choices[i]) { enabled[count++] = i; mask |= (1U << i); }
 

@@ -10,6 +10,15 @@ recorded — only version numbers and short notes.
 > some numbers below are just iteration builds with no shipped change of their
 > own. Entries are written against the version that first carried the change.
 
+## 4.35 - 2026-08-20
+- Screen 13's rain module gains an "Only Show If Rain Chance Above" switch
+  and a 0-100% threshold slider. When on, the module is skipped in the
+  screen's rotation unless the peak of the next hour's rain chance (the four
+  15-minute buckets when available, otherwise the current hourly point)
+  reaches the threshold - so a dry stretch drops the rain panel from the
+  rotation instead of holding an unchanging low number every cycle. Screen
+  13 only; not offered on Screen 10, which doesn't rotate between modules.
+
 ## 4.34 - 2026-08-14
 - Rain graphs on Screen 10 and Screen 13 gain a Line/Bar dropdown, sharing one
   `rainGraphStyle` field between the two screens that draw one.
