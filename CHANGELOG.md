@@ -10,6 +10,11 @@ recorded — only version numbers and short notes.
 > some numbers below are just iteration builds with no shipped change of their
 > own. Entries are written against the version that first carried the change.
 
+## 4.37 - 2026-08-20
+- Nudged the first 15-minute sub-bar 1px right on both rain graphs - the
+  centred layout left it visibly tighter against the left edge / weather
+  icon than the gaps between the other three.
+
 ## 4.36 - 2026-08-20
 - The rain-chance threshold from 4.35 no longer produces an empty
   "SELECT INFO" screen when rain is the only infographic module selected.

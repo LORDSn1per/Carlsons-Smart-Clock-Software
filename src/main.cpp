@@ -10,7 +10,7 @@
 
 // Single source of truth for the version. Auto-incremented by +0.01 on every
 // successful build by scripts/merge_firmware.py; see CHANGELOG.md for history.
-float ver = 4.37;
+float ver = 4.38;
 
 
 /* #################### To add a new screen (example screen6) ####################
@@ -8793,6 +8793,10 @@ static void drawRainGraph(GFXcanvas16& canvas, int chartStartX, int chartEndX,
     for (uint8_t k = 0; k < QUARTER_HOUR_POINTS; ++k) {
       quarterX[k] = chartStartX + (int)lroundf(subWidth * (k + 0.5f));
     }
+    // The centred formula above leaves the first sub-bar visibly tighter
+    // against the left edge / weather icon than the gaps between the other
+    // three - nudged right by Phillip's request.
+    quarterX[0] += 1;
     for (uint8_t i = 0; i < columnCount; ++i) {
       outColumnX[i] = chartStartX + (int)lroundf(slotWidth * (i + 0.5f));
     }
