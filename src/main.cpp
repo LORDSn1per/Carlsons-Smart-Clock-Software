@@ -10,7 +10,7 @@
 
 // Single source of truth for the version. Auto-incremented by +0.01 on every
 // successful build by scripts/merge_firmware.py; see CHANGELOG.md for history.
-float ver = 4.34;
+float ver = 4.35;
 
 
 /* #################### To add a new screen (example screen6) ####################
@@ -218,6 +218,10 @@ struct ScreenSettings {
   // sunset times borrowed dateBG_col (shared with the arc). Both now stand alone.
   RGBColor sunpathSunColor = {255, 225, 0};
   RGBColor sunpathHoursColor = {255, 164, 0};
+  // Screen 13's rain module only: optional reference grid drawn behind the
+  // graph - horizontal lines at 0/25/50/75/100% and a vertical divider between
+  // each hour's column.
+  RGBColor infographicRainGridColor = {60, 68, 82};
 
 
   // Switches
@@ -247,6 +251,7 @@ struct ScreenSettings {
   bool SpareSwitch        = false;
   bool SpareSwitch2       = false;
   bool SpareSwitch3       = false;
+  bool infographicRainGridSwitch = false;
 
   // Sliders
   int pageSlider          = 128;
@@ -254,6 +259,9 @@ struct ScreenSettings {
   int pageSlider3         = 128;
   uint8_t infographicTransition = 0;
   uint8_t infographicHoldSeconds = 8;
+  // Shared by Screen 10 and Screen 13's rain module: 0 = line (default,
+  // matches every clock already in the field), 1 = bar.
+  uint8_t rainGraphStyle = 0;
 
   // Image/Colour Options
   bool land_use_image     = false;
@@ -816,6 +824,18 @@ constexpr uint8_t WEATHER_TIMELINE_POINTS = 5;
 uint8_t hourlyRainChance[WEATHER_TIMELINE_POINTS] = {0};
 uint8_t hourlyForecastHour[WEATHER_TIMELINE_POINTS] = {0};
 uint8_t hourlyForecastCount = 0;
+// Sub-hourly rain % for the current hour, in four 15-minute buckets, so the
+// rain graphs can show the next hour at finer resolution than the rest of the
+// timeline. Populated only from PirateWeather's "minutely" block today - see
+// the pirateweather branch of fetchWeather(). WeatherAPI's literal 15-minute
+// endpoint (tp=15) is real but documented as Enterprise-only and its response
+// shape isn't published, so it isn't wired up; OpenWeatherMap's minutely block
+// has no probability field at all, only an intensity in mm/h. quarterHourRainValid
+// is false whenever this fetch didn't supply usable sub-hourly data, and the
+// graphs fall back to the plain hourly timeline exactly as before.
+constexpr uint8_t QUARTER_HOUR_POINTS = 4;
+uint8_t quarterHourRainChance[QUARTER_HOUR_POINTS] = {0};
+bool quarterHourRainValid = false;
 float currentWindSpeedKph = 0.0f;
 float currentWindGustKph = 0.0f;
 uint16_t currentWindBearing = 0;
@@ -1329,6 +1349,7 @@ void handleChartLine();
 void handleInfographicModule();
 void handleInfographicColor();
 void handleInfographicTransition();
+void handleRainGraphStyle();
 void handleInfographicHold();
 void handleMinMaxTemps();
 void handleDay();
@@ -1769,7 +1790,9 @@ bool persistSettingsNow(uint32_t maxWaitMs) {
       SAVE_INFOGRAPHIC_COLOR(infographicForecastMaxColor);
       SAVE_INFOGRAPHIC_COLOR(infographicForecastDividerColor);
       SAVE_INFOGRAPHIC_COLOR(infographicSunMarkerColor);
+      SAVE_INFOGRAPHIC_COLOR(infographicRainGridColor);
 #undef SAVE_INFOGRAPHIC_COLOR
+      screenObj["infographicRainGridSwitch"] = settings.infographicRainGridSwitch;
     }
     // Screen 11 only, for the same reason the block above is screen 13 only:
     // writing these for all thirteen screens would add ~2 KB to a document that
@@ -1782,6 +1805,11 @@ bool persistSettingsNow(uint32_t maxWaitMs) {
       SAVE_SUNPATH_COLOR(sunpathSunColor);
       SAVE_SUNPATH_COLOR(sunpathHoursColor);
 #undef SAVE_SUNPATH_COLOR
+    }
+    // Rain graph style rides on Screen 10 and Screen 13 only - the two screens
+    // that actually draw a rain graph.
+    if (&settings == &allScreenSettings[9] || &settings == &allScreenSettings[12]) {
+      screenObj["rainGraphStyle"] = settings.rainGraphStyle;
     }
   }
 
@@ -2239,7 +2267,9 @@ void loadSettings() {
           LOAD_INFOGRAPHIC_COLOR(infographicForecastMaxColor);
           LOAD_INFOGRAPHIC_COLOR(infographicForecastDividerColor);
           LOAD_INFOGRAPHIC_COLOR(infographicSunMarkerColor);
+          LOAD_INFOGRAPHIC_COLOR(infographicRainGridColor);
 #undef LOAD_INFOGRAPHIC_COLOR
+          infographic.infographicRainGridSwitch = screenObj["infographicRainGridSwitch"] | false;
         }
         if (i == 10) {
           ScreenSettings& sunpath = allScreenSettings[i];
@@ -2250,6 +2280,10 @@ void loadSettings() {
           LOAD_SUNPATH_COLOR(sunpathSunColor);
           LOAD_SUNPATH_COLOR(sunpathHoursColor);
 #undef LOAD_SUNPATH_COLOR
+        }
+        if (i == 9 || i == 12) {
+          allScreenSettings[i].rainGraphStyle = (uint8_t)constrain(
+            (int)(screenObj["rainGraphStyle"] | 0), 0, 1);
         }
       }
     }
@@ -2388,6 +2422,8 @@ void handleSettings() {
   doc["infographic_wind_compass_switch"] = settings.infographicWindCompassSwitch;
   doc["infographic_transition"] = settings.infographicTransition;
   doc["infographic_hold_seconds"] = settings.infographicHoldSeconds;
+  doc["rain_graph_style"] = settings.rainGraphStyle;
+  doc["infographic_rain_grid_switch"] = settings.infographicRainGridSwitch;
   doc["minmax_temps_switch"] = settings.minMaxTempsSwitch;
   doc["day_switch"] = settings.daySwitch;
   doc["date_switch"] = settings.dateSwitch;
@@ -2469,6 +2505,7 @@ void handleSettings() {
   addInfographicColor("infographic_sun_marker_color", settings.infographicSunMarkerColor);
   addInfographicColor("sunpath_sun_color", settings.sunpathSunColor);
   addInfographicColor("sunpath_hours_color", settings.sunpathHoursColor);
+  addInfographicColor("infographic_rain_grid_color", settings.infographicRainGridColor);
 
   doc["auto_brightness"] = autoBrightnessEnabled;
   doc["timezone"] = selectedTimezone;
@@ -3076,6 +3113,8 @@ static void clearExtendedWeatherData() {
   hourlyForecastCount = 0;
   memset(hourlyRainChance, 0, sizeof(hourlyRainChance));
   memset(hourlyForecastHour, 0, sizeof(hourlyForecastHour));
+  quarterHourRainValid = false;
+  memset(quarterHourRainChance, 0, sizeof(quarterHourRainChance));
   currentWindSpeedKph = 0.0f;
   currentWindGustKph = 0.0f;
   currentWindBearing = 0;
@@ -3161,7 +3200,9 @@ void fetchWeather() {
     // forecast can be tens of kilobytes; buffering all of it previously
     // exhausted the largest contiguous heap block and appeared as a 0-byte
     // response even after HTTP 200.
-    url = "https://api.pirateweather.net/forecast/" + pirateWeatherAPI + "/" + String(gpsLat, 6) + "," + String(gpsLon, 6) + "?units=" + apiUnits + "&exclude=minutely,alerts,flags,day_night";
+    // minutely is no longer excluded: it is the only free, documented source
+    // this clock has for sub-hourly rain probability (see quarterHourRainValid).
+    url = "https://api.pirateweather.net/forecast/" + pirateWeatherAPI + "/" + String(gpsLat, 6) + "," + String(gpsLon, 6) + "?units=" + apiUnits + "&exclude=alerts,flags,day_night";
   } 
   else if (requestWeatherService == "openweathermap") {
     if (openWeatherMapAPI.isEmpty()) { Serial.println("Missing OpenWeatherMap API key."); lastHttpCode = -1; weatherLastDurationMs = millis() - attemptStartedAt; setWeatherFetchStage(WEATHER_ERROR, WEATHER_ERROR_MISSING_API_KEY); return; }
@@ -3281,6 +3322,7 @@ void fetchWeather() {
       filter["daily"]["data"][0]["icon"] = true;
       filter["hourly"]["data"][0]["time"] = true;
       filter["hourly"]["data"][0]["precipProbability"] = true;
+      filter["minutely"]["data"][0]["precipProbability"] = true;
       error = deserializeJson(doc, http.getStream(), DeserializationOption::Filter(filter));
       if (!error && requestConfigRevision == weatherConfigRevision) {
         clearExtendedWeatherData();
@@ -3333,8 +3375,39 @@ void fetchWeather() {
           ++sourceIndex;
           if (hourlyForecastCount >= WEATHER_TIMELINE_POINTS) break;
         }
+
+        // Bucket the minute-by-minute block into four 15-minute rain-probability
+        // averages for the current hour. PirateWeather's minutely data is
+        // sequential from the current minute, so position in the array stands in
+        // for elapsed minutes - no per-entry timestamp is requested. Only marked
+        // valid if every bucket got at least one sample; a short or missing
+        // minutely array (a provider hiccup, or a plan that doesn't include it)
+        // leaves quarterHourRainValid false and the graphs fall back to the
+        // ordinary hourly timeline exactly as before this feature existed.
+        uint32_t bucketSum[QUARTER_HOUR_POINTS] = {0, 0, 0, 0};
+        uint16_t bucketCount[QUARTER_HOUR_POINTS] = {0, 0, 0, 0};
+        JsonArray minutelyData = doc["minutely"]["data"].as<JsonArray>();
+        const size_t minuteTotal = minutelyData.size();
+        if (minuteTotal >= QUARTER_HOUR_POINTS) {
+          size_t minuteIndex = 0;
+          for (JsonObject minute : minutelyData) {
+            size_t bucket = (minuteIndex * QUARTER_HOUR_POINTS) / minuteTotal;
+            if (bucket >= QUARTER_HOUR_POINTS) bucket = QUARTER_HOUR_POINTS - 1;
+            bucketSum[bucket] += (uint32_t)lroundf(
+              constrain(minute["precipProbability"].as<float>(), 0.0f, 1.0f) * 100.0f);
+            ++bucketCount[bucket];
+            ++minuteIndex;
+          }
+        }
+        bool allBucketsFilled = true;
+        for (uint8_t b = 0; b < QUARTER_HOUR_POINTS; ++b) {
+          if (bucketCount[b] == 0) { allBucketsFilled = false; break; }
+          quarterHourRainChance[b] = (uint8_t)constrain(
+            bucketSum[b] / bucketCount[b], 0u, 100u);
+        }
+        quarterHourRainValid = allBucketsFilled;
       }
-    } 
+    }
     else if (requestWeatherService == "openweathermap") {
       StaticJsonDocument<1024> filter;
       filter["current"]["temp"] = true;
@@ -3736,6 +3809,7 @@ void handleInfographicModule() {
   else if (module == "forecast") settings.infographicForecastSwitch = enabled;
   else if (module == "rainicon") settings.infographicRainIconSwitch = enabled;
   else if (module == "windcompass") settings.infographicWindCompassSwitch = enabled;
+  else if (module == "raingrid") settings.infographicRainGridSwitch = enabled;
   else {
     server.send(400, "text/plain", "Invalid module");
     return;
@@ -3773,6 +3847,7 @@ void handleInfographicColor() {
   // Screen 11 rides the same endpoint rather than gaining two more of its own.
   else if (part == "sunpathsun") target = &settings.sunpathSunColor;
   else if (part == "sunpathhours") target = &settings.sunpathHoursColor;
+  else if (part == "raingrid") target = &settings.infographicRainGridColor;
   if (!target) {
     server.send(400, "text/plain", "Invalid infographic part");
     return;
@@ -3813,6 +3888,24 @@ void handleInfographicHold() {
     return;
   }
   allScreenSettings[screenIndex].infographicHoldSeconds = value;
+  saveSettings();
+  server.send(200, "text/plain", "OK");
+}
+
+// Shared by Screen 10 and Screen 13's rain module - see rainGraphStyle in
+// ScreenSettings. 0 = line, 1 = bar.
+void handleRainGraphStyle() {
+  if (!server.hasArg("value") || !server.hasArg("screen")) {
+    server.send(400, "text/plain", "Missing parameters");
+    return;
+  }
+  const int screenIndex = server.arg("screen").toInt() - 1;
+  const int value = server.arg("value").toInt();
+  if (screenIndex < 0 || screenIndex >= allScreenSettings.size() || value < 0 || value > 1) {
+    server.send(400, "text/plain", "Invalid graph style");
+    return;
+  }
+  allScreenSettings[screenIndex].rainGraphStyle = (uint8_t)value;
   saveSettings();
   server.send(200, "text/plain", "OK");
 }
@@ -5368,6 +5461,9 @@ void setup() {
     { File f = SPIFFS.open("/settings.json.ota", "r"); d["sz_ota"] = f ? f.size() : 0; if (f) f.close(); }
     d["spiffs_total"] = SPIFFS.totalBytes();
     d["screen13_module_mask"] = diagnosticScreen13Mask;
+    d["quarter_rain_valid"] = quarterHourRainValid;
+    { JsonArray qr = d.createNestedArray("quarter_rain_chance");
+      for (uint8_t i = 0; i < QUARTER_HOUR_POINTS; ++i) qr.add(quarterHourRainChance[i]); }
     d["wifi_status"] = (int)WiFi.status();
     d["state"] = (int)currentState;
     d["rssi"] = (WiFi.status() == WL_CONNECTED) ? (long)WiFi.RSSI() : 0;
@@ -5425,6 +5521,7 @@ void setup() {
   server.on("/infographiccolor", handleInfographicColor);
   server.on("/infographictransition", handleInfographicTransition);
   server.on("/infographichold", handleInfographicHold);
+  server.on("/raingraphstyle", handleRainGraphStyle);
   server.on("/units", handleUnits);
   server.on("/temp_type", handleTempType);
   server.on("/minmaxtemps", handleMinMaxTemps);
@@ -8594,6 +8691,124 @@ static void drawRainlineHourLabel(int pointX, uint8_t hour24,
   }
 }
 
+// Shared by Screen 10 and Screen 13's rain module.
+//
+// Plots up to WEATHER_TIMELINE_POINTS "hour columns" across [chartStartX,
+// chartEndX]. Column 0 is the current hour: normally one point like every
+// other column, but when quarterHourRainValid (set only by PirateWeather's
+// minutely block today - see fetchWeather()) it holds four 15-minute
+// sub-points instead, drawn within that one hour's own width rather than
+// stretching the whole graph. Columns 1..N remain one point per subsequent
+// hour, laid out exactly as before this feature existed - so with no
+// sub-hourly data (OpenWeatherMap, or a PirateWeather fetch whose minutely
+// block didn't parse) the graph is pixel-identical to the original code.
+//
+// barMode draws filled columns instead of a connected line. gridColor of 0
+// means no grid; otherwise draws 0/25/50/75/100% horizontal reference lines
+// and a vertical divider between each hour's column, behind everything else.
+//
+// Writes up to WEATHER_TIMELINE_POINTS column-centre x positions into
+// outColumnX and the count into outColumnCount, so the caller's existing
+// per-hour label loop only needs to swap its x source - everything else
+// about how it draws hour labels is unchanged.
+static void drawRainGraph(GFXcanvas16& canvas, int chartStartX, int chartEndX,
+                          int baselineY, int topY, uint16_t graphColor, bool barMode,
+                          uint16_t gridColor, int outColumnX[WEATHER_TIMELINE_POINTS],
+                          uint8_t& outColumnCount) {
+  const uint8_t columnCount = hourlyForecastCount > 0
+    ? min(hourlyForecastCount, WEATHER_TIMELINE_POINTS) : WEATHER_TIMELINE_POINTS;
+  outColumnCount = columnCount;
+  if (columnCount == 0 || chartEndX <= chartStartX) return;
+
+  const int width = chartEndX - chartStartX;
+  const bool useQuarters = quarterHourRainValid;
+
+  // Grid divides the width into `columnCount` equal areas regardless of how
+  // the points themselves are laid out below - it is a fixed visual reference,
+  // not tied to the quarter/hourly split.
+  if (gridColor != 0) {
+    for (int pct = 0; pct <= 100; pct += 25) {
+      const int y = map(pct, 0, 100, baselineY - 1, topY);
+      canvas.drawFastHLine(chartStartX, y, width + 1, gridColor);
+    }
+    for (uint8_t i = 1; i < columnCount; ++i) {
+      const int x = chartStartX + (int)((width * (int32_t)i) / columnCount);
+      canvas.drawFastVLine(x, topY, baselineY - topY, gridColor);
+    }
+  }
+
+  const auto mapChance = [&](int chance) -> int {
+    if (chance <= 0) return baselineY - 1;
+    return map(constrain(chance, 0, 100), 1, 100, baselineY - 2, topY);
+  };
+  const auto drawBar = [&](int x, int barWidth, int chance) {
+    const int top = mapChance(chance);
+    const int height = (baselineY - 1) - top + 1;
+    if (height <= 0) return;
+    canvas.fillRect(x - barWidth / 2, top, max(1, barWidth), height, graphColor);
+  };
+
+  if (useQuarters) {
+    // Column 0's own hourly value is not drawn - it is entirely replaced by
+    // the four finer sub-points covering the same hour.
+    const float slotWidth = width / (float)columnCount;
+    const float subWidth = slotWidth / QUARTER_HOUR_POINTS;
+    int quarterX[QUARTER_HOUR_POINTS];
+    for (uint8_t k = 0; k < QUARTER_HOUR_POINTS; ++k) {
+      quarterX[k] = chartStartX + (int)lroundf(subWidth * (k + 0.5f));
+    }
+    for (uint8_t i = 0; i < columnCount; ++i) {
+      outColumnX[i] = chartStartX + (int)lroundf(slotWidth * (i + 0.5f));
+    }
+
+    if (barMode) {
+      for (uint8_t k = 0; k < QUARTER_HOUR_POINTS; ++k) {
+        drawBar(quarterX[k], max(1, (int)subWidth - 1), quarterHourRainChance[k]);
+      }
+      for (uint8_t i = 1; i < columnCount; ++i) {
+        drawBar(outColumnX[i], max(1, (int)slotWidth - 2), hourlyRainChance[i]);
+      }
+    } else {
+      int previousX = quarterX[0], previousY = mapChance(quarterHourRainChance[0]);
+      canvas.fillRect(previousX, previousY - 1, 2, 2, graphColor);
+      for (uint8_t k = 1; k < QUARTER_HOUR_POINTS; ++k) {
+        const int x = quarterX[k], y = mapChance(quarterHourRainChance[k]);
+        canvas.drawLine(previousX, previousY, x, y, graphColor);
+        canvas.fillRect(x, y - 1, 2, 2, graphColor);
+        previousX = x; previousY = y;
+      }
+      for (uint8_t i = 1; i < columnCount; ++i) {
+        const int x = outColumnX[i], y = mapChance(hourlyRainChance[i]);
+        canvas.drawLine(previousX, previousY, x, y, graphColor);
+        canvas.fillRect(x, y - 1, 2, 2, graphColor);
+        previousX = x; previousY = y;
+      }
+    }
+    return;
+  }
+
+  // No sub-hourly data: identical geometry to the original single-timeline
+  // code - edge to edge, first point at chartStartX, last at chartEndX.
+  const float pointStep = columnCount > 1 ? width / (float)(columnCount - 1) : 0.0f;
+  for (uint8_t i = 0; i < columnCount; ++i) {
+    outColumnX[i] = chartStartX + (int)lroundf(pointStep * i);
+  }
+  if (barMode) {
+    for (uint8_t i = 0; i < columnCount; ++i) {
+      drawBar(outColumnX[i], max(1, (int)pointStep - 2), hourlyRainChance[i]);
+    }
+  } else {
+    int previousX = outColumnX[0], previousY = mapChance(hourlyRainChance[0]);
+    canvas.fillRect(previousX, previousY - 1, 2, 2, graphColor);
+    for (uint8_t i = 1; i < columnCount; ++i) {
+      const int x = outColumnX[i], y = mapChance(hourlyRainChance[i]);
+      canvas.drawLine(previousX, previousY, x, y, graphColor);
+      canvas.fillRect(x, y - 1, 2, 2, graphColor);
+      previousX = x; previousY = y;
+    }
+  }
+}
+
 void Screen10() { // Rainline
   const ScreenSettings& settings = allScreenSettings[currentScreen - 1];
   getLocalTime(&timeinfo, LOCAL_TIME_MAX_WAIT_MS);
@@ -8604,7 +8819,10 @@ void Screen10() { // Rainline
   const uint16_t baselineColor = dma_display->color565(settings.dateBG_col.r, settings.dateBG_col.g, settings.dateBG_col.b);
   const uint16_t internalTempColor = dma_display->color565(settings.ampm_col.r, settings.ampm_col.g, settings.ampm_col.b);
   const int timeEndX = drawWeatherBlockTime(1, 0, 3, timeColor, rainColor);
-  drawWeatherSecondsLine(1, timeEndX, 16, settings);
+  // y=15, one row above the chart's own top row (16) - was 16, which was the
+  // same row a 100%-chance point draws on, so the seconds line and the rain
+  // line could occupy the same pixels.
+  drawWeatherSecondsLine(1, timeEndX, 15, settings);
   if (settings.temperatureSwitch) {
     drawTinyTemperatureRight(64, 5, currentTemperature, tempColor, '$');
   }
@@ -8614,44 +8832,37 @@ void Screen10() { // Rainline
   }
 
   const int baselineY = 26;
+  const int topY = 16;
   const int chartStartX = settings.iconsSwitch ? 15 : 3;
   const int chartEndX = 60;
   const int baselineStartX = settings.iconsSwitch ? 14 : 1;
   if (settings.chartLineSwitch) {
     dma_canvas.drawFastHLine(baselineStartX, baselineY, 63 - baselineStartX, baselineColor);
   }
-  const int count = hourlyForecastCount > 0 ? hourlyForecastCount : WEATHER_TIMELINE_POINTS;
-  const int pointStep = count > 1 ? (chartEndX - chartStartX) / (count - 1) : 0;
-  uint8_t peakChance = 0;
-  int previousX = chartStartX;
-  int previousY = baselineY - 1;
-  for (int i = 0; i < count; ++i) {
-    const uint8_t chance = hourlyForecastCount > 0 ? hourlyRainChance[i] : 0;
-    peakChance = max(peakChance, chance);
-    const int x = chartStartX + i * pointStep;
-    const int y = chance == 0 ? baselineY - 1 : map(chance, 1, 100, baselineY - 2, 16);
-    if (i > 0) dma_canvas.drawLine(previousX, previousY, x, y, rainColor);
-    dma_canvas.fillRect(x, y - 1, 2, 2, rainColor);
-    previousX = x;
-    previousY = y;
-  }
+
+  int columnX[WEATHER_TIMELINE_POINTS];
+  uint8_t columnCount = 0;
+  // Grid is Screen 13's rain module feature only; not offered here.
+  drawRainGraph(dma_canvas, chartStartX, chartEndX, baselineY, topY, rainColor,
+               settings.rainGraphStyle == 1, 0, columnX, columnCount);
+
   if (settings.iconsSwitch) displayWeatherIconAt(weatherIcon, 1, 20);
 
   dma_canvas.setFont(&TomThumb);
   dma_canvas.setTextColor(rainColor);
   if (hourlyForecastCount > 0) {
-    for (uint8_t i = 0; i < hourlyForecastCount; ++i) {
-      drawRainlineHourLabel(chartStartX + i * pointStep, hourlyForecastHour[i],
+    for (uint8_t i = 0; i < columnCount; ++i) {
+      drawRainlineHourLabel(columnX[i], hourlyForecastHour[i],
                             settings.twentyFourHourSwitch, rainColor);
     }
   } else {
     dma_canvas.setCursor(17, 32); dma_canvas.print("WAITING");
   }
-  if (peakChance > 0) {
-    char peakLabel[5]; snprintf(peakLabel, sizeof(peakLabel), "%u%%", peakChance);
-    int16_t x1, y1; uint16_t w, h; dma_canvas.getTextBounds(peakLabel, 0, 0, &x1, &y1, &w, &h);
-    dma_canvas.setCursor(63 - w, 20); dma_canvas.print(peakLabel);
-  }
+  // The peak-% readout used to sit at a fixed position near the top-right of
+  // the chart, which put it directly in the path of a high-probability point
+  // drawn in the same colour - the two would overlap into an unreadable
+  // smear. Removed rather than repositioned, since the chart itself already
+  // shows where the peak is.
 }
 
 static void drawSunpathMarker(int x, int y, bool daylight, uint16_t sunColor, uint16_t moonColor) {
@@ -8887,29 +9098,24 @@ static void renderInfographicModule(GFXcanvas16& canvas, uint8_t module,
       canvas.drawPixel(sunsetX + w + 1, 15, hoursColor);
       canvas.drawPixel(sunsetX + w + 1, 16, hoursColor);
     }
-  } else if (module == 1) { // Five-hour rain forecast
+  } else if (module == 1) { // Rain forecast
     const uint16_t hoursColor = colour565(settings.infographicRainHoursColor);
     const uint16_t graphColor = colour565(settings.infographicRainGraphColor);
+    const uint16_t gridColor = settings.infographicRainGridSwitch
+      ? colour565(settings.infographicRainGridColor) : 0;
     const int baselineY = 15;
+    const int topY = 1;
     const int chartStartX = settings.infographicRainIconSwitch ? 15 : 0;
     const int chartEndX = 63;
-    const int count = hourlyForecastCount > 0 ? hourlyForecastCount : WEATHER_TIMELINE_POINTS;
-    const auto pointX = [&](int index) {
-      if (count <= 1) return chartStartX;
-      return chartStartX + (int)lroundf(index * (chartEndX - chartStartX) / (float)(count - 1));
-    };
-    int previousX = chartStartX, previousY = baselineY - 1;
-    for (int i = 0; i < count; ++i) {
-      const int chance = hourlyForecastCount > 0 ? hourlyRainChance[i] : 0;
-      const int x = pointX(i);
-      const int y = chance == 0 ? baselineY - 1 : map(chance, 1, 100, baselineY - 2, 1);
-      if (i) canvas.drawLine(previousX, previousY, x, y, graphColor);
-      canvas.drawPixel(x, y, graphColor);
-      previousX = x; previousY = y;
-    }
+
+    int columnX[WEATHER_TIMELINE_POINTS];
+    uint8_t count = 0;
+    drawRainGraph(canvas, chartStartX, chartEndX, baselineY, topY, graphColor,
+                 settings.rainGraphStyle == 1, gridColor, columnX, count);
+
     if (settings.infographicRainIconSwitch) drawWeatherIconOn(canvas, weatherIcon, 1, 9);
     canvas.setFont(&TomThumb);
-    for (int i = 0; i < count; ++i) {
+    for (uint8_t i = 0; i < count; ++i) {
       const uint8_t hour24 = hourlyForecastCount > 0 ? hourlyForecastHour[i] : (timeinfo.tm_hour + i) % 24;
       uint8_t shownHour = hour24;
       const bool pm = !settings.twentyFourHourSwitch && hour24 >= 12;
@@ -8919,7 +9125,7 @@ static void renderInfographicModule(GFXcanvas16& canvas, uint8_t module,
       int16_t x1, y1; uint16_t w, h;
       canvas.getTextBounds(label, 0, 21, &x1, &y1, &w, &h);
       const int labelWidth = (int)w + (pm ? 2 : 0);
-      const int labelX = constrain(pointX(i) - labelWidth / 2, 0, 64 - labelWidth);
+      const int labelX = constrain(columnX[i] - labelWidth / 2, 0, 64 - labelWidth);
       canvas.setTextColor(hoursColor); canvas.setCursor(labelX, 21); canvas.print(label);
       if (pm) {
         canvas.drawPixel(labelX + w + 1, 16, hoursColor);

@@ -10,6 +10,31 @@ recorded — only version numbers and short notes.
 > some numbers below are just iteration builds with no shipped change of their
 > own. Entries are written against the version that first carried the change.
 
+## 4.34 - 2026-08-14
+- Rain graphs on Screen 10 and Screen 13 gain a Line/Bar dropdown, sharing one
+  `rainGraphStyle` field between the two screens that draw one.
+- PirateWeather's `minutely` block (per-minute rain probability, previously
+  excluded from every request) is now parsed and bucketed into four 15-minute
+  averages for the current hour. When present, both rain graphs plot the
+  current hour as those four sub-points, sized within that hour's own column
+  width, and the remaining four columns as before. Falls back to the plain
+  hourly timeline - pixel-identical to the prior code - whenever the bucket
+  data isn't available. **WeatherAPI is not wired up**: its literal 15-minute
+  endpoint (`tp=15`) is documented as Enterprise-only and its response shape
+  isn't published, so implementing it now would mean guessing at fields
+  nobody could verify. OpenWeatherMap's `minutely` has no probability field
+  at all, only an intensity in mm/h, so it was never a candidate.
+- Fixed two real collisions on Screen 10, both visible in a user-supplied
+  screenshot: the peak-% readout sat at a fixed position that a
+  high-probability point could be drawn directly through (same colour, same
+  pixels) - removed rather than repositioned, since the chart already shows
+  where the peak is. The seconds line was drawn on y=16, the same row a
+  100%-chance point occupies - moved to y=15.
+- Screen 13's rain module gains a Grid switch and colour picker: 0/25/50/75/
+  100% horizontal reference lines and a vertical divider between each hour's
+  column, drawn behind the graph. Screen 10 does not get this control -
+  narrower chart, not requested there.
+
 ## 4.26 - 2026-08-13
 - **The config portal is no longer starved.** Reading the clock never blocks a
   render again. `getLocalTime(tm*, ms)` is not a "read the clock" call: it is a
