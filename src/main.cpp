@@ -10,7 +10,7 @@
 
 // Single source of truth for the version. Auto-incremented by +0.01 on every
 // successful build by scripts/merge_firmware.py; see CHANGELOG.md for history.
-float ver = 4.36;
+float ver = 4.37;
 
 
 /* #################### To add a new screen (example screen6) ####################
@@ -9415,7 +9415,13 @@ void Screen13() { // Infographic
   } else if (hourlyForecastCount > 0) {
     nextHourRainPeak = hourlyRainChance[0];
   }
+  // Never hide rain if it's the only module selected - the threshold is for
+  // skipping rain when there's something else in rotation to show instead,
+  // not for producing an empty "SELECT INFO" screen the user didn't ask for.
+  const bool otherModuleSelected = settings.infographicSunpathSwitch
+    || settings.infographicWindSwitch || settings.infographicForecastSwitch;
   const bool rainThresholdMet = !settings.infographicRainThresholdSwitch
+    || !otherModuleSelected
     || nextHourRainPeak >= settings.infographicRainThresholdPercent;
 
   uint8_t enabled[4]; uint8_t count = 0; uint8_t mask = 0;

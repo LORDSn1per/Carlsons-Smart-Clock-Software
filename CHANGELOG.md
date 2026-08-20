@@ -10,6 +10,12 @@ recorded — only version numbers and short notes.
 > some numbers below are just iteration builds with no shipped change of their
 > own. Entries are written against the version that first carried the change.
 
+## 4.36 - 2026-08-20
+- The rain-chance threshold from 4.35 no longer produces an empty
+  "SELECT INFO" screen when rain is the only infographic module selected.
+  The threshold now only skips rain when there's another enabled module for
+  the rotation to fall back to; with rain selected alone, it always shows.
+
 ## 4.35 - 2026-08-20
 - Screen 13's rain module gains an "Only Show If Rain Chance Above" switch
   and a 0-100% threshold slider. When on, the module is skipped in the
