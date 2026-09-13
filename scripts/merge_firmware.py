@@ -9,7 +9,7 @@ single-file image that can be written to a blank ESP32 at offset 0x0.
 
 The SPIFFS partition is deliberately left out so that flashing this image
 does NOT erase the clock's saved settings / WiFi credentials / weather cache.
-Upload the filesystem separately with `pio run -t uploadfs` when data/ changes.
+The web page is embedded at build time; there is no filesystem upload step.
 
 The result is copied to ../BIN/ (the NAS firmware folder) if that folder
 exists, so a history of every built version accumulates there.
@@ -18,7 +18,7 @@ VERSION AUTO-BUMP: `src/main.cpp`'s `float ver = X.XX;` line is the single
 source of truth for the version number. After a successful build, this
 script reads that value (the version that was actually just compiled),
 names/copies this build's .bin after it, then bumps main.cpp, the
-platformio.ini header comment, and README.md by +0.01 for the NEXT build.
+platformio.ini header comment, and docs/DEVELOPMENT.md by +0.01 for the NEXT build.
 This means every `pio run` (build or upload) advances the version - that is
 intentional, not a bug: see HANDOFF.md for the rationale and tradeoffs.
 """
@@ -33,7 +33,7 @@ Import("env")  # noqa: F821  (injected by PlatformIO/SCons)
 PROJECT_DIR = env.subst("$PROJECT_DIR")  # noqa: F821
 MAIN_CPP = os.path.join(PROJECT_DIR, "src", "main.cpp")
 PIO_INI = os.path.join(PROJECT_DIR, "platformio.ini")
-README = os.path.join(PROJECT_DIR, "README.md")
+README = os.path.join(PROJECT_DIR, "docs", "DEVELOPMENT.md")
 
 VER_RE = re.compile(r"float ver = (\d+\.\d+);")
 INI_TITLE_RE = re.compile(r"(;\s*SmartClock )\d+\.\d+( - PlatformIO / VS Code project)")
@@ -63,7 +63,7 @@ def bump_version_for_next_build(old_str):
     new_str = "{:.2f}".format(new)
 
     # Targeted regexes, not a blanket string replace: platformio.ini and
-    # README.md each also contain historical prose ("that conversion is what
+    # DEVELOPMENT.md also contains historical prose ("that conversion is what
     # v2.90 is...") that must stay pinned to the version it actually
     # describes rather than being dragged forward on every bump. Only the
     # "current version" title/header lines are live pointers.

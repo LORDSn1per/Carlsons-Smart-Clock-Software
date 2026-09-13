@@ -93,7 +93,9 @@ ground, layered panels and `#d9ff62` accent as the clock's settings page. The
 subtle LED grid, cyan data colour, illuminated status display and restrained
 control glow make the app and web interface read as one product.
 
-Built against the macOS 12 SDK with Command Line Tools only, ad-hoc signed.
+Built for Intel macOS 12+ with Command Line Tools only, ad-hoc signed rather
+than notarised. Apple Silicon needs Rosetta; macOS may ask you to allow the
+downloaded app in Privacy & Security before first launch.
 Signing happens on local disk — an AFP share adds metadata that `codesign`
 rejects outright, and re-adds it faster than `xattr -cr` can strip it.
 
