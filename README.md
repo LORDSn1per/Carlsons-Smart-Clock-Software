@@ -70,8 +70,9 @@ data when Pirate Weather supplies it.
 - **Updates without losing your setup.** Upload firmware from the local web
   page, use Arduino OTA, or flash over USB. A normal USB update keeps the
   settings partition; a full erase is an explicit separate choice.
-- **Hardware you can make.** ESP32, HUB75 P2.5/P5 64 × 32 panel, sensors, PCB
-  files and a printable enclosure. See the
+- **Hardware you can make.** ESP32, P2.5 HUB75 64 × 32 panel, sensors, PCB
+  files and a printable enclosure. Firmware also offers P5.0 panel colour
+  mapping; the linked case is designed for the P2.5 build. See the
   [hardware repository](https://github.com/LORDSn1per/Carlsons-Smart-Clock-Hardware).
 
 ## Get the software
